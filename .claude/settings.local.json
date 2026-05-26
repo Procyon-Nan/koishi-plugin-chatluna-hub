@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn build *)",
+      "Bash(yarn build:server *)",
+      "Bash(git status *)",
+      "Bash(yarn build:client *)"
+    ]
+  }
+}

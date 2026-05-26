@@ -1,0 +1,2528 @@
+<template>
+    <section
+        ref="stageRef"
+        class="relationship-home"
+        @pointermove="handleStagePointerMove"
+        @pointerleave="handleStagePointerLeave"
+    >
+        <div class="graph-container-box">
+            <header class="graph-header">
+                <h1>ChatLuna Hub</h1>
+                <p>ChatLuna &#29983;&#24577;&#32593;&#32476;</p>
+            </header>
+
+            <aside class="ecosystem-meter" aria-label="ChatLuna ecosystem plugins">
+                <span>ChatLuna &#29983;&#24577;&#25554;&#20214;</span>
+                <strong>{{ availableEcosystemCount }} / {{ confirmedEcosystemTotal }}</strong>
+                <small>&#21487;&#29992; / &#20840;&#37096;</small>
+            </aside>
+
+            <aside class="range-control" aria-label="ChatLuna effective range">
+                <div class="range-control-row">
+                    <input
+                        :value="Math.round(effectiveRangeRadiusPx)"
+                        type="range"
+                        :min="effectiveRangeMinRadiusPx"
+                        :max="Math.round(effectiveRangeMaxRadiusPx)"
+                        step="4"
+                        aria-label="&#35843;&#25972; ChatLuna &#26377;&#25928;&#33539;&#22260;"
+                        @input="handleRangeControlInput"
+                        @pointerdown="handleRangeControlInteractionStart"
+                        @pointerup="handleRangeControlInteractionEnd"
+                        @pointercancel="handleRangeControlInteractionEnd"
+                    />
+                    <button
+                        class="range-reset-button"
+                        type="button"
+                        @click="handleResetGraphDefaults"
+                    >
+                        &#37325;&#32622;
+                    </button>
+                </div>
+            </aside>
+
+            <div class="graph-stage" :class="{ 'orbit-active': isOrbitActive }">
+                <svg
+                    class="graph-svg"
+                    viewBox="0 0 1000 620"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    focusable="false"
+                >
+                    <defs>
+                        <filter id="hub-graph-glow" x="-45%" y="-45%" width="190%" height="190%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <ellipse
+                        v-if="effectiveRange && effectiveRangePreviewVisible"
+                        class="effective-range"
+                        :cx="effectiveRange.cx"
+                        :cy="effectiveRange.cy"
+                        :rx="effectiveRange.rx"
+                        :ry="effectiveRange.ry"
+                    />
+
+                    <g v-if="coreNode" class="edge-layer">
+                        <path
+                            v-for="edge in edges"
+                            :key="edge.id"
+                            class="graph-edge edge-base"
+                            :class="{
+                                disabled: edge.muted,
+                                risky: edge.risk > 0
+                            }"
+                            :style="edgeStyle(edge)"
+                            :d="edge.path"
+                        />
+                        <path
+                            v-for="edge in edges"
+                            :key="`${edge.id}-flow`"
+                            class="graph-edge edge-flow"
+                            :class="{
+                                disabled: edge.muted,
+                                risky: edge.risk > 0
+                            }"
+                            :style="edgeStyle(edge)"
+                            :d="edge.path"
+                        />
+                    </g>
+                </svg>
+
+                <button
+                    v-if="coreNode"
+                    class="graph-node core"
+                    :class="{
+                        dragging: draggingId === coreNode.id,
+                        focused: focusedNodeId === coreNode.id
+                    }"
+                    :style="nodeStyle(coreNode)"
+                    :title="coreNode.title"
+                    type="button"
+                    @pointerdown="handleNodePointerDown($event, coreNode)"
+                    @pointerenter="focusedNodeId = coreNode.id"
+                    @pointerleave="handleNodePointerLeave(coreNode.id)"
+                >
+                    <span class="node-disc">
+                        <span class="node-glow" />
+                        <svg
+                            class="chatluna-mark"
+                            viewBox="0 0 96 96"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <path
+                                d="M45 20C25 20 12 32 12 49c0 17 14 29 34 29 6 0 13-1 18-4l16 8-5-17c4-5 7-10 7-17 0-16-14-28-37-28Z"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="6"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <g fill="currentColor">
+                                <circle cx="36" cy="62" r="2.5" />
+                                <circle cx="46" cy="63" r="2.5" />
+                                <circle cx="56" cy="61" r="2.5" />
+                                <circle cx="65" cy="57" r="2.5" />
+                                <circle cx="42" cy="72" r="2.5" />
+                                <circle cx="52" cy="72" r="2.5" />
+                                <circle cx="62" cy="69" r="2.5" />
+                                <circle cx="69" cy="64" r="2.5" />
+                                <circle cx="59" cy="50" r="2.5" />
+                                <circle cx="67" cy="45" r="2.5" />
+                                <circle cx="72" cy="38" r="2.5" />
+                                <circle cx="73" cy="50" r="2.5" />
+                            </g>
+                        </svg>
+                    </span>
+                    <span class="node-title">{{ coreNode.title }}</span>
+                    <span class="node-status">Core</span>
+                </button>
+
+                <button
+                    v-for="node in satelliteNodes"
+                    :key="node.id"
+                    class="graph-node satellite"
+                    :class="{
+                        disabled: !node.available,
+                        disturbed: node.disturbed,
+                        dragging: draggingId === node.id,
+                        focused: focusedNodeId === node.id,
+                        pending: isNodePending(node.id),
+                        'out-of-range': isNodeOutOfRange(node)
+                    }"
+                    :style="nodeStyle(node)"
+                    :title="getNodeTitle(node)"
+                    :aria-disabled="!node.available"
+                    type="button"
+                    @pointerdown="handleNodePointerDown($event, node)"
+                    @pointerenter="focusedNodeId = node.id"
+                    @pointerleave="handleNodePointerLeave(node.id)"
+                >
+                    <span class="node-disc">
+                        <span class="node-glow" />
+                        <svg
+                            v-if="node.id === 'agent'"
+                            class="agent-mark"
+                            viewBox="0 0 96 96"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <path
+                                d="M48 18v10M34 28h28c11 0 18 7 18 18v16c0 11-7 18-18 18H34c-11 0-18-7-18-18V46c0-11 7-18 18-18Z"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="6"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <circle cx="36" cy="54" r="5" fill="currentColor" />
+                            <circle cx="60" cy="54" r="5" fill="currentColor" />
+                            <path
+                                d="M38 67h20"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="6"
+                                stroke-linecap="round"
+                            />
+                            <circle cx="48" cy="14" r="4" fill="currentColor" />
+                        </svg>
+                        <svg
+                            v-else-if="node.id === 'mediaLuna'"
+                            class="palette-mark"
+                            viewBox="0 0 96 96"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <path
+                                d="M47 16c-18 0-32 12-32 29 0 20 15 35 36 35h4c6 0 10-4 10-9 0-3-1-5-3-7-2-2-3-4-3-7 0-5 4-8 9-8h5c6 0 9-4 9-9 0-14-14-24-35-24Z"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="6"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <circle cx="34" cy="38" r="4" fill="currentColor" />
+                            <circle cx="48" cy="31" r="4" fill="currentColor" />
+                            <circle cx="62" cy="38" r="4" fill="currentColor" />
+                            <circle cx="39" cy="55" r="4" fill="currentColor" />
+                        </svg>
+                        <MemesLunaIcon
+                            v-else-if="node.id === 'memesLuna'"
+                            class="memesluna-mark"
+                        />
+                        <el-icon v-else :size="34">
+                            <component :is="resolveIcon(node.icon)" />
+                        </el-icon>
+                    </span>
+                    <span class="node-title">{{ node.title }}</span>
+                    <span class="node-status">
+                        {{ getNodeStatus(node) }}
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 悬浮型模块详情面板 -->
+        <div
+            class="hub-module-detail-panel"
+            :style="{ '--detail-font-size': `${detailFontSizePx}px` }"
+        >
+            <el-scrollbar class="detail-panel-scroll">
+                <div class="detail-panel-content">
+                    <transition name="fade-slide" mode="out-in">
+                        <div
+                            v-if="activeModuleDetail && activeDetailModule"
+                            :key="activeDetailModuleId"
+                            class="detail-card-inner"
+                        >
+                            <div class="detail-card-header">
+                                <div class="detail-icon" :style="{ '--detail-tone': activeDetailModule.id === 'chatluna' ? 'var(--k-color-primary)' : getTone(activeDetailModule) }">
+                                    <svg
+                                        v-if="activeDetailModule.id === 'chatluna'"
+                                        class="chatluna-mark mini"
+                                        viewBox="0 0 96 96"
+                                    >
+                                        <path
+                                            d="M45 20C25 20 12 32 12 49c0 17 14 29 34 29 6 0 13-1 18-4l16 8-5-17c4-5 7-10 7-17 0-16-14-28-37-28Z"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="6"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <g fill="currentColor">
+                                            <circle cx="36" cy="62" r="2.5" />
+                                            <circle cx="46" cy="63" r="2.5" />
+                                            <circle cx="56" cy="61" r="2.5" />
+                                            <circle cx="65" cy="57" r="2.5" />
+                                            <circle cx="42" cy="72" r="2.5" />
+                                            <circle cx="52" cy="72" r="2.5" />
+                                            <circle cx="62" cy="69" r="2.5" />
+                                            <circle cx="69" cy="64" r="2.5" />
+                                            <circle cx="59" cy="50" r="2.5" />
+                                            <circle cx="67" cy="45" r="2.5" />
+                                            <circle cx="72" cy="38" r="2.5" />
+                                            <circle cx="73" cy="50" r="2.5" />
+                                        </g>
+                                    </svg>
+                                    <svg
+                                        v-else-if="activeDetailModule.id === 'agent'"
+                                        class="agent-mark mini"
+                                        viewBox="0 0 96 96"
+                                    >
+                                        <path
+                                            d="M48 18v10M34 28h28c11 0 18 7 18 18v16c0 11-7 18-18 18H34c-11 0-18-7-18-18V46c0-11 7-18 18-18Z"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="6"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <circle cx="36" cy="54" r="5" fill="currentColor" />
+                                        <circle cx="60" cy="54" r="5" fill="currentColor" />
+                                        <path
+                                            d="M38 67h20"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="6"
+                                            stroke-linecap="round"
+                                        />
+                                        <circle cx="48" cy="14" r="4" fill="currentColor" />
+                                    </svg>
+                                    <svg
+                                        v-else-if="activeDetailModule.id === 'mediaLuna'"
+                                        class="palette-mark mini"
+                                        viewBox="0 0 96 96"
+                                    >
+                                        <path
+                                            d="M47 16c-18 0-32 12-32 29 0 20 15 35 36 35h4c6 0 10-4 10-9 0-3-1-5-3-7-2-2-3-4-3-7 0-5 4-8 9-8h5c6 0 9-4 9-9 0-14-14-24-35-24Z"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="6"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <circle cx="34" cy="38" r="4" fill="currentColor" />
+                                        <circle cx="48" cy="31" r="4" fill="currentColor" />
+                                        <circle cx="62" cy="38" r="4" fill="currentColor" />
+                                        <circle cx="39" cy="55" r="4" fill="currentColor" />
+                                    </svg>
+                                    <MemesLunaIcon
+                                        v-else-if="activeDetailModule.id === 'memesLuna'"
+                                        class="memesluna-mark mini"
+                                    />
+                                    <el-icon v-else :size="22">
+                                        <component :is="resolveIcon(activeDetailModule.icon)" />
+                                    </el-icon>
+                                </div>
+                                <div class="header-titles">
+                                    <span class="detail-tag" :class="activeDetailModule.group">
+                                        {{ activeDetailModule.group === 'core' ? 'Core' : 'Ecosystem' }}
+                                    </span>
+                                    <h3>{{ activeModuleDetail.title }}</h3>
+                                    <span class="detail-subtitle">{{ activeModuleDetail.subtitle }}</span>
+                                </div>
+                            </div>
+
+                            <div class="detail-status-indicator" :class="{ 'is-active': activeDetailModule.available || activeDetailModule.id === 'chatluna' }">
+                                <el-icon :size="15">
+                                    <component :is="activeDetailModule.available || activeDetailModule.id === 'chatluna' ? icons.Connection : icons.Collection" />
+                                </el-icon>
+                                <span>
+                                    {{ activeDetailModule.id === 'chatluna' ? '运行中' : (activeDetailModule.available ? '已启用 (Ready)' : '未启用 (Disabled)') }}
+                                </span>
+                            </div>
+
+                            <p class="detail-description">
+                                {{ activeModuleDetail.description }}
+                            </p>
+
+                            <div class="detail-section">
+                                <h4>功能特性</h4>
+                                <ul class="detail-features">
+                                    <li v-for="feat in activeModuleDetail.features" :key="feat">
+                                        <el-icon :size="12" class="feat-dot">
+                                            <Guide />
+                                        </el-icon>
+                                        <span>{{ feat }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div v-if="activeModuleDetail.tip" class="detail-tip">
+                                <el-icon :size="14" class="tip-icon">
+                                    <Operation />
+                                </el-icon>
+                                <p>{{ activeModuleDetail.tip }}</p>
+                            </div>
+                        </div>
+
+                        <!-- 默认展示说明 -->
+                        <div v-else class="detail-card-default">
+                            <div class="default-icon">
+                                <el-icon :size="38">
+                                    <Guide />
+                                </el-icon>
+                            </div>
+                            <h3>生态网络图谱说明</h3>
+                            <p>
+                                ChatLuna Hub 生态图展示了当前 ChatLuna 的核心服务与各大扩展插件之间的拓扑依赖关系。
+                            </p>
+                            <div class="guide-steps">
+                                <div class="step-item">
+                                    <span class="step-num">1</span>
+                                    <p>将鼠标悬停在任意节点上，可在此卡片中即时了解该插件的核心功能和架构职责。</p>
+                                </div>
+                                <div class="step-item">
+                                    <span class="step-num">2</span>
+                                    <p>按住鼠标左键可任意拖拽节点。拖拽 ChatLuna Core 核心节点将以物理绳索牵引全场子节点游动。</p>
+                                </div>
+                                <div class="step-item">
+                                    <span class="step-num">3</span>
+                                    <p>若将子节点拖拽出外侧虚线有效范围圈并释放，会发出指令停用并卸载对应插件；拖回圆圈内则可重新触发启动。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </transition>
+                </div>
+            </el-scrollbar>
+
+            <!-- 文本大小调节器 -->
+            <div class="font-size-adjuster" @pointerdown.stop>
+                <el-icon :size="13"><Operation /></el-icon>
+                <input
+                    v-model="detailFontSizePx"
+                    type="range"
+                    min="12"
+                    max="20"
+                    step="1"
+                    aria-label="调节卡片字体大小"
+                    @change="savePersistedFontSize(detailFontSizePx)"
+                />
+                <span>{{ detailFontSizePx }}px</span>
+            </div>
+        </div>
+    </section>
+</template>
+
+<script setup lang="ts">
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    reactive,
+    ref,
+    type Component
+} from 'vue'
+import { send } from '@koishijs/client'
+import {
+    ChatRound,
+    Collection,
+    Connection,
+    Cpu,
+    Guide,
+    Operation
+} from '@element-plus/icons-vue'
+import MemesLunaIcon from '../../icons/memesluna.vue'
+import type {
+    HubModuleId,
+    HubModuleItem,
+    HubModuleToggleResult
+} from '../../types'
+
+// ============================================================================
+// Customizable Orbit Configuration (手动调整子节点自转速度与到主节点中心的距离)
+// ============================================================================
+
+interface ModuleDetail {
+    title: string
+    subtitle: string
+    description: string
+    features: string[]
+    tip?: string
+}
+
+const moduleDetails: Record<HubModuleId, ModuleDetail> = {
+    chatluna: {
+        title: 'ChatLuna Core',
+        subtitle: '核心管理中枢',
+        description: '承载大语言模型管理、上下文绑定、自定义预设规则、智能多路路由以及会话归档的核心中枢，是整个 ChatLuna 的大脑。',
+        features: [
+            '模型接入与统一调度',
+            '多路路由及权限规则管控',
+            '会话上下文自动管理与归档',
+            '指令预设引擎及快捷预加载'
+        ],
+        tip: '主中枢节点，移动此节点将拉动整个生态的网络图谱。'
+    },
+    agent: {
+        title: 'ChatLuna Agent',
+        subtitle: '智能体协作网络',
+        description: '提供完整的 ReAct/智能体自主规划决策框架。允许机器人结合定制工具（Google搜索、代码执行等）自主解决多步骤的复杂任务。',
+        features: [
+            '自主规划与多步骤执行 (COT)',
+            '支持动态工具调用接口',
+            '复杂场景自动容错与推理',
+            '智能体路由分发网络'
+        ],
+        tip: '处于未启用状态时，将其拖入虚线有效半径内即可自动启动。'
+    },
+    livingMemory: {
+        title: 'Living Memory',
+        subtitle: '活体长期记忆',
+        description: '基于 Vector Embedding 和本地向量存储的高级长期记忆组件。支持自动记忆摘要、跨会话知识检索与人设情感长期沉淀。',
+        features: [
+            '基于 RAG 的向量知识库检索',
+            '对话自动提炼与长期记忆固化',
+            '跨会话背景知识智能插值',
+            '长期情感态度曲线追踪'
+        ]
+    },
+    mediaLuna: {
+        title: 'Media Luna',
+        subtitle: '多媒体跨模态画板',
+        description: '多媒体处理生态的底层中枢。提供跨模态的语音渲染交互、画板渲染、图像处理与富媒体卡片生成能力。',
+        features: [
+            '跨模态语音转换 (TTS/ASR)',
+            'Canvas 级富媒体卡片渲染',
+            '多模态图像识别及文本生成',
+            '多媒体数据流管道加速'
+        ]
+    },
+    memesLuna: {
+        title: 'Memes Luna',
+        subtitle: '模因表情包绘制',
+        description: '为聊天注入灵魂的趣味表情模因合成引擎。内置数十款经典中文与国外热门网络梗表情，支持文字位置动态缩放与 GIF 表情渲染。',
+        features: [
+            '热门网络梗图动态合成',
+            '多行文字防溢出智能渲染',
+            '动态 GIF 表情包智能渲染',
+            '自定义模板即刻加载'
+        ]
+    }
+}
+
+const activeDetailModuleId = computed<HubModuleId | null>(() => {
+    return focusedNodeId.value || draggingId.value
+})
+
+const activeDetailModule = computed(() => {
+    if (!activeDetailModuleId.value) return null
+    return sortedModules.value.find((item) => item.id === activeDetailModuleId.value) ?? null
+})
+
+const activeModuleDetail = computed<ModuleDetail | null>(() => {
+    const id = activeDetailModuleId.value
+    return id ? moduleDetails[id] : null
+})
+/**
+ * Distance between satellite nodes and the core node in screen pixels
+ * 子节点距离主节点的距离 (单位: 屏幕像素px)
+ * Default: 200
+ */
+const orbitRadiusPx = 280
+
+/**
+ * Rotation speed in radians per frame (at 60fps)
+ * 自转的速度 (单位: 弧度/帧)
+ * Default: 0.0015 (approx. 70 seconds per full rotation)
+ */
+const orbitSpeedRad = 0.001
+// ============================================================================
+
+interface Point {
+    x: number
+    y: number
+}
+
+interface Disturbance extends Point {
+    active: boolean
+}
+
+interface GraphNode extends HubModuleItem {
+    x: number
+    y: number
+    size: number
+    radius: number
+    tone: string
+    disturbed: boolean
+}
+
+interface GraphEdge {
+    id: HubModuleId
+    available: boolean
+    muted: boolean
+    risk: number
+    color: string
+    path: string
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    midX: number
+    midY: number
+}
+
+interface DragState {
+    id: HubModuleId
+    pointerId: number
+    startClientX: number
+    startClientY: number
+    startPoint: Point
+    startPosition: Point
+    startPositions: Partial<Record<HubModuleId, Point>>
+    moved: boolean
+}
+
+type ToggleDirection = 'enable' | 'disable'
+
+const props = defineProps<{
+    modules: HubModuleItem[]
+}>()
+
+const emit = defineEmits<{
+    select: [id: HubModuleId]
+}>()
+
+const focusedNodeId = ref<HubModuleId | null>(null)
+const detailFontSizePx = ref(18)
+const detailFontSizeStorageKey = 'chatluna-hub:detail-font-size:v1'
+
+const icons: Record<string, Component> = {
+    ChatRound,
+    Collection,
+    Connection,
+    Cpu,
+    Guide,
+    Operation,
+    MemesLunaEmoji: MemesLunaIcon
+}
+
+// Manually maintained; do not infer this from installed packages.
+const confirmedEcosystemTotal = 4
+const positionStorageKey = 'chatluna-hub:relationship-node-positions:v1'
+const rangeStorageKey = 'chatluna-hub:relationship-effective-range:v1'
+const stageRef = ref<HTMLElement | null>(null)
+const pointer = ref<Point | null>(null)
+const draggingId = ref<HubModuleId | null>(null)
+const effectiveRangeMinRadiusPx = 260
+const effectiveRangeRadiusInput = ref(0)
+const effectiveRangePreviewVisible = ref(false)
+const stageSize = reactive({
+    width: 1000,
+    height: 620
+})
+const nodePositions = reactive<Partial<Record<HubModuleId, Point>>>({})
+const disturbances = reactive<Partial<Record<HubModuleId, Disturbance>>>({})
+const carriedVisuals = reactive<Partial<Record<HubModuleId, Point>>>({})
+const carriedVelocities: Partial<Record<HubModuleId, Point>> = {}
+const togglePending = reactive<Partial<Record<HubModuleId, ToggleDirection>>>({})
+const toggleErrors = reactive<Partial<Record<HubModuleId, string>>>({})
+
+let resizeObserver: ResizeObserver | undefined
+let dragState: DragState | null = null
+let animationFrame = 0
+let lastAnimationTime = 0
+let effectiveRangePreviewHideTimer = 0
+let rangeControlPointerActive = false
+const errorTimers: Partial<Record<HubModuleId, number>> = {}
+
+const sortedModules = computed(() =>
+    props.modules.slice().sort((left, right) => left.order - right.order)
+)
+const availableEcosystemCount = computed(() => {
+    const count = sortedModules.value.filter(
+        (item) => item.group === 'ecosystem' && item.available
+    ).length
+
+    return Math.min(count, confirmedEcosystemTotal)
+})
+const coreModule = computed(() =>
+    sortedModules.value.find((item) => item.id === 'chatluna') ?? null
+)
+const ecosystemModules = computed(() =>
+    sortedModules.value.filter((item) => item.id !== 'chatluna')
+)
+const coreNode = computed<GraphNode | null>(() => {
+    if (!coreModule.value) return null
+    const base = nodePositions[coreModule.value.id] ?? getDefaultCorePosition()
+
+    return {
+        ...coreModule.value,
+        x: base.x,
+        y: base.y,
+        size: 148,
+        radius: 74,
+        tone: 'color-mix(in srgb, var(--k-color-primary), mediumpurple 58%)',
+        disturbed: false
+    }
+})
+const defaultEffectiveRangeRadiusPx = computed(() =>
+    clampNumber(
+        Math.min(stageSize.width, stageSize.height) * 0.52,
+        effectiveRangeMinRadiusPx,
+        720
+    )
+)
+const effectiveRangeMaxRadiusPx = computed(() => {
+    // Decouple max range from dynamic core node position by calculating from stage center
+    const centerX = stageSize.width * 0.5
+    const centerY = stageSize.height * 0.5
+    const maxDistance = Math.max(
+        Math.hypot(centerX, centerY),
+        Math.hypot(stageSize.width - centerX, centerY),
+        Math.hypot(centerX, stageSize.height - centerY),
+        Math.hypot(stageSize.width - centerX, stageSize.height - centerY)
+    )
+
+    return Math.max(effectiveRangeMinRadiusPx, Math.ceil(maxDistance + 24))
+})
+const effectiveRangeRadiusPx = computed(() =>
+    clampNumber(
+        effectiveRangeRadiusInput.value || defaultEffectiveRangeRadiusPx.value,
+        effectiveRangeMinRadiusPx,
+        effectiveRangeMaxRadiusPx.value
+    )
+)
+const effectiveRange = computed(() => {
+    if (!coreNode.value) return null
+
+    return {
+        cx: coreNode.value.x,
+        cy: coreNode.value.y,
+        rx: effectiveRangeRadiusPx.value * (1000 / stageSize.width),
+        ry: effectiveRangeRadiusPx.value * (620 / stageSize.height)
+    }
+})
+const isOrbitActive = computed(() => draggingId.value === null && !rangeControlPointerActive)
+
+const satelliteNodes = computed<GraphNode[]>(() => {
+    const count = ecosystemModules.value.length
+
+    return ecosystemModules.value.map((item, index) => {
+        const base = nodePositions[item.id] ?? getDefaultSatellitePosition(
+            index,
+            count
+        )
+        const visual = getVisualPosition(item.id, base)
+        const disturbed = disturbances[item.id] ?? {
+            x: 0,
+            y: 0,
+            active: false
+        }
+
+        return {
+            ...item,
+            x: visual.x + disturbed.x,
+            y: visual.y + disturbed.y,
+            size: 126,
+            radius: 63,
+            tone: getTone(item),
+            disturbed: disturbed.active
+        }
+    })
+})
+const edges = computed<GraphEdge[]>(() => {
+    if (!coreNode.value) return []
+
+    return satelliteNodes.value.map((node) => {
+        const edge = createEdge(coreNode.value!, node)
+        const risk = getEdgeRisk(node)
+
+        return {
+            id: node.id,
+            available: node.available,
+            muted: !node.available && draggingId.value !== node.id,
+            risk,
+            color: getEdgeColor(node, risk),
+            path: createEdgePath(edge),
+            ...edge
+        }
+    })
+})
+
+const getDefaultSatellitePosition = (
+    index: number,
+    count: number
+): Point => {
+    const core = getDefaultCorePosition()
+    const angle = ((2 * Math.PI) / count) * index - Math.PI / 2
+    const radiusPx = orbitRadiusPx
+
+    const dxPx = Math.cos(angle) * radiusPx
+    const dyPx = Math.sin(angle) * radiusPx
+
+    return {
+        x: core.x + dxPx * (1000 / stageSize.width),
+        y: core.y + dyPx * (620 / stageSize.height)
+    }
+}
+
+const getDefaultCorePosition = (): Point => ({
+    x: 350,
+    y: 280
+})
+
+const clampNumber = (value: number, min: number, max: number) => {
+    return Math.min(max, Math.max(min, value))
+}
+
+const getVisualPosition = (id: HubModuleId, base: Point): Point => {
+    if (draggingId.value === id) return base
+
+    const visual = carriedVisuals[id]
+    return visual ? { ...visual } : base
+}
+
+const getTone = (item: HubModuleItem) => {
+    if (!item.available) return 'var(--k-text-light)'
+    if (item.id === 'agent') return 'var(--k-color-success)'
+    if (item.id === 'livingMemory') return 'var(--k-color-primary)'
+    if (item.id === 'mediaLuna') return 'var(--k-color-warning)'
+    if (item.id === 'memesLuna') return 'var(--k-color-danger)'
+    return 'var(--k-color-primary)'
+}
+
+const getActiveTone = (id: HubModuleId) => {
+    if (id === 'agent') return 'var(--k-color-success)'
+    if (id === 'livingMemory') return 'var(--k-color-primary)'
+    if (id === 'mediaLuna') return 'var(--k-color-warning)'
+    if (id === 'memesLuna') return 'var(--k-color-danger)'
+    return 'var(--k-color-primary)'
+}
+
+const getEdgeColor = (node: GraphNode, risk: number) => {
+    const base = node.available ? node.tone : getActiveTone(node.id)
+    if (risk <= 0) return base
+
+    return `color-mix(in srgb, ${base}, var(--k-color-danger) ${Math.round(
+        risk * 100
+    )}%)`
+}
+
+const getDisturbanceTarget = (base: Point, id: HubModuleId): Disturbance => {
+    if (!pointer.value || draggingId.value === id) {
+        return {
+            x: 0,
+            y: 0,
+            active: false
+        }
+    }
+
+    const distance = distancePx(base, pointer.value)
+    if (distance > 190) {
+        return {
+            x: 0,
+            y: 0,
+            active: false
+        }
+    }
+
+    const dx = ((base.x - pointer.value.x) / 1000) * stageSize.width
+    const dy = ((base.y - pointer.value.y) / 620) * stageSize.height
+    const length = Math.hypot(dx, dy) || 1
+    const force = Math.pow(1 - distance / 190, 2) * 28
+
+    return {
+        x: (dx / length) * force * (1000 / stageSize.width),
+        y: (dy / length) * force * (620 / stageSize.height),
+        active: true
+    }
+}
+
+const createEdge = (from: GraphNode, to: GraphNode) => {
+    const dxPx = ((to.x - from.x) / 1000) * stageSize.width
+    const dyPx = ((to.y - from.y) / 620) * stageSize.height
+    const length = Math.hypot(dxPx, dyPx) || 1
+    const unitXPx = dxPx / length
+    const unitYPx = dyPx / length
+    const x1 = from.x + unitXPx * from.radius * (1000 / stageSize.width)
+    const y1 = from.y + unitYPx * from.radius * (620 / stageSize.height)
+    const x2 = to.x - unitXPx * to.radius * (1000 / stageSize.width)
+    const y2 = to.y - unitYPx * to.radius * (620 / stageSize.height)
+
+    return {
+        x1,
+        y1,
+        x2,
+        y2,
+        midX: (x1 + x2) / 2,
+        midY: (y1 + y2) / 2
+    }
+}
+
+const createEdgePath = (edge: {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+}) => {
+    return `M ${edge.x1} ${edge.y1} L ${edge.x2} ${edge.y2}`
+}
+
+const getEdgeRisk = (node: GraphNode) => {
+    if (!coreNode.value || draggingId.value !== node.id) return 0
+
+    const distance = distancePx(node, coreNode.value)
+    const radius = effectiveRangeRadiusPx.value
+    const start = radius * 0.72
+
+    return clampNumber((distance - start) / (radius - start), 0, 1)
+}
+
+const isPointWithinEffectiveRange = (point: Point) => {
+    if (!coreNode.value) return true
+
+    return distancePx(point, coreNode.value) <= effectiveRangeRadiusPx.value
+}
+
+const nodeStyle = (node: GraphNode) =>
+    ({
+        '--node-x': `${(node.x / 1000) * 100}%`,
+        '--node-y': `${(node.y / 620) * 100}%`,
+        '--node-size': `${node.size}px`,
+        '--node-tone': node.tone,
+        '--float-delay': `${getFloatDelay(node.id)}s`
+    }) as Record<string, string>
+
+const edgeStyle = (edge: GraphEdge) =>
+    ({
+        color: edge.color
+    }) as Record<string, string>
+
+const resolveIcon = (icon: string) => icons[icon] ?? Cpu
+const getFloatDelay = (id: HubModuleId) => {
+    if (id === 'agent') return -0.8
+    if (id === 'livingMemory') return -2.2
+    if (id === 'mediaLuna') return -3.4
+    if (id === 'memesLuna') return -4.6
+    return 0
+}
+
+const isNodePending = (id: HubModuleId) => Boolean(togglePending[id])
+const isNodeOutOfRange = (node: GraphNode) => {
+    return node.id !== 'chatluna' && !isPointWithinEffectiveRange(node)
+}
+
+const getNodeTitle = (node: GraphNode) => {
+    return toggleErrors[node.id] ?? node.reason ?? node.title
+}
+
+const getNodeStatus = (node: GraphNode) => {
+    const pending = togglePending[node.id]
+    if (pending === 'enable') return 'Enabling...'
+    if (pending === 'disable') return 'Disabling...'
+    if (toggleErrors[node.id]) return 'Action failed'
+    if (node.id === 'chatluna') return 'Core'
+    if (!node.available && node.configured === false) return '未安装'
+
+    return node.available ? 'Ready' : 'Not enabled'
+}
+
+const selectModule = (item: HubModuleItem) => {
+    if (isNodePending(item.id)) return
+    if (!item.available) return
+    emit('select', item.id)
+}
+
+const handleNodePointerLeave = (id: HubModuleId) => {
+    if (focusedNodeId.value === id) {
+        focusedNodeId.value = null
+    }
+}
+
+const handleStagePointerMove = (event: PointerEvent) => {
+    const point = eventToPoint(event)
+    if (point) pointer.value = point
+}
+
+const handleStagePointerLeave = () => {
+    if (!dragState) pointer.value = null
+}
+
+const handleRangeControlInput = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement
+    effectiveRangeRadiusInput.value = clampNumber(
+        Number(input.value),
+        effectiveRangeMinRadiusPx,
+        effectiveRangeMaxRadiusPx.value
+    )
+    showEffectiveRangePreview()
+    if (!rangeControlPointerActive) scheduleEffectiveRangePreviewHide()
+    savePersistedRange()
+}
+
+const clearEffectiveRangePreviewHideTimer = () => {
+    if (!effectiveRangePreviewHideTimer) return
+    window.clearTimeout(effectiveRangePreviewHideTimer)
+    effectiveRangePreviewHideTimer = 0
+}
+
+const showEffectiveRangePreview = () => {
+    clearEffectiveRangePreviewHideTimer()
+    effectiveRangePreviewVisible.value = true
+}
+
+const scheduleEffectiveRangePreviewHide = () => {
+    clearEffectiveRangePreviewHideTimer()
+    effectiveRangePreviewHideTimer = window.setTimeout(() => {
+        effectiveRangePreviewVisible.value = false
+        effectiveRangePreviewHideTimer = 0
+    }, 760)
+}
+
+const detachRangeControlPointerListeners = () => {
+    window.removeEventListener('pointerup', handleRangeControlInteractionEnd)
+    window.removeEventListener('pointercancel', handleRangeControlInteractionEnd)
+}
+
+const handleRangeControlInteractionStart = () => {
+    detachRangeControlPointerListeners()
+    rangeControlPointerActive = true
+    showEffectiveRangePreview()
+    window.addEventListener('pointerup', handleRangeControlInteractionEnd)
+    window.addEventListener('pointercancel', handleRangeControlInteractionEnd)
+}
+
+const handleRangeControlInteractionEnd = () => {
+    detachRangeControlPointerListeners()
+    rangeControlPointerActive = false
+    scheduleEffectiveRangePreviewHide()
+}
+
+const clearRecord = <T,>(record: Partial<Record<HubModuleId, T>>) => {
+    for (const key of Object.keys(record) as HubModuleId[]) {
+        delete record[key]
+    }
+}
+
+const handleResetGraphDefaults = () => {
+    if (dragState) {
+        dragState = null
+        draggingId.value = null
+        detachDragListeners()
+    }
+
+    pointer.value = null
+    detachRangeControlPointerListeners()
+    rangeControlPointerActive = false
+    clearEffectiveRangePreviewHideTimer()
+    effectiveRangePreviewVisible.value = false
+    effectiveRangeRadiusInput.value = 0
+    detailFontSizePx.value = 18
+    clearRecord(nodePositions)
+    clearRecord(disturbances)
+    clearRecord(carriedVisuals)
+    clearRecord(carriedVelocities)
+    physicsStates.splice(0, physicsStates.length)
+
+    try {
+        window.localStorage.removeItem(positionStorageKey)
+        window.localStorage.removeItem(rangeStorageKey)
+        window.localStorage.removeItem(detailFontSizeStorageKey)
+    } catch {
+        // Ignore storage failures; the visible graph has still been reset.
+    }
+}
+
+const handleNodePointerDown = (event: PointerEvent, node: GraphNode) => {
+    if (event.button !== 0) return
+
+    const point = eventToPoint(event)
+    if (!point) return
+
+    event.preventDefault()
+    dragState = {
+        id: node.id,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startPoint: point,
+        startPosition: getBasePosition(node),
+        startPositions: collectBasePositions(),
+        moved: false
+    }
+    draggingId.value = node.id
+
+    if (node.id !== 'chatluna') {
+        nodePositions[node.id] = dragState.startPosition
+        carriedVisuals[node.id] = dragState.startPosition
+        carriedVelocities[node.id] = { x: 0, y: 0 }
+    }
+
+    window.addEventListener('pointermove', handleDragMove)
+    window.addEventListener('pointerup', handleDragEnd)
+    window.addEventListener('pointercancel', handleDragEnd)
+}
+
+const handleDragMove = (event: PointerEvent) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    const point = eventToPoint(event)
+    if (!point) return
+
+    pointer.value = point
+    const clientDistance = Math.hypot(
+        event.clientX - dragState.startClientX,
+        event.clientY - dragState.startClientY
+    )
+
+    if (clientDistance > 4) dragState.moved = true
+    if (!dragState.moved) return
+
+    const nextPoint = clampPoint({
+        x: dragState.startPosition.x + point.x - dragState.startPoint.x,
+        y: dragState.startPosition.y + point.y - dragState.startPoint.y
+    })
+
+    nodePositions[dragState.id] = nextPoint
+    carriedVisuals[dragState.id] = nextPoint
+    carriedVelocities[dragState.id] = { x: 0, y: 0 }
+}
+
+const handleDragEnd = (event: PointerEvent) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+
+    const target = sortedModules.value.find((item) => item.id === dragState!.id)
+    if (!dragState.moved && target) selectModule(target)
+    if (dragState.moved) {
+        savePersistedPositions()
+        if (target) {
+            // Set final drop positions and zero velocities to prevent inertia/spring effect
+            carriedVisuals[target.id] = nodePositions[target.id]
+            carriedVelocities[target.id] = { x: 0, y: 0 }
+
+            if (target.id === 'chatluna') {
+                // If core moved, reconcile boundaries for all satellites
+                for (const item of ecosystemModules.value) {
+                    void reconcileModuleBoundary(item)
+                }
+            } else {
+                void reconcileModuleBoundary(target)
+            }
+        }
+    }
+
+    dragState = null
+    draggingId.value = null
+    detachDragListeners()
+}
+
+const detachDragListeners = () => {
+    window.removeEventListener('pointermove', handleDragMove)
+    window.removeEventListener('pointerup', handleDragEnd)
+    window.removeEventListener('pointercancel', handleDragEnd)
+}
+
+const collectBasePositions = () => {
+    const data: Partial<Record<HubModuleId, Point>> = {}
+
+    for (const item of sortedModules.value) {
+        data[item.id] = getBasePositionForItem(item)
+    }
+
+    return data
+}
+
+const getBasePosition = (node: GraphNode): Point => {
+    const item = sortedModules.value.find((module) => module.id === node.id)
+    if (item) {
+        const visual = node.id === 'chatluna' ? undefined : carriedVisuals[node.id]
+        return visual ? { ...visual } : getBasePositionForItem(item)
+    }
+
+    return {
+        x: node.x,
+        y: node.y
+    }
+}
+
+const getBasePositionForItem = (
+    item: HubModuleItem,
+    satelliteIndex = ecosystemModules.value.findIndex(
+        (module) => module.id === item.id
+    )
+): Point => {
+    const stored = nodePositions[item.id]
+    if (stored) return { ...stored }
+    if (item.id === 'chatluna') return getDefaultCorePosition()
+
+    return getDefaultSatellitePosition(
+        satelliteIndex < 0 ? 0 : satelliteIndex,
+        ecosystemModules.value.length
+    )
+}
+
+const clampPoint = (point: Point): Point => ({
+    x: Math.min(910, Math.max(90, point.x)),
+    y: Math.min(540, Math.max(80, point.y))
+})
+
+const reconcileModuleBoundary = async (item: HubModuleItem) => {
+    if (item.id === 'chatluna' || item.group !== 'ecosystem') return
+    if (togglePending[item.id]) return
+    if (item.configured === false) return
+
+    const point = getBasePositionForItem(item)
+    const withinRange = isPointWithinEffectiveRange(point)
+
+    if (item.available && !withinRange) {
+        await setModuleEnabled(item, false)
+    } else if (!item.available && withinRange) {
+        await setModuleEnabled(item, true)
+    }
+}
+
+const setModuleEnabled = async (item: HubModuleItem, enabled: boolean) => {
+    clearToggleError(item.id)
+    togglePending[item.id] = enabled ? 'enable' : 'disable'
+
+    try {
+        const result = (await send(
+            'chatluna-hub/module/set-enabled',
+            item.id,
+            enabled
+        )) as HubModuleToggleResult | undefined
+
+        if (!result?.ok) {
+            setToggleError(
+                item.id,
+                result?.reason ?? 'Unable to update plugin state.'
+            )
+        }
+    } catch (error) {
+        setToggleError(
+            item.id,
+            error instanceof Error ? error.message : String(error)
+        )
+    } finally {
+        delete togglePending[item.id]
+    }
+}
+
+const clearToggleError = (id: HubModuleId) => {
+    if (errorTimers[id]) {
+        window.clearTimeout(errorTimers[id])
+        delete errorTimers[id]
+    }
+
+    delete toggleErrors[id]
+}
+
+const setToggleError = (id: HubModuleId, reason: string) => {
+    clearToggleError(id)
+    toggleErrors[id] = reason
+    errorTimers[id] = window.setTimeout(() => {
+        delete toggleErrors[id]
+        delete errorTimers[id]
+    }, 4200)
+}
+
+const tickDisturbances = () => {
+    for (const [index, item] of ecosystemModules.value.entries()) {
+        const base = getBasePositionForItem(item, index)
+        const target = getDisturbanceTarget(base, item.id)
+        const current = disturbances[item.id] ?? {
+            x: 0,
+            y: 0,
+            active: false
+        }
+        const smoothing = target.active ? 0.13 : 0.075
+        const nextX = current.x + (target.x - current.x) * smoothing
+        const nextY = current.y + (target.y - current.y) * smoothing
+        const active = target.active || Math.hypot(nextX, nextY) > 0.45
+
+        disturbances[item.id] = {
+            x: active ? nextX : 0,
+            y: active ? nextY : 0,
+            active
+        }
+    }
+}
+
+interface PhysicsState {
+    id: HubModuleId
+    x: number
+    y: number
+    vx: number
+    vy: number
+    radius: number
+    isDragging: boolean
+    isCore: boolean
+    available: boolean
+    item: HubModuleItem
+}
+
+const physicsStates: PhysicsState[] = []
+
+const syncPhysicsStates = () => {
+    const core = coreNode.value
+    if (!core) return
+
+    // Sync core
+    if (physicsStates.length === 0) {
+        physicsStates.push({
+            id: 'chatluna',
+            x: core.x,
+            y: core.y,
+            vx: 0,
+            vy: 0,
+            radius: 74,
+            isDragging: draggingId.value === 'chatluna',
+            isCore: true,
+            available: true,
+            item: coreModule.value!
+        })
+    } else {
+        const s = physicsStates[0]
+        s.x = core.x
+        s.y = core.y
+        s.isDragging = draggingId.value === 'chatluna'
+        s.item = coreModule.value!
+    }
+
+    const modulesList = ecosystemModules.value
+    while (physicsStates.length - 1 > modulesList.length) {
+        physicsStates.pop()
+    }
+
+    for (let i = 0; i < modulesList.length; i++) {
+        const item = modulesList[i]
+        const id = item.id
+        const isDragging = draggingId.value === id
+        const base = getBasePositionForItem(item)
+        const current = carriedVisuals[id] ?? { ...base }
+        const velocity = carriedVelocities[id] ?? { x: 0, y: 0 }
+
+        const stateIndex = i + 1
+        if (stateIndex >= physicsStates.length) {
+            physicsStates.push({
+                id,
+                x: isDragging ? base.x : current.x,
+                y: isDragging ? base.y : current.y,
+                vx: isDragging ? 0 : velocity.x,
+                vy: isDragging ? 0 : velocity.y,
+                radius: 63,
+                isDragging,
+                isCore: false,
+                available: item.available,
+                item
+            })
+        } else {
+            const s = physicsStates[stateIndex]
+            s.id = id
+            s.x = isDragging ? base.x : current.x
+            s.y = isDragging ? base.y : current.y
+            s.vx = isDragging ? 0 : velocity.x
+            s.vy = isDragging ? 0 : velocity.y
+            s.isDragging = isDragging
+            s.available = item.available
+            s.item = item
+        }
+    }
+}
+
+const tickCarriedNodes = (deltaFrames: number) => {
+    // If we're dragging a node, we should update its visual representation directly
+    // If we're not dragging, we apply rope constraints, inertia, and damping.
+    const core = coreNode.value
+    if (!core) return
+
+    syncPhysicsStates()
+
+    // 2. Perform Verlet / Euler step for non-dragging satellites (Inertia & Damping)
+    // Direct Drag Isolation: Only drag core node triggers physics for others.
+    // When directly dragging a satellite node, it follows the pointer statically,
+    // and when released, it has no inertia (immediate stop).
+    const draggingCore = draggingId.value === 'chatluna'
+    const statesCount = physicsStates.length
+
+    // Slow Orbital Motion: Orbit core slowly when no dragging or range adjustment occurs
+    const isOrbitActiveVal = isOrbitActive.value
+
+    for (let i = 0; i < statesCount; i++) {
+        const state = physicsStates[i]
+        if (state.isCore || state.isDragging) continue
+
+        if (isOrbitActiveVal) {
+            // Calculate orbital rotation in screen pixels to avoid stretching distortions
+            const dx = state.x - core.x
+            const dy = state.y - core.y
+            const speed = orbitSpeedRad * deltaFrames
+
+            const dxPx = (dx / 1000) * stageSize.width
+            const dyPx = (dy / 620) * stageSize.height
+
+            const cosVal = Math.cos(speed)
+            const sinVal = Math.sin(speed)
+
+            const nextDxPx = dxPx * cosVal - dyPx * sinVal
+            const nextDyPx = dxPx * sinVal + dyPx * cosVal
+
+            state.x = core.x + nextDxPx * (1000 / stageSize.width)
+            state.y = core.y + nextDyPx * (620 / stageSize.height)
+
+            // Bring velocity to 0 to prevent inertia conflicts during orbit
+            state.vx = 0
+            state.vy = 0
+            continue
+        }
+
+        // If we are NOT dragging the core, satellites should not slide or have physics inertia!
+        // Direct Drag Isolation: If a satellite itself was being dragged and just released,
+        // or if we're not dragging the core, set its velocity to zero so it comes to a complete halt immediately.
+        if (!draggingCore) {
+            state.vx = 0
+            state.vy = 0
+            continue
+        }
+
+        const damping = 0.90
+        state.vx *= Math.pow(damping, deltaFrames)
+        state.vy *= Math.pow(damping, deltaFrames)
+
+        state.x += state.vx * deltaFrames
+        state.y += state.vy * deltaFrames
+    }
+
+    // 3. Collision Detection & Resolution (Repulsion)
+    // Avoid overlapping for ALL nodes.
+    // Iterative constraint resolver for stable collision physics
+    // Bypass collision resolution when orbiting to avoid sub-pixel jitter
+    if (!isOrbitActiveVal) {
+        for (let iteration = 0; iteration < 2; iteration++) {
+            for (let i = 0; i < statesCount; i++) {
+                for (let j = i + 1; j < statesCount; j++) {
+                    const a = physicsStates[i]
+                    const b = physicsStates[j]
+
+                    const dxPx = ((b.x - a.x) / 1000) * stageSize.width
+                    const dyPx = ((b.y - a.y) / 620) * stageSize.height
+                    const distPx = Math.hypot(dxPx, dyPx)
+                    const minDistancePx = a.radius + b.radius + 16 // Radius + padding to avoid overlapping
+
+                    if (distPx < minDistancePx) {
+                        const overlapPx = minDistancePx - distPx
+                        const nx = dxPx / (distPx || 1)
+                        const ny = dyPx / (distPx || 1)
+
+                        const pushX = overlapPx * nx * (1000 / stageSize.width)
+                        const pushY = overlapPx * ny * (620 / stageSize.height)
+
+                        // Distribute push based on whether nodes are static (dragging, core, etc.)
+                        const aStatic = a.isDragging || (a.isCore && draggingId.value === 'chatluna')
+                        const bStatic = b.isDragging || (b.isCore && draggingId.value === 'chatluna')
+
+                        if (aStatic && !bStatic) {
+                            b.x += pushX
+                            b.y += pushY
+                            if (!b.isDragging) {
+                                b.vx += pushX * 0.1
+                                b.vy += pushY * 0.1
+                            }
+                        } else if (!aStatic && bStatic) {
+                            a.x -= pushX
+                            a.y -= pushY
+                            if (!a.isDragging) {
+                                a.vx -= pushX * 0.1
+                                a.vy -= pushY * 0.1
+                            }
+                        } else if (!aStatic && !bStatic) {
+                            // Split the push equally
+                            a.x -= pushX * 0.5
+                            a.y -= pushY * 0.5
+                            b.x += pushX * 0.5
+                            b.y += pushY * 0.5
+
+                            a.vx -= pushX * 0.05
+                            a.vy -= pushY * 0.05
+                            b.vx += pushX * 0.05
+                            b.vy += pushY * 0.05
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Apply Rope Constraint (from Core) & Save positions
+    for (let i = 0; i < statesCount; i++) {
+        const state = physicsStates[i]
+        if (state.isCore) continue
+
+        const id = state.id
+
+        // Rope constraint applies only if the module is enabled (available),
+        // NOT currently disabling, and NOT currently being dragged by the user!
+        // Direct Drag Isolation: Bypassing rope constraint while dragging allows moving nodes outside.
+        const isDisabling = togglePending[id] === 'disable'
+        if (state.available && !isDisabling && !state.isDragging) {
+            // Calculate distance in screen pixels to ensure the boundary matches the perfect circle rendered on screen
+            const dxPx = ((state.x - core.x) / 1000) * stageSize.width
+            const dyPx = ((state.y - core.y) / 620) * stageSize.height
+            const distPx = Math.hypot(dxPx, dyPx)
+            const rangePx = effectiveRangeRadiusPx.value
+
+            if (distPx > rangePx) {
+                // Rope is taut: project back onto perfect circle boundary in screen pixels
+                const scale = rangePx / distPx
+                const targetXPx = dxPx * scale
+                const targetYPx = dyPx * scale
+
+                // Convert back to SVG coordinate space
+                const targetX = core.x + targetXPx * (1000 / stageSize.width)
+                const targetY = core.y + targetYPx * (620 / stageSize.height)
+
+                // Only transfer pulling force to velocity if dragging the core (rope pulls satellite)
+                if (draggingCore) {
+                    state.vx = (targetX - state.x) / deltaFrames
+                    state.vy = (targetY - state.y) / deltaFrames
+                }
+
+                state.x = targetX
+                state.y = targetY
+            }
+        }
+
+        // Clamp to stage boundaries
+        const clamped = clampPoint({ x: state.x, y: state.y })
+        let velocity = carriedVelocities[id]
+        if (!velocity) {
+            carriedVelocities[id] = { x: state.vx, y: state.vy }
+        } else {
+            velocity.x = state.vx
+            velocity.y = state.vy
+        }
+        carriedVisuals[id] = clamped
+        nodePositions[id] = clamped
+    }
+}
+
+const tickAnimation = (time = window.performance.now()) => {
+    const deltaFrames = lastAnimationTime
+        ? clampNumber((time - lastAnimationTime) / 16.667, 0.45, 2.2)
+        : 1
+
+    lastAnimationTime = time
+    tickDisturbances()
+    tickCarriedNodes(deltaFrames)
+    animationFrame = window.requestAnimationFrame(tickAnimation)
+}
+
+const loadPersistedFontSize = () => {
+    try {
+        const raw = window.localStorage.getItem(detailFontSizeStorageKey)
+        if (raw) {
+            const val = Number(raw)
+            if (val >= 12 && val <= 20) {
+                detailFontSizePx.value = val
+            }
+        }
+    } catch {
+        window.localStorage.removeItem(detailFontSizeStorageKey)
+    }
+}
+
+const savePersistedFontSize = (val: number) => {
+    try {
+        window.localStorage.setItem(detailFontSizeStorageKey, String(val))
+    } catch {
+        // Ignore failures
+    }
+}
+
+const loadPersistedPositions = () => {
+    try {
+        const raw = window.localStorage.getItem(positionStorageKey)
+        if (!raw) return
+
+        const data = JSON.parse(raw) as Partial<Record<HubModuleId, Point>>
+        for (const item of sortedModules.value) {
+            const point = data[item.id]
+            if (!isPoint(point)) continue
+            nodePositions[item.id] = clampPoint(point)
+        }
+    } catch {
+        window.localStorage.removeItem(positionStorageKey)
+    }
+}
+
+const loadPersistedRange = () => {
+    try {
+        const raw = window.localStorage.getItem(rangeStorageKey)
+        if (!raw) return
+
+        const value = Number(raw)
+        if (!Number.isFinite(value)) return
+        const radius =
+            value <= 160 ? defaultEffectiveRangeRadiusPx.value * (value / 100) : value
+
+        effectiveRangeRadiusInput.value = clampNumber(
+            radius,
+            effectiveRangeMinRadiusPx,
+            effectiveRangeMaxRadiusPx.value
+        )
+    } catch {
+        window.localStorage.removeItem(rangeStorageKey)
+    }
+}
+
+const savePersistedRange = () => {
+    try {
+        window.localStorage.setItem(
+            rangeStorageKey,
+            String(Math.round(effectiveRangeRadiusPx.value))
+        )
+    } catch {
+        // Ignore storage failures; the control should still work for this session.
+    }
+}
+
+const savePersistedPositions = () => {
+    const data: Partial<Record<HubModuleId, Point>> = {}
+
+    for (const item of sortedModules.value) {
+        const point = nodePositions[item.id]
+        if (point) data[item.id] = clampPoint(point)
+    }
+
+    try {
+        window.localStorage.setItem(positionStorageKey, JSON.stringify(data))
+    } catch {
+        // Ignore storage failures; dragging should still work for this session.
+    }
+}
+
+const isPoint = (value: unknown): value is Point => {
+    if (!value || typeof value !== 'object') return false
+
+    const point = value as Partial<Point>
+    return Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
+const eventToPoint = (event: PointerEvent): Point | null => {
+    const rect = stageRef.value?.getBoundingClientRect()
+    if (!rect?.width || !rect.height) return null
+
+    return {
+        x: ((event.clientX - rect.left) / rect.width) * 1000,
+        y: ((event.clientY - rect.top) / rect.height) * 620
+    }
+}
+
+const distancePx = (left: Point, right: Point) => {
+    const dx = ((left.x - right.x) / 1000) * stageSize.width
+    const dy = ((left.y - right.y) / 620) * stageSize.height
+
+    return Math.hypot(dx, dy)
+}
+
+const refreshStageSize = () => {
+    const rect = stageRef.value?.getBoundingClientRect()
+    if (!rect) return
+
+    stageSize.width = rect.width || 1000
+    stageSize.height = rect.height || 620
+}
+
+onMounted(() => {
+    refreshStageSize()
+    loadPersistedPositions()
+    loadPersistedRange()
+    loadPersistedFontSize()
+    if (!stageRef.value) return
+
+    resizeObserver = new ResizeObserver(refreshStageSize)
+    resizeObserver.observe(stageRef.value)
+    animationFrame = window.requestAnimationFrame(tickAnimation)
+})
+
+onBeforeUnmount(() => {
+    detachDragListeners()
+    detachRangeControlPointerListeners()
+    clearEffectiveRangePreviewHideTimer()
+    window.cancelAnimationFrame(animationFrame)
+    for (const timer of Object.values(errorTimers)) {
+        if (timer) window.clearTimeout(timer)
+    }
+    resizeObserver?.disconnect()
+})
+</script>
+
+<style scoped>
+.relationship-home {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 560px;
+    overflow: hidden;
+    color: var(--k-text-dark);
+}
+
+.graph-container-box {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.hub-module-detail-panel {
+    position: absolute;
+    bottom: 24px;
+    right: 28px;
+    width: 500px;
+    height: 800px; /* Fixed height so size is not affected by text content */
+    border: 1px solid var(--k-color-divider);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: var(--k-card-shadow);
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.detail-panel-scroll {
+    flex: 1;
+    min-height: 0;
+}
+
+.detail-panel-content {
+    box-sizing: border-box;
+    padding: 22px 20px 24px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch; /* Stretch child elements to fill container width to keep margin padding consistent */
+}
+
+.detail-card-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    gap: 16px;
+    width: 100%;
+    will-change: transform, opacity;
+}
+
+.detail-card-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.detail-icon {
+    width: 54px;
+    height: 54px;
+    border: 1px solid color-mix(in srgb, var(--detail-tone), var(--k-color-divider) 30%);
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: var(--detail-tone);
+    background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--k-card-bg), var(--detail-tone) 12%), transparent 60%),
+                color-mix(in srgb, var(--k-card-bg), var(--detail-tone) 6%);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--detail-tone), transparent 84%);
+}
+
+.detail-icon .chatluna-mark.mini,
+.detail-icon .agent-mark.mini,
+.detail-icon .palette-mark.mini,
+.detail-icon .memesluna-mark.mini {
+    width: 32px;
+    height: 32px;
+}
+
+.header-titles {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.detail-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.detail-tag.core {
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
+    border: 1px solid color-mix(in srgb, var(--k-color-primary), transparent 78%);
+}
+
+.detail-tag.ecosystem {
+    color: var(--k-color-success);
+    background: color-mix(in srgb, var(--k-color-success), transparent 90%);
+    border: 1px solid color-mix(in srgb, var(--k-color-success), transparent 78%);
+}
+
+.header-titles h3 {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) + 4px);
+    font-weight: 760;
+    color: var(--k-text-dark);
+    line-height: 1.25;
+}
+
+.detail-subtitle {
+    font-size: calc(var(--detail-font-size) - 2px);
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+    font-weight: 550;
+}
+
+.detail-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    font-weight: 600;
+    color: var(--k-text-dark); /* Changed from var(--k-text-light) to var(--k-text-dark) for better readability */
+    background: var(--k-hover-bg);
+    border: 1px solid var(--k-color-divider);
+    width: fit-content;
+    align-self: center; /* Keep the status indicator badge centered */
+}
+
+.detail-status-indicator.is-active {
+    color: var(--k-color-success);
+    background: color-mix(in srgb, var(--k-color-success), transparent 93%);
+    border-color: color-mix(in srgb, var(--k-color-success), transparent 82%);
+}
+
+.detail-description {
+    margin: 0;
+    font-size: var(--detail-font-size);
+    line-height: 1.6;
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+}
+
+.detail-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+    width: 100%;
+}
+
+.detail-section h4 {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    font-weight: 700;
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 6px;
+    width: 100%;
+}
+
+.detail-features li {
+    display: inline-flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: calc(var(--detail-font-size) - 0.5px);
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+    line-height: 1.4;
+}
+
+.feat-dot {
+    color: var(--k-color-primary);
+    flex-shrink: 0;
+    margin-top: 3px; /* Align checkmark icon with first line of multiline feature text */
+}
+
+.detail-tip {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--k-color-warning), transparent 94%);
+    border: 1px solid color-mix(in srgb, var(--k-color-warning), transparent 84%);
+    color: color-mix(in srgb, var(--k-color-warning), var(--k-text-dark) 34%);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tip-icon {
+    flex-shrink: 0;
+    color: var(--k-color-warning);
+    margin-top: 2px; /* Align icon vertically with first line of tip description */
+}
+
+.detail-tip p {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    line-height: 1.5;
+}
+
+.detail-card-default {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    padding: 8px 4px;
+    height: 100%;
+    width: 100%;
+}
+
+.default-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--k-color-primary), transparent 92%);
+    color: var(--k-color-primary);
+    display: grid;
+    place-items: center;
+    margin-bottom: 16px;
+    align-self: center; /* Center the icon at the top of default explanation */
+}
+
+.detail-card-default h3 {
+    margin: 0 0 12px;
+    font-size: calc(var(--detail-font-size) + 4px);
+    font-weight: 760;
+    color: var(--k-text-dark);
+    text-align: center; /* Center only the main title */
+}
+
+.detail-card-default p {
+    margin: 0 0 20px;
+    font-size: var(--detail-font-size);
+    line-height: 1.6;
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+}
+
+.guide-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    align-items: stretch;
+    width: 100%;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 10px;
+    width: 100%;
+}
+
+.step-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--k-hover-bg);
+    border: 1px solid var(--k-color-divider);
+    font-size: 10px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    color: var(--k-text-normal);
+    flex-shrink: 0;
+    margin-top: 2px; /* Align number badge with first line of step text */
+}
+
+.step-item p {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1px);
+    line-height: 1.5;
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+}
+
+.font-size-adjuster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--k-color-divider);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-hover-bg) 35%);
+    font-size: 11px;
+    color: var(--k-text-light);
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.font-size-adjuster input {
+    flex: 1;
+    min-width: 0;
+    height: 3px;
+    accent-color: var(--k-color-primary);
+    cursor: pointer;
+}
+
+.font-size-adjuster span {
+    font-weight: 700;
+    min-width: 32px;
+    text-align: right;
+    font-family: monospace;
+}
+
+/* Animations */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-slide-enter-from {
+    opacity: 0;
+    transform: translateX(10px);
+}
+
+.fade-slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+.graph-header,
+.ecosystem-meter,
+.range-control {
+    position: absolute;
+    z-index: 4;
+}
+
+.graph-header {
+    top: 24px;
+    left: 28px;
+    max-width: min(420px, calc(100% - 240px));
+}
+
+.graph-header h1 {
+    margin: 0;
+    color: var(--k-text-dark);
+    font-size: 30px;
+    line-height: 1.15;
+    font-weight: 760;
+}
+
+.graph-header p {
+    margin: 8px 0 0;
+    color: var(--k-text-light);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.ecosystem-meter {
+    top: 24px;
+    right: 28px;
+    min-width: 150px;
+    padding: 10px 12px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    color: var(--k-text-dark);
+    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
+    box-shadow: var(--k-card-shadow);
+}
+
+.ecosystem-meter span,
+.ecosystem-meter small {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.ecosystem-meter strong {
+    font-size: 22px;
+    line-height: 1.1;
+}
+
+.range-control {
+    left: max(24px, env(safe-area-inset-left, 0px));
+    bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    width: min(260px, calc(100% - 36px));
+    padding: 9px 10px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
+    box-shadow: var(--k-card-shadow);
+}
+
+.range-control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.range-control input {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--k-color-primary);
+    cursor: pointer;
+}
+
+.range-reset-button {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    color: var(--k-text-dark);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-primary) 6%);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 0.16s ease,
+        color 0.16s ease,
+        background 0.16s ease;
+}
+
+.range-reset-button:hover,
+.range-reset-button:focus-visible {
+    border-color: color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 34%);
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-primary) 12%);
+}
+
+.range-reset-button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--k-color-primary), transparent 38%);
+    outline-offset: 2px;
+}
+
+.graph-stage,
+.graph-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.edge-layer {
+    color: var(--k-color-primary);
+    --disabled-edge-tone: color-mix(
+        in srgb,
+        var(--k-text-light),
+        var(--k-color-divider) 42%
+    );
+}
+
+.effective-range {
+    fill: none;
+    stroke: color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 56%);
+    stroke-width: 1.2;
+    stroke-dasharray: 10 14;
+    opacity: 0.58;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.graph-edge {
+    fill: none;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.edge-base {
+    stroke: color-mix(in srgb, currentColor, var(--k-color-divider) 36%);
+    stroke-width: 1.6;
+    opacity: 0.55;
+    transition:
+        opacity 0.16s ease,
+        stroke 0.16s ease,
+        stroke-width 0.16s ease;
+}
+
+.edge-flow {
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-dasharray: 20 150;
+    stroke-dashoffset: 0;
+    opacity: 0.64;
+    filter: url(#hub-graph-glow);
+    animation: edge-flow 3.4s linear infinite;
+    transition:
+        opacity 0.16s ease,
+        stroke 0.16s ease;
+}
+
+.edge-base.risky {
+    stroke-width: 2.4;
+    opacity: 0.82;
+}
+
+.edge-flow.risky {
+    opacity: 0.82;
+}
+
+.graph-edge.disabled {
+    stroke: var(--disabled-edge-tone);
+    filter: none;
+    animation: none;
+}
+
+.edge-base.disabled {
+    opacity: 0.42;
+}
+
+.edge-flow.disabled {
+    opacity: 0;
+}
+
+/* Removed .edge-joint styles since joint circles are deleted */
+
+.graph-node {
+    position: absolute;
+    left: var(--node-x);
+    top: var(--node-y);
+    width: calc(var(--node-size) + 42px);
+    min-height: calc(var(--node-size) + 50px);
+    padding: 0;
+    border: 0;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 8px;
+    color: var(--k-text-dark);
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    transform: translate(-50%, calc(var(--node-size) / -2));
+    transition:
+        opacity 0.2s ease,
+        transform 0.22s ease;
+}
+
+.graph-node:hover,
+.graph-node:focus-visible,
+.graph-node.disturbed {
+    transform: translate(-50%, calc(var(--node-size) / -2)) scale(1.035);
+}
+
+.graph-node:focus-visible {
+    outline: 2px solid var(--node-tone);
+    outline-offset: 6px;
+}
+
+.graph-node.dragging {
+    cursor: grabbing;
+    transition-duration: 0.01ms;
+}
+
+.graph-node.core,
+.graph-node.satellite {
+    cursor: grab;
+}
+
+.graph-node.disabled {
+    opacity: 0.58;
+}
+
+.graph-node.pending {
+    opacity: 0.72;
+}
+
+.graph-node.out-of-range .node-status {
+    color: var(--k-color-danger);
+}
+
+.node-disc {
+    position: relative;
+    width: var(--node-size);
+    height: var(--node-size);
+    border: 1px solid color-mix(in srgb, var(--node-tone), var(--k-color-divider) 34%);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--node-tone);
+    background:
+        radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--k-card-bg), var(--node-tone) 12%), transparent 58%),
+        color-mix(in srgb, var(--k-card-bg), var(--node-tone) 8%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 46%) inset,
+        0 16px 34px color-mix(in srgb, var(--k-text-dark), transparent 88%),
+        0 0 28px color-mix(in srgb, var(--node-tone), transparent 72%);
+    overflow: hidden;
+    animation: node-breathe 4.6s ease-in-out infinite;
+}
+
+.satellite:not(.dragging) .node-disc {
+    animation:
+        node-breathe 4.6s ease-in-out infinite,
+        node-float 6.8s ease-in-out infinite;
+    animation-delay: 0s, var(--float-delay);
+}
+
+.orbit-active .satellite:not(.dragging) .node-disc {
+    animation: node-breathe 4.6s ease-in-out infinite !important;
+}
+
+.node-disc::after {
+    content: "";
+    position: absolute;
+    inset: 17%;
+    border-radius: inherit;
+    border: 1px solid color-mix(in srgb, var(--node-tone), transparent 70%);
+    opacity: 0.72;
+}
+
+.node-glow {
+    position: absolute;
+    inset: -18%;
+    border-radius: inherit;
+    background: radial-gradient(circle, color-mix(in srgb, var(--node-tone), transparent 72%), transparent 68%);
+    opacity: 0.54;
+    animation: glow-pulse 3.8s ease-in-out infinite;
+}
+
+.core .node-disc {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--node-tone), transparent 58%) inset,
+        0 18px 42px color-mix(in srgb, var(--k-text-dark), transparent 88%),
+        0 0 26px color-mix(in srgb, var(--node-tone), transparent 50%),
+        0 0 64px color-mix(in srgb, var(--node-tone), transparent 70%);
+}
+
+.chatluna-mark,
+.agent-mark,
+.palette-mark,
+.memesluna-mark,
+.node-disc .el-icon {
+    position: relative;
+    z-index: 1;
+}
+
+.chatluna-mark {
+    width: 74px;
+    height: 74px;
+    color: currentColor;
+}
+
+.agent-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.palette-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.memesluna-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.node-title,
+.node-status {
+    max-width: 168px;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.node-title {
+    color: var(--k-text-dark);
+    font-size: 14px;
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.node-status {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+@keyframes edge-flow {
+    to {
+        stroke-dashoffset: -170;
+    }
+}
+
+/* Removed @keyframes joint-pulse since joint circles are deleted */
+
+@keyframes node-breathe {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 46%) inset,
+            0 16px 34px color-mix(in srgb, var(--k-text-dark), transparent 88%),
+            0 0 22px color-mix(in srgb, var(--node-tone), transparent 76%);
+    }
+
+    50% {
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--node-tone), transparent 58%) inset,
+            0 18px 38px color-mix(in srgb, var(--k-text-dark), transparent 86%),
+            0 0 34px color-mix(in srgb, var(--node-tone), transparent 66%);
+    }
+}
+
+@keyframes node-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes glow-pulse {
+    0%,
+    100% {
+        opacity: 0.38;
+        transform: scale(0.94);
+    }
+
+    50% {
+        opacity: 0.72;
+        transform: scale(1.08);
+    }
+}
+
+@media (max-width: 1024px) {
+    .hub-module-detail-panel {
+        position: absolute;
+        bottom: 24px;
+        right: 28px;
+        left: 28px;
+        width: auto;
+        max-height: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    .relationship-home {
+        min-height: 520px;
+    }
+
+    .graph-header {
+        top: 16px;
+        left: 16px;
+        max-width: calc(100% - 190px);
+    }
+
+    .graph-header h1 {
+        font-size: 24px;
+    }
+
+    .ecosystem-meter {
+        top: 16px;
+        right: 16px;
+        min-width: 126px;
+    }
+
+    .range-control {
+        left: max(14px, env(safe-area-inset-left, 0px));
+        bottom: max(14px, env(safe-area-inset-bottom, 0px));
+        width: min(248px, calc(100% - 28px));
+        z-index: 6; /* Float above the detail card on mobile if overlapping */
+    }
+
+    .hub-module-detail-panel {
+        bottom: max(14px, env(safe-area-inset-bottom, 0px));
+        right: 14px;
+        left: 14px;
+        max-height: 200px;
+        border-radius: 10px;
+    }
+
+    .detail-panel-content {
+        padding: 16px 14px 18px;
+    }
+
+    .chatluna-mark {
+        width: 68px;
+        height: 68px;
+    }
+
+    .agent-mark {
+        width: 52px;
+        height: 52px;
+    }
+
+    .palette-mark,
+    .memesluna-mark {
+        width: 52px;
+        height: 52px;
+    }
+
+    .node-title,
+    .node-status {
+        max-width: 126px;
+    }
+}
+
+@media (max-width: 520px) {
+    .graph-header {
+        max-width: calc(100% - 32px);
+    }
+
+    .ecosystem-meter {
+        top: 92px;
+        left: 16px;
+        right: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edge-flow,
+    .edge-joint,
+    .node-disc,
+    .node-glow {
+        animation: none !important;
+    }
+
+    .graph-node {
+        transition-duration: 0.01ms !important;
+    }
+
+    .graph-node:hover,
+    .graph-node:focus-visible,
+    .graph-node.disturbed {
+        transform: translate(-50%, calc(var(--node-size) / -2));
+    }
+}
+</style>

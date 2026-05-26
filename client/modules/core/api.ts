@@ -1,0 +1,73 @@
+import { send } from '@koishijs/client'
+import type {
+    ChatLunaConversationListItem,
+    ChatLunaConversationListQuery,
+    ChatLunaConversationOptions,
+    ChatLunaCoreModelListResult,
+    ChatLunaCorePresetCreateInput,
+    ChatLunaCorePresetDetail,
+    ChatLunaCorePresetGetInput,
+    ChatLunaCorePresetListResult,
+    ChatLunaCorePresetUpdateInput,
+    ChatLunaCorePresetValidateInput,
+    ChatLunaCorePresetValidationResult,
+    DeleteChatLunaConversationInput,
+    PageResult,
+    UpdateChatLunaConversationUsageInput
+} from './types'
+
+export async function listChatLunaConversations(
+    params: ChatLunaConversationListQuery
+): Promise<PageResult<ChatLunaConversationListItem>> {
+    return await send('living-memory/listChatLunaConversations', params)
+}
+
+export async function listChatLunaConversationOptions(): Promise<
+    ChatLunaConversationOptions
+> {
+    return await send('living-memory/listChatLunaConversationOptions')
+}
+
+export async function updateChatLunaConversationUsage(
+    input: UpdateChatLunaConversationUsageInput
+): Promise<ChatLunaConversationListItem> {
+    return await send('living-memory/updateChatLunaConversationUsage', input)
+}
+
+export async function deleteChatLunaConversation(
+    input: DeleteChatLunaConversationInput
+): Promise<{ success: true }> {
+    return await send('living-memory/deleteChatLunaConversation', input)
+}
+
+export async function listChatLunaCoreModels(): Promise<ChatLunaCoreModelListResult> {
+    return await send('chatluna-hub/core/models/list')
+}
+
+export async function listChatLunaCorePresets(): Promise<ChatLunaCorePresetListResult> {
+    return await send('chatluna-hub/core/presets/list')
+}
+
+export async function getChatLunaCorePreset(
+    input: ChatLunaCorePresetGetInput
+): Promise<ChatLunaCorePresetDetail> {
+    return await send('chatluna-hub/core/presets/get', input)
+}
+
+export async function validateChatLunaCorePreset(
+    input: ChatLunaCorePresetValidateInput
+): Promise<ChatLunaCorePresetValidationResult> {
+    return await send('chatluna-hub/core/presets/validate', input)
+}
+
+export async function createChatLunaCorePreset(
+    input: ChatLunaCorePresetCreateInput
+): Promise<ChatLunaCorePresetDetail> {
+    return await send('chatluna-hub/core/presets/create', input)
+}
+
+export async function updateChatLunaCorePreset(
+    input: ChatLunaCorePresetUpdateInput
+): Promise<ChatLunaCorePresetDetail> {
+    return await send('chatluna-hub/core/presets/update', input)
+}
