@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-chatluna-hub",
-  "description": "IsAHub?",
+  "description": "Do you like long, cluttered sidebars? I don't, so here's my solution.",
   "version": "0.0.1",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
@@ -21,6 +21,13 @@
     "client"
   ],
   "license": "MIT",
+  "repository": {                    
+    "type": "git",
+    "url": "git+https://github.com/Procyon-Nan/koishi-plugin-chatluna-hub.git"
+  },  
+  "contributors": [                       
+    "Procyon-Nan <3189960265@qq.com>"
+  ],
   "scripts": {
     "build:server": "node scripts/build-server.cjs",
     "build:client": "../../node_modules/.bin/koishi-console build",
