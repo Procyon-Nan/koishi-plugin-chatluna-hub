@@ -37,10 +37,17 @@ export interface HubModuleToggleResult {
 
 export interface HubConsoleData {
     modules: HubModuleItem[]
+    config: HubConsoleConfig
 }
 
-export interface HubModuleDefinition
-    extends Omit<HubModuleItem, 'available' | 'configured' | 'reason'> {
+export interface HubConsoleConfig {
+    hideDependencyGraphEntry: boolean
+}
+
+export interface HubModuleDefinition extends Omit<
+    HubModuleItem,
+    'available' | 'configured' | 'reason'
+> {
     pluginName?: string
 }
 
@@ -175,7 +182,9 @@ const isPluginConfigured = (ctx: Context, pluginName: string) => {
 const isScopeRunning = (scope: RuntimeScope) => {
     if (scope.status !== undefined) {
         if (scope.status === 3 || scope.status === 4) return false
-        return scope.status === 1 || scope.status === 2 || scope.isActive === true
+        return (
+            scope.status === 1 || scope.status === 2 || scope.isActive === true
+        )
     }
 
     return scope.isActive === true

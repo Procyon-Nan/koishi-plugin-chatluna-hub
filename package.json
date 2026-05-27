@@ -9,8 +9,7 @@
     ".": {
       "types": "./lib/index.d.ts",
       "import": "./lib/index.mjs",
-      "require": "./lib/index.cjs",
-      "default": "./lib/index.mjs"
+      "require": "./lib/index.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -21,17 +20,19 @@
     "client"
   ],
   "license": "MIT",
-  "repository": {                    
+  "repository": {
     "type": "git",
     "url": "git+https://github.com/Procyon-Nan/koishi-plugin-chatluna-hub.git"
-  },  
-  "contributors": [                       
+  },
+  "contributors": [
     "Procyon-Nan <3189960265@qq.com>"
   ],
   "scripts": {
     "build:server": "node scripts/build-server.cjs",
     "build:client": "../../node_modules/.bin/koishi-console build",
-    "build": "yarn build:server && yarn build:client"
+    "build": "yarn build:server && yarn build:client",
+    "lint": "yarn eslint src --ext=ts",
+    "lint-fix": "yarn eslint src --ext=ts --fix"
   },
   "keywords": [
     "chatbot",
@@ -46,6 +47,15 @@
   "devDependencies": {
     "@koishijs/client": "^5.30.11",
     "@koishijs/plugin-console": "^5.30.11",
+    "@typescript-eslint/eslint-plugin": "^7.18.1-alpha.3",
+    "@typescript-eslint/parser": "^8.45.1-alpha.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^16.6.2",
+    "eslint-plugin-prettier": "^5.5.4",
+    "eslint-plugin-promise": "^7.2.1",
     "koishi": "^4.18.9",
     "typescript": "^5.6.2"
   },

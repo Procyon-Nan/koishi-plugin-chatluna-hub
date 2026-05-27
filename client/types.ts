@@ -37,6 +37,11 @@ export interface HubModuleToggleResult {
 
 export interface HubConsoleData {
     modules: HubModuleItem[]
+    config: HubConsoleConfig
+}
+
+export interface HubConsoleConfig {
+    hideDependencyGraphEntry: boolean
 }
 
 declare module '@koishijs/plugin-console' {

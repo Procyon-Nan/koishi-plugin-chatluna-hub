@@ -62,8 +62,7 @@ export interface ChatLunaCorePresetDetail {
     rawText: string
 }
 
-export interface ChatLunaCorePresetValidationResult
-    extends ChatLunaCorePresetSummary {
+export interface ChatLunaCorePresetValidationResult extends ChatLunaCorePresetSummary {
     valid: boolean
     error?: string
 }
@@ -232,10 +231,14 @@ const sortModels = (
     left: ChatLunaCoreModelItem,
     right: ChatLunaCoreModelItem
 ) => {
-    const platformOrder = left.platform.localeCompare(right.platform, undefined, {
-        numeric: true,
-        sensitivity: 'base'
-    })
+    const platformOrder = left.platform.localeCompare(
+        right.platform,
+        undefined,
+        {
+            numeric: true,
+            sensitivity: 'base'
+        }
+    )
 
     if (platformOrder !== 0) return platformOrder
 
@@ -301,12 +304,13 @@ export const listChatLunaCoreModels = (
 
     return {
         models,
-        platforms: Array.from(new Set(models.map((item) => item.platform))).sort(
-            (left, right) =>
-                left.localeCompare(right, undefined, {
-                    numeric: true,
-                    sensitivity: 'base'
-                })
+        platforms: Array.from(
+            new Set(models.map((item) => item.platform))
+        ).sort((left, right) =>
+            left.localeCompare(right, undefined, {
+                numeric: true,
+                sensitivity: 'base'
+            })
         ),
         summary: summarizeModels(models),
         updatedAt: new Date().toISOString()
@@ -344,10 +348,7 @@ const normalizePresetSource = (
     return source === 'character' ? 'character' : 'core'
 }
 
-const encodePresetId = (
-    source: ChatLunaCorePresetSource,
-    filename: string
-) => {
+const encodePresetId = (source: ChatLunaCorePresetSource, filename: string) => {
     return `${source}:${filename}`
 }
 
@@ -517,8 +518,7 @@ const parseCorePresetRawText = async (rawText: string) => {
     const summary: ChatLunaCorePresetSummary = {
         keywords,
         promptCount: prompts.length,
-        version:
-            typeof preset.version === 'string' ? preset.version : undefined
+        version: typeof preset.version === 'string' ? preset.version : undefined
     }
 
     if (!summary.keywords.length) {
@@ -543,10 +543,7 @@ const parseCorePresetRawText = async (rawText: string) => {
             throw new Error(`Prompt #${index + 1} must be an object.`)
         }
 
-        if (
-            typeof prompt.role !== 'string' ||
-            !validRoles.has(prompt.role)
-        ) {
+        if (typeof prompt.role !== 'string' || !validRoles.has(prompt.role)) {
             throw new Error(`Prompt #${index + 1} has an invalid role.`)
         }
 
@@ -755,9 +752,7 @@ const ensureUniqueCharacterPresetKeywords = async (
         const { filePath } = resolvePresetFile(presetDir, file, 'character')
         const rawText = await fs.readFile(filePath, 'utf-8')
         const summary = await summarizePresetRawText(rawText, 'character')
-        const conflict = summary.keywords.find((keyword) =>
-            target.has(keyword)
-        )
+        const conflict = summary.keywords.find((keyword) => target.has(keyword))
 
         if (conflict) {
             throw new Error(
@@ -818,8 +813,7 @@ export const listChatLunaCorePresets = async (
 
     presets.sort((left, right) => {
         const sourceOrder =
-            (left.source === 'core' ? 0 : 1) -
-            (right.source === 'core' ? 0 : 1)
+            (left.source === 'core' ? 0 : 1) - (right.source === 'core' ? 0 : 1)
 
         if (sourceOrder !== 0) return sourceOrder
 
@@ -932,10 +926,7 @@ export const updateChatLunaCorePreset = async (
 
     await fs.access(filePath)
 
-    const { summary } = await parsePresetRawText(
-        input.rawText,
-        presetId.source
-    )
+    const { summary } = await parsePresetRawText(input.rawText, presetId.source)
     await reloadPresetSource(ctx, presetId.source)
     await ensureUniquePresetKeywords(
         ctx,

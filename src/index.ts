@@ -4,18 +4,12 @@ import { Context, Schema, Service } from 'koishi'
 import {
     createHubModules,
     getHubModuleDefinition,
-    isToggleableHubModule,
     type HubConsoleData,
     type HubModuleId,
-    type HubModuleToggleResult
+    type HubModuleToggleResult,
+    isToggleableHubModule
 } from './webui/modules'
 import {
-    createChatLunaCorePreset,
-    getChatLunaCorePreset,
-    listChatLunaCoreModels,
-    listChatLunaCorePresets,
-    updateChatLunaCorePreset,
-    validateChatLunaCorePreset,
     type ChatLunaCoreModelListResult,
     type ChatLunaCorePresetCreateInput,
     type ChatLunaCorePresetDetail,
@@ -23,14 +17,26 @@ import {
     type ChatLunaCorePresetListResult,
     type ChatLunaCorePresetUpdateInput,
     type ChatLunaCorePresetValidateInput,
-    type ChatLunaCorePresetValidationResult
+    type ChatLunaCorePresetValidationResult,
+    createChatLunaCorePreset,
+    getChatLunaCorePreset,
+    listChatLunaCoreModels,
+    listChatLunaCorePresets,
+    updateChatLunaCorePreset,
+    validateChatLunaCorePreset
 } from './webui/core'
 
 export const name = 'chatluna-hub'
 
-export interface Config {}
+export interface Config {
+    hideDependencyGraphEntry?: boolean
+}
 
-export const Config: Schema<Config> = Schema.object({})
+export const Config: Schema<Config> = Schema.object({
+    hideDependencyGraphEntry: Schema.boolean()
+        .default(false)
+        .description('隐藏 Koishi 侧边栏依赖图页面入口')
+})
 
 const loaderRecord = Symbol.for('koishi.loader.record')
 
@@ -40,11 +46,7 @@ interface LoaderLike {
     }
     entry?: Context
     writable?: boolean
-    reload?: (
-        parent: Context,
-        key: string,
-        source: unknown
-    ) => Promise<unknown>
+    reload?: (parent: Context, key: string, source: unknown) => Promise<unknown>
     unload?: (parent: Context, key: string) => void
     writeConfig?: () => Promise<void>
 }
@@ -89,10 +91,12 @@ const getActiveConfigKey = (key: string) => {
 const getForkContext = (parent: Context | undefined, key: string) => {
     if (!parent) return
 
-    const records = (parent.scope as unknown as Record<
-        symbol,
-        Record<string, { ctx?: Context }> | undefined
-    >)[loaderRecord]
+    const records = (
+        parent.scope as unknown as Record<
+            symbol,
+            Record<string, { ctx?: Context }> | undefined
+        >
+    )[loaderRecord]
 
     return records?.[key]?.ctx
 }
@@ -174,13 +178,20 @@ const coerceReason = (error: unknown) => {
 }
 
 export class ChatLunaHubService extends Service {
-    constructor(public readonly ctx: Context) {
+    constructor(
+        public readonly ctx: Context,
+        public readonly config: Config = {}
+    ) {
         super(ctx, 'chatluna_hub')
     }
 
     async getConsoleData(): Promise<HubConsoleData> {
         return {
-            modules: createHubModules(this.ctx)
+            modules: createHubModules(this.ctx),
+            config: {
+                hideDependencyGraphEntry:
+                    this.config.hideDependencyGraphEntry ?? false
+            }
         }
     }
 
@@ -372,8 +383,8 @@ class ChatLunaHubConsoleService extends DataService<HubConsoleData> {
     }
 }
 
-export function apply(ctx: Context) {
-    ctx.plugin(ChatLunaHubService)
+export function apply(ctx: Context, config: Config = {}) {
+    ctx.plugin(ChatLunaHubService, config)
 
     ctx.inject(['console', 'chatluna_hub'], (ctx) => {
         const base = ctx.loader?.baseDir ?? process.cwd()

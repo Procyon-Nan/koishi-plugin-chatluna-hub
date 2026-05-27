@@ -1,4 +1,4 @@
-import { Context, icons } from '@koishijs/client'
+import { Context, icons, store } from '@koishijs/client'
 import type {} from './types'
 import Dashboard from './dashboard.vue'
 import EcosystemRouteReturnCard from './components/layout/ecosystem-route-return-card.vue'
@@ -19,10 +19,27 @@ const hiddenEcosystemActivityPaths = new Set([
     '/memesluna/'
 ])
 
+const dependencyGraphActivityId = 'graph'
+const dependencyGraphActivityPath = '/graph'
+
+const shouldHideDependencyGraphEntry = () => {
+    return (
+        store.chatluna_hub_webui?.config?.hideDependencyGraphEntry === true
+    )
+}
+
 export default (ctx: Context) => {
     icons.register('activity:chatluna-hub', HubIcon)
 
     ctx.on('activity', (activity) => {
+        if (
+            shouldHideDependencyGraphEntry() &&
+            (activity.id === dependencyGraphActivityId ||
+                activity.path === dependencyGraphActivityPath)
+        ) {
+            return true
+        }
+
         if (hiddenEcosystemActivities.has(activity.id)) return true
         if (hiddenEcosystemActivityPaths.has(activity.path)) return true
     })
