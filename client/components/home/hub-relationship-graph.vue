@@ -216,6 +216,11 @@
                             v-else-if="node.id === 'memesLuna'"
                             class="memesluna-mark"
                         />
+                        <TreeOfLifeIcon
+                            v-else-if="node.id === 'livingMemory'"
+                            class="livingmemory-mark"
+                            style="width: 36px; height: 36px; color: currentColor;"
+                        />
                         <el-icon v-else :size="34">
                             <component :is="resolveIcon(node.icon)" />
                         </el-icon>
@@ -317,6 +322,11 @@
                                         v-else-if="activeDetailModule.id === 'memesLuna'"
                                         class="memesluna-mark mini"
                                     />
+                                    <TreeOfLifeIcon
+                                        v-else-if="activeDetailModule.id === 'livingMemory'"
+                                        class="livingmemory-mark mini"
+                                        style="width: 22px; height: 22px; color: currentColor;"
+                                    />
                                     <el-icon v-else :size="22">
                                         <component :is="resolveIcon(activeDetailModule.icon)" />
                                     </el-icon>
@@ -370,22 +380,34 @@
                                     <Guide />
                                 </el-icon>
                             </div>
-                            <h3>生态网络图谱说明</h3>
+                            <h3>ChatLuna生态网络图谱</h3>
                             <p>
-                                ChatLuna Hub 生态图展示了当前 ChatLuna 的核心服务与各大扩展插件之间的拓扑依赖关系。
+                                ChatLuna 的核心功能与各拓展插件的统一 WebUI 管理
                             </p>
                             <div class="guide-steps">
                                 <div class="step-item">
                                     <span class="step-num">1</span>
-                                    <p>将鼠标悬停在任意节点上，可在此卡片中即时了解该插件的核心功能和架构职责。</p>
+                                    <p>将鼠标悬停在任意节点上，即可在此卡片中显示该节点所属插件的功能与介绍</p>
                                 </div>
+                                <div class="step-item"></div>
                                 <div class="step-item">
                                     <span class="step-num">2</span>
-                                    <p>按住鼠标左键可任意拖拽节点。拖拽 ChatLuna Core 核心节点将以物理绳索牵引全场子节点游动。</p>
+                                    <p>按住鼠标左键可以拖动节点。拖动 ChatLuna 主节点时，各子节点会被间接拖动；拖动子节点时，不会影响其他节点的位置</p>
                                 </div>
+                                <div class="step-item"></div>
                                 <div class="step-item">
                                     <span class="step-num">3</span>
-                                    <p>若将子节点拖拽出外侧虚线有效范围圈并释放，会发出指令停用并卸载对应插件；拖回圆圈内则可重新触发启动。</p>
+                                    <p>如果子节点被拖动到距离主节点过远的位置，该子节点所属的插件将会被关闭</p>
+                                </div>
+                                <div class="step-item"></div>
+                                <div class="step-item">
+                                    <span class="step-num">4</span>
+                                    <p>对于一个已经被关闭的子节点，将其重新拖动回主节点周围，即可重新开启</p>
+                                </div>
+                                <div class="step-item"></div>
+                                <div class="step-item">
+                                    <span class="step-num">5</span>
+                                    <p>如果节点位置混乱，请活用页面左下角的重置按钮</p>
                                 </div>
                             </div>
                         </div>
@@ -430,6 +452,7 @@ import {
     Operation
 } from '@element-plus/icons-vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
+import TreeOfLifeIcon from '../../icons/tree-of-life.vue'
 import type {
     HubModuleId,
     HubModuleItem,
@@ -450,66 +473,70 @@ interface ModuleDetail {
 
 const moduleDetails: Record<HubModuleId, ModuleDetail> = {
     chatluna: {
-        title: 'ChatLuna Core',
-        subtitle: '核心管理中枢',
-        description: '承载大语言模型管理、上下文绑定、自定义预设规则、智能多路路由以及会话归档的核心中枢，是整个 ChatLuna 的大脑。',
+        title: 'ChatLuna 主插件',
+        subtitle: 'ChatLuna生态的核心',
+        description: '承载模型管理、会话管理以及预设管理等功能的核心中枢，是整个 ChatLuna 生态网络的根基',
         features: [
             '模型接入与统一调度',
-            '多路路由及权限规则管控',
-            '会话上下文自动管理与归档',
-            '指令预设引擎及快捷预加载'
+            '按私聊、群聊分层的多会话消息系统',
+            '自定义AI人格预设，兼具角色扮演与助手职能',
+            '指令控制及对外部插件的灵活调用'
         ],
-        tip: '主中枢节点，移动此节点将拉动整个生态的网络图谱。'
+        tip: '文档链接：https://chatluna.chat/guide/introduction.html'
     },
     agent: {
-        title: 'ChatLuna Agent',
-        subtitle: '智能体协作网络',
-        description: '提供完整的 ReAct/智能体自主规划决策框架。允许机器人结合定制工具（Google搜索、代码执行等）自主解决多步骤的复杂任务。',
+        title: 'ChatLuna-Agent',
+        subtitle: '智能体协作系统',
+        description: '提供完整的智能体自主规划决策框架。允许AI根据已装载的工具或 skills 自主解决多步骤的复杂任务',
         features: [
-            '自主规划与多步骤执行 (COT)',
-            '支持动态工具调用接口',
+            '自主规划与多步骤执行',
+            '动态可控的工具、skills 调用',
             '复杂场景自动容错与推理',
-            '智能体路由分发网络'
+            '子智能体路由分发调度'
         ],
-        tip: '处于未启用状态时，将其拖入虚线有效半径内即可自动启动。'
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/extension-agent.html'
     },
     livingMemory: {
         title: 'Living Memory',
-        subtitle: '活体长期记忆',
-        description: '基于 Vector Embedding 和本地向量存储的高级长期记忆组件。支持自动记忆摘要、跨会话知识检索与人设情感长期沉淀。',
+        subtitle: '异步运行的记忆系统',
+        description: '为 ChatLuna 主插件和 character 插件提供服务于预设的第一人称叙事记忆',
         features: [
-            '基于 RAG 的向量知识库检索',
-            '对话自动提炼与长期记忆固化',
-            '跨会话背景知识智能插值',
-            '长期情感态度曲线追踪'
-        ]
+            '基于关键词 / 向量检索的记忆召回',
+            '对话自动总结与记忆生成',
+            '依托于持久化快照的记忆条目注入',
+            '记忆跨会话存在，快照以会话为单位生成',
+            '以“Dream”形式进行记忆库的整理'
+        ],
+        tip: '文档链接：https://github.com/Procyon-Nan/koishi-plugin-chatluna-livingmemory'
     },
     mediaLuna: {
-        title: 'Media Luna',
+        title: 'Media-Luna',
         subtitle: '多媒体跨模态画板',
-        description: '多媒体处理生态的底层中枢。提供跨模态的语音渲染交互、画板渲染、图像处理与富媒体卡片生成能力。',
+        description: '中间件驱动的多媒体生成插件，支持多种 AI 图像生成服务和 WebUI 管理',
         features: [
-            '跨模态语音转换 (TTS/ASR)',
-            'Canvas 级富媒体卡片渲染',
-            '多模态图像识别及文本生成',
-            '多媒体数据流管道加速'
-        ]
+            'DALL-E、通用 Chat API 等多连接件支持',
+            '创建和管理提示词模板，支持远程同步',
+            '灵活的请求处理流程，支持计费、缓存、翻译等',
+            '完整的生成历史和数据统计'
+        ],
+        tip:'文档链接：https://github.com/ziyi233/media-luna#readme'
     },
     memesLuna: {
-        title: 'Memes Luna',
-        subtitle: '模因表情包绘制',
-        description: '为聊天注入灵魂的趣味表情模因合成引擎。内置数十款经典中文与国外热门网络梗表情，支持文字位置动态缩放与 GIF 表情渲染。',
+        title: 'MemesLuna',
+        subtitle: ' Koishi 表情路由工具',
+        description: '为 Chatluna 主插件和 character 插件提供变量形式的表情包图片注入',
         features: [
-            '热门网络梗图动态合成',
-            '多行文字防溢出智能渲染',
-            '动态 GIF 表情包智能渲染',
-            '自定义模板即刻加载'
-        ]
+            '兼顾本地图片和外链的表情合集管理',
+            '图床端点管理',
+            '支持静态图片与动态 GIF 表情',
+            '通过关键词进行表情包库的分类'
+        ],
+        tip:'文档链接：https://www.npmjs.com/package/koishi-plugin-memesluna/v/0.2.10'
     }
 }
 
 const activeDetailModuleId = computed<HubModuleId | null>(() => {
-    return focusedNodeId.value || draggingId.value
+    return focusedNodeId.value || draggingId.value || lastActiveNodeId.value
 })
 
 const activeDetailModule = computed(() => {
@@ -591,6 +618,7 @@ const emit = defineEmits<{
 }>()
 
 const focusedNodeId = ref<HubModuleId | null>(null)
+const lastActiveNodeId = ref<HubModuleId | null>(null)
 const detailFontSizePx = ref(18)
 const detailFontSizeStorageKey = 'chatluna-hub:detail-font-size:v1'
 
@@ -933,6 +961,7 @@ const selectModule = (item: HubModuleItem) => {
 
 const handleNodePointerLeave = (id: HubModuleId) => {
     if (focusedNodeId.value === id) {
+        lastActiveNodeId.value = id
         focusedNodeId.value = null
     }
 }
@@ -1016,6 +1045,7 @@ const handleResetGraphDefaults = () => {
     effectiveRangePreviewVisible.value = false
     effectiveRangeRadiusInput.value = 0
     detailFontSizePx.value = 18
+    lastActiveNodeId.value = null
     clearRecord(nodePositions)
     clearRecord(disturbances)
     clearRecord(carriedVisuals)
