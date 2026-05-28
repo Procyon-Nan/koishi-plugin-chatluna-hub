@@ -19,25 +19,25 @@ import type {
 export async function listChatLunaConversations(
     params: ChatLunaConversationListQuery
 ): Promise<PageResult<ChatLunaConversationListItem>> {
-    return await send('living-memory/listChatLunaConversations', params)
+    return await send('chatluna-hub/core/conversations/list', params)
 }
 
 export async function listChatLunaConversationOptions(): Promise<
     ChatLunaConversationOptions
 > {
-    return await send('living-memory/listChatLunaConversationOptions')
+    return await send('chatluna-hub/core/conversations/options')
 }
 
 export async function updateChatLunaConversationUsage(
     input: UpdateChatLunaConversationUsageInput
 ): Promise<ChatLunaConversationListItem> {
-    return await send('living-memory/updateChatLunaConversationUsage', input)
+    return await send('chatluna-hub/core/conversations/update-usage', input)
 }
 
 export async function deleteChatLunaConversation(
     input: DeleteChatLunaConversationInput
 ): Promise<{ success: true }> {
-    return await send('living-memory/deleteChatLunaConversation', input)
+    return await send('chatluna-hub/core/conversations/delete', input)
 }
 
 export async function listChatLunaCoreModels(): Promise<ChatLunaCoreModelListResult> {

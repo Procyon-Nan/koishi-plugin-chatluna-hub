@@ -171,14 +171,15 @@ export interface PageResult<T> {
 
 declare module '@koishijs/client' {
     interface Events {
-        'living-memory/listChatLunaConversations': (
+        'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => PageResult<ChatLunaConversationListItem>
-        'living-memory/listChatLunaConversationOptions': () => ChatLunaConversationOptions
-        'living-memory/updateChatLunaConversationUsage': (
+        'chatluna-hub/core/conversations/options': () =>
+            ChatLunaConversationOptions
+        'chatluna-hub/core/conversations/update-usage': (
             input: UpdateChatLunaConversationUsageInput
         ) => ChatLunaConversationListItem
-        'living-memory/deleteChatLunaConversation': (
+        'chatluna-hub/core/conversations/delete': (
             input: DeleteChatLunaConversationInput
         ) => { success: true }
         'chatluna-hub/core/models/list': () => ChatLunaCoreModelListResult
