@@ -10,6 +10,9 @@ import {
     isToggleableHubModule
 } from './webui/modules'
 import {
+    type ChatLunaConversationListItem,
+    type ChatLunaConversationListQuery,
+    type ChatLunaConversationOptions,
     type ChatLunaCoreModelListResult,
     type ChatLunaCorePresetCreateInput,
     type ChatLunaCorePresetDetail,
@@ -19,9 +22,16 @@ import {
     type ChatLunaCorePresetValidateInput,
     type ChatLunaCorePresetValidationResult,
     createChatLunaCorePreset,
+    deleteChatLunaConversation,
+    type DeleteChatLunaConversationInput,
     getChatLunaCorePreset,
+    listChatLunaConversationOptions,
+    listChatLunaConversations,
     listChatLunaCoreModels,
     listChatLunaCorePresets,
+    type PageResult,
+    updateChatLunaConversationUsage,
+    type UpdateChatLunaConversationUsageInput,
     updateChatLunaCorePreset,
     validateChatLunaCorePreset
 } from './webui/core'
@@ -335,6 +345,28 @@ export class ChatLunaHubService extends Service {
         return listChatLunaCoreModels(this.ctx)
     }
 
+    async listCoreConversations(
+        query: ChatLunaConversationListQuery
+    ): Promise<PageResult<ChatLunaConversationListItem>> {
+        return listChatLunaConversations(this.ctx, query)
+    }
+
+    async listCoreConversationOptions(): Promise<ChatLunaConversationOptions> {
+        return listChatLunaConversationOptions(this.ctx)
+    }
+
+    async updateCoreConversationUsage(
+        input: UpdateChatLunaConversationUsageInput
+    ): Promise<ChatLunaConversationListItem> {
+        return updateChatLunaConversationUsage(this.ctx, input)
+    }
+
+    async deleteCoreConversation(
+        input: DeleteChatLunaConversationInput
+    ): Promise<{ success: true }> {
+        return deleteChatLunaConversation(this.ctx, input)
+    }
+
     async listCorePresets(): Promise<ChatLunaCorePresetListResult> {
         return listChatLunaCorePresets(this.ctx)
     }
@@ -431,6 +463,46 @@ export function apply(ctx: Context, config: Config = {}) {
         )
 
         ctx.console.addListener(
+            'chatluna-hub/core/conversations/list',
+            async (query) => {
+                return await ctx.chatluna_hub.listCoreConversations(query ?? {})
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/conversations/options',
+            async () => {
+                return await ctx.chatluna_hub.listCoreConversationOptions()
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/conversations/update-usage',
+            async (input) => {
+                return await ctx.chatluna_hub.updateCoreConversationUsage(input)
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/conversations/delete',
+            async (input) => {
+                return await ctx.chatluna_hub.deleteCoreConversation(input)
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
             'chatluna-hub/core/presets/list',
             async () => {
                 return await ctx.chatluna_hub.listCorePresets()
@@ -501,6 +573,16 @@ declare module '@koishijs/plugin-console' {
             enabled: boolean
         ) => Promise<HubModuleToggleResult>
         'chatluna-hub/core/models/list': () => Promise<ChatLunaCoreModelListResult>
+        'chatluna-hub/core/conversations/list': (
+            query: ChatLunaConversationListQuery
+        ) => Promise<PageResult<ChatLunaConversationListItem>>
+        'chatluna-hub/core/conversations/options': () => Promise<ChatLunaConversationOptions>
+        'chatluna-hub/core/conversations/update-usage': (
+            input: UpdateChatLunaConversationUsageInput
+        ) => Promise<ChatLunaConversationListItem>
+        'chatluna-hub/core/conversations/delete': (
+            input: DeleteChatLunaConversationInput
+        ) => Promise<{ success: true }>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput
@@ -530,6 +612,16 @@ declare module '@koishijs/console' {
             enabled: boolean
         ) => Promise<HubModuleToggleResult>
         'chatluna-hub/core/models/list': () => Promise<ChatLunaCoreModelListResult>
+        'chatluna-hub/core/conversations/list': (
+            query: ChatLunaConversationListQuery
+        ) => Promise<PageResult<ChatLunaConversationListItem>>
+        'chatluna-hub/core/conversations/options': () => Promise<ChatLunaConversationOptions>
+        'chatluna-hub/core/conversations/update-usage': (
+            input: UpdateChatLunaConversationUsageInput
+        ) => Promise<ChatLunaConversationListItem>
+        'chatluna-hub/core/conversations/delete': (
+            input: DeleteChatLunaConversationInput
+        ) => Promise<{ success: true }>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput

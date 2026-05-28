@@ -87,6 +87,129 @@ export interface ChatLunaCorePresetUpdateInput {
     rawText: string
 }
 
+export type ChatLunaConversationRouteMode =
+    | 'personal'
+    | 'shared'
+    | 'custom'
+    | 'unknown'
+
+export type ChatLunaConversationStatus =
+    | 'active'
+    | 'archived'
+    | 'deleted'
+    | 'broken'
+
+export interface ChatLunaConversationRouteInfo {
+    mode: ChatLunaConversationRouteMode
+    baseBindingKey: string
+    presetLane?: string | null
+    platform?: string | null
+    selfId?: string | null
+    userId?: string | null
+    guildId?: string | null
+    routeKey?: string | null
+    isDirect?: boolean | null
+}
+
+export interface ChatLunaConversationListQuery {
+    keyword?: string
+    page?: number
+    pageSize?: number
+}
+
+export interface ChatLunaModelOption {
+    label: string
+    value: string
+    platform: string
+    name: string
+}
+
+export interface ChatLunaPresetOption {
+    label: string
+    value: string
+}
+
+export interface ChatLunaConversationOptions {
+    models: ChatLunaModelOption[]
+    presets: ChatLunaPresetOption[]
+}
+
+export interface ChatLunaConversationListItem {
+    id: string
+    seq?: number
+    bindingKey: string
+    title: string
+    model: string
+    preset: string
+    chatMode: string
+    createdBy: string
+    createdAt: Date | string
+    updatedAt: Date | string
+    lastChatAt?: Date | string | null
+    status: ChatLunaConversationStatus
+    isCurrent: boolean
+    activeConversationId?: string | null
+    route: ChatLunaConversationRouteInfo
+}
+
+export interface UpdateChatLunaConversationUsageInput {
+    conversationId: string
+    model?: string
+    preset?: string
+}
+
+export interface DeleteChatLunaConversationInput {
+    conversationId: string
+}
+
+export interface PageResult<T> {
+    items: T[]
+    page: number
+    pageSize: number
+    total: number
+}
+
+interface ConversationRecord {
+    id: string
+    seq?: number
+    bindingKey: string
+    title: string
+    model: string
+    preset: string
+    chatMode: string
+    createdBy: string
+    createdAt: Date
+    updatedAt: Date
+    lastChatAt?: Date | null
+    status: ChatLunaConversationStatus
+    archivedAt?: Date | null
+    archiveId?: string | null
+}
+
+interface BindingRecord {
+    bindingKey: string
+    activeConversationId?: string | null
+    lastConversationId?: string | null
+    updatedAt: Date
+}
+
+interface DatabaseLike {
+    get: (table: string, query: Record<string, unknown>) => Promise<unknown[]>
+    upsert: (table: string, rows: Record<string, unknown>[]) => Promise<unknown>
+    remove: (table: string, query: Record<string, unknown>) => Promise<unknown>
+}
+
+interface ChatLunaConversationEventRoot {
+    parallel: (
+        name:
+            | 'chatluna/before-conversation-delete'
+            | 'chatluna/after-conversation-delete',
+        payload: {
+            conversation: ConversationRecord
+        }
+    ) => Promise<void>
+}
+
 interface ChatLunaLikeService {
     platform?: {
         listAllModels?: (type: number) => {
@@ -94,6 +217,22 @@ interface ChatLunaLikeService {
         }
     }
     preset?: ChatLunaPresetServiceLike
+    conversation?: ChatLunaConversationServiceLike
+    clearCache?: (conversation: ConversationRecord) => Promise<void>
+}
+
+interface ChatLunaConversationServiceLike {
+    getConversation?: (
+        conversationId: string
+    ) => Promise<ConversationRecord | null | undefined>
+    touchConversation?: (
+        conversationId: string,
+        patch: Partial<ConversationRecord>
+    ) => Promise<ConversationRecord | null | undefined>
+    getBinding?: (
+        bindingKey: string
+    ) => Promise<BindingRecord | null | undefined>
+    removeAcl?: (conversationId: string) => Promise<void>
 }
 
 interface ChatLunaPresetServiceLike {
@@ -145,6 +284,10 @@ const modelTypeOrder: Record<ChatLunaCoreModelType, number> = {
     unknown: 3
 }
 
+const defaultPage = 1
+const defaultPageSize = 20
+const maxPageSize = 100
+
 const emptySummary = (): ChatLunaCoreModelSummary => ({
     total: 0,
     llm: 0,
@@ -156,6 +299,47 @@ const emptySummary = (): ChatLunaCoreModelSummary => ({
 const coerceReason = (error: unknown) => {
     if (error instanceof Error) return error.message
     return String(error)
+}
+
+const getDatabase = (ctx: Context) => {
+    const database = ctx.get('database') as DatabaseLike | undefined
+    if (!database?.get || !database.upsert || !database.remove) {
+        throw new Error('Koishi database service is not available.')
+    }
+
+    return database
+}
+
+const normalizePage = (value: number | undefined) => {
+    if (value == null || !Number.isFinite(value)) return defaultPage
+    return Math.max(1, Math.floor(value))
+}
+
+const normalizePageSize = (value: number | undefined) => {
+    if (value == null || !Number.isFinite(value)) return defaultPageSize
+    return Math.min(maxPageSize, Math.max(1, Math.floor(value)))
+}
+
+const toTimestamp = (value: Date | string | null | undefined) => {
+    if (value == null) return 0
+    const date = value instanceof Date ? value : new Date(value)
+    const time = date.getTime()
+
+    return Number.isFinite(time) ? time : 0
+}
+
+const unique = <T>(items: T[], resolveKey: (item: T) => string) => {
+    const result: T[] = []
+    const keys = new Set<string>()
+
+    for (const item of items) {
+        const key = resolveKey(item)
+        if (keys.has(key)) continue
+        keys.add(key)
+        result.push(item)
+    }
+
+    return result
 }
 
 const emptyPresetSummary = (): ChatLunaCorePresetSummary => ({
@@ -315,6 +499,425 @@ export const listChatLunaCoreModels = (
         summary: summarizeModels(models),
         updatedAt: new Date().toISOString()
     }
+}
+
+const parseRouteInfo = (bindingKey: string): ChatLunaConversationRouteInfo => {
+    const presetMarker = ':preset:'
+    const presetIndex = bindingKey.indexOf(presetMarker)
+    const baseBindingKey =
+        presetIndex >= 0 ? bindingKey.slice(0, presetIndex) : bindingKey
+    const presetLane =
+        presetIndex >= 0
+            ? bindingKey.slice(presetIndex + presetMarker.length) || null
+            : null
+    const parts = baseBindingKey.split(':')
+
+    if (parts[0] === 'custom') {
+        return {
+            mode: 'custom',
+            baseBindingKey,
+            presetLane,
+            routeKey: parts.slice(1).join(':') || null,
+            isDirect: null
+        }
+    }
+
+    if (parts[0] === 'shared' && parts.length >= 4) {
+        return {
+            mode: 'shared',
+            baseBindingKey,
+            presetLane,
+            platform: parts[1],
+            selfId: parts[2],
+            guildId: parts[3],
+            isDirect: false
+        }
+    }
+
+    if (parts[0] === 'personal' && parts.length >= 5) {
+        const direct = parts[3] === 'direct'
+
+        return {
+            mode: 'personal',
+            baseBindingKey,
+            presetLane,
+            platform: parts[1],
+            selfId: parts[2],
+            guildId: direct ? null : parts[3],
+            userId: parts[4],
+            isDirect: direct
+        }
+    }
+
+    return {
+        mode: 'unknown',
+        baseBindingKey,
+        presetLane,
+        isDirect: null
+    }
+}
+
+const createConversationListItem = (
+    conversation: ConversationRecord,
+    activeConversationId?: string | null
+): ChatLunaConversationListItem => {
+    return {
+        id: conversation.id,
+        seq: conversation.seq,
+        bindingKey: conversation.bindingKey,
+        title: conversation.title,
+        model: conversation.model,
+        preset: conversation.preset,
+        chatMode: conversation.chatMode,
+        createdBy: conversation.createdBy,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        lastChatAt: conversation.lastChatAt,
+        status: conversation.status,
+        isCurrent: activeConversationId === conversation.id,
+        activeConversationId: activeConversationId ?? null,
+        route: parseRouteInfo(conversation.bindingKey)
+    }
+}
+
+const includesConversationKeyword = (
+    item: ChatLunaConversationListItem,
+    keyword: string
+) => {
+    const values = [
+        item.id,
+        item.title,
+        item.model,
+        item.preset,
+        item.chatMode,
+        item.createdBy,
+        item.status,
+        item.bindingKey,
+        item.activeConversationId,
+        item.route.mode,
+        item.route.platform,
+        item.route.selfId,
+        item.route.userId,
+        item.route.guildId,
+        item.route.routeKey,
+        item.route.presetLane
+    ]
+
+    return values.some((value) =>
+        String(value ?? '')
+            .toLocaleLowerCase()
+            .includes(keyword)
+    )
+}
+
+const getConversationService = (ctx: Context) => {
+    const chatluna = ctx.get('chatluna') as ChatLunaLikeService | undefined
+    const conversation = chatluna?.conversation
+
+    if (
+        !chatluna ||
+        !conversation?.getConversation ||
+        !conversation.touchConversation ||
+        !conversation.getBinding ||
+        !conversation.removeAcl ||
+        !chatluna.clearCache
+    ) {
+        throw new Error('ChatLuna conversation service is not available.')
+    }
+
+    return {
+        chatluna,
+        conversation
+    }
+}
+
+const getModelValues = (options: ChatLunaConversationOptions) => {
+    return new Set(options.models.map((model) => model.value))
+}
+
+const getPresetValues = (options: ChatLunaConversationOptions) => {
+    return new Set(options.presets.map((preset) => preset.value))
+}
+
+const unbindConversation = async (ctx: Context, conversationId: string) => {
+    const database = getDatabase(ctx)
+    const [active, last] = await Promise.all([
+        database.get('chatluna_binding', {
+            activeConversationId: conversationId
+        }),
+        database.get('chatluna_binding', {
+            lastConversationId: conversationId
+        })
+    ])
+    const bindings = Array.from(
+        new Map(
+            [...(active as BindingRecord[]), ...(last as BindingRecord[])].map(
+                (binding) => [binding.bindingKey, binding]
+            )
+        ).values()
+    )
+
+    for (const binding of bindings) {
+        await database.upsert('chatluna_binding', [
+            {
+                bindingKey: binding.bindingKey,
+                activeConversationId:
+                    binding.activeConversationId === conversationId
+                        ? null
+                        : binding.activeConversationId,
+                lastConversationId:
+                    binding.lastConversationId === conversationId
+                        ? null
+                        : binding.lastConversationId,
+                updatedAt: new Date()
+            }
+        ])
+    }
+}
+
+const emitConversationDeleteEvent = async (
+    ctx: Context,
+    name:
+        | 'chatluna/before-conversation-delete'
+        | 'chatluna/after-conversation-delete',
+    conversation: ConversationRecord
+) => {
+    await (ctx.root as unknown as ChatLunaConversationEventRoot).parallel(name, {
+        conversation
+    })
+}
+
+export const listChatLunaConversationOptions = (
+    ctx: Context
+): ChatLunaConversationOptions => {
+    const chatluna = ctx.get('chatluna') as ChatLunaLikeService | undefined
+    const listAllModels = chatluna?.platform?.listAllModels
+    const getAllPreset = chatluna?.preset?.getAllPreset
+
+    if (!chatluna?.platform || !listAllModels || !getAllPreset) {
+        throw new Error('ChatLuna service is not available.')
+    }
+
+    const rawModels = listAllModels.call(chatluna.platform, 1)?.value
+    const modelItems = (Array.isArray(rawModels) ? rawModels : [])
+        .map((raw) => {
+            const model = raw as RawPlatformModelInfo
+            const name = coerceString(model.name)
+            const platform = coerceString(model.platform)
+            const fullName =
+                typeof model.toModelName === 'function'
+                    ? String(model.toModelName())
+                    : `${platform}/${name}`
+
+            if (!name || !platform || !fullName) return null
+
+            return {
+                label: fullName,
+                value: fullName,
+                platform,
+                name
+            }
+        })
+        .filter((item): item is ChatLunaModelOption => Boolean(item))
+        .sort((left, right) => left.value.localeCompare(right.value))
+
+    const rawPresets = getAllPreset.call(chatluna.preset, false)?.value
+    const presetItems = (Array.isArray(rawPresets) ? rawPresets : [])
+        .map((preset) =>
+            typeof preset === 'string'
+                ? {
+                      label: preset,
+                      value: preset
+                  }
+                : null
+        )
+        .filter((item): item is ChatLunaPresetOption => Boolean(item))
+        .sort((left, right) => left.value.localeCompare(right.value))
+
+    return {
+        models: unique(modelItems, (item) => item.value),
+        presets: unique(presetItems, (item) => item.value)
+    }
+}
+
+export const listChatLunaConversations = async (
+    ctx: Context,
+    query: ChatLunaConversationListQuery
+): Promise<PageResult<ChatLunaConversationListItem>> => {
+    const database = getDatabase(ctx)
+    const page = normalizePage(query.page)
+    const pageSize = normalizePageSize(query.pageSize)
+    const keyword = query.keyword?.trim().toLocaleLowerCase()
+    const conversations = (await database.get('chatluna_conversation', {
+        status: 'active'
+    })) as ConversationRecord[]
+    const bindings = (await database.get(
+        'chatluna_binding',
+        {}
+    )) as BindingRecord[]
+    const activeByBindingKey = new Map(
+        bindings.map((binding) => [
+            binding.bindingKey,
+            binding.activeConversationId ?? null
+        ])
+    )
+    const items = conversations
+        .map((conversation) =>
+            createConversationListItem(
+                conversation,
+                activeByBindingKey.get(conversation.bindingKey)
+            )
+        )
+        .filter((item) =>
+            keyword == null || keyword.length === 0
+                ? true
+                : includesConversationKeyword(item, keyword)
+        )
+        .sort((left, right) => {
+            const route = left.route.baseBindingKey.localeCompare(
+                right.route.baseBindingKey
+            )
+            if (route !== 0) return route
+
+            const bindingKey = left.bindingKey.localeCompare(right.bindingKey)
+            if (bindingKey !== 0) return bindingKey
+
+            const seq = (left.seq ?? 0) - (right.seq ?? 0)
+            if (seq !== 0) return seq
+
+            const created =
+                toTimestamp(left.createdAt) - toTimestamp(right.createdAt)
+            if (created !== 0) return created
+
+            return left.id.localeCompare(right.id)
+        })
+    const start = (page - 1) * pageSize
+
+    return {
+        items: items.slice(start, start + pageSize),
+        page,
+        pageSize,
+        total: items.length
+    }
+}
+
+export const updateChatLunaConversationUsage = async (
+    ctx: Context,
+    input: UpdateChatLunaConversationUsageInput
+): Promise<ChatLunaConversationListItem> => {
+    const conversationId = input.conversationId?.trim()
+    if (conversationId == null || conversationId.length === 0) {
+        throw new Error('Conversation id is required.')
+    }
+
+    const { chatluna, conversation: conversationService } =
+        getConversationService(ctx)
+    const conversation =
+        await conversationService.getConversation!(conversationId)
+    if (conversation == null) {
+        throw new Error('Conversation not found.')
+    }
+
+    if (conversation.status !== 'active') {
+        throw new Error('Only active conversations can be updated.')
+    }
+
+    const options = listChatLunaConversationOptions(ctx)
+    const modelValues = getModelValues(options)
+    const presetValues = getPresetValues(options)
+    const patch: Partial<ConversationRecord> = {}
+    const model = input.model?.trim()
+    const preset = input.preset?.trim()
+
+    if (model != null) {
+        if (!modelValues.has(model)) {
+            throw new Error(`Model is unavailable: ${model}`)
+        }
+        patch.model = model
+    }
+
+    if (preset != null) {
+        if (!presetValues.has(preset)) {
+            throw new Error(`Preset is unavailable: ${preset}`)
+        }
+        patch.preset = preset
+    }
+
+    if (patch.model == null && patch.preset == null) {
+        throw new Error('No conversation usage change provided.')
+    }
+
+    const updated = await conversationService.touchConversation!(
+        conversation.id,
+        patch
+    )
+    if (updated == null) {
+        throw new Error('Conversation not found.')
+    }
+
+    await chatluna.clearCache!(updated)
+
+    const binding = await conversationService.getBinding!(updated.bindingKey)
+
+    return createConversationListItem(
+        updated,
+        binding?.activeConversationId ?? null
+    )
+}
+
+export const deleteChatLunaConversation = async (
+    ctx: Context,
+    input: DeleteChatLunaConversationInput
+): Promise<{ success: true }> => {
+    const conversationId = input.conversationId?.trim()
+    if (conversationId == null || conversationId.length === 0) {
+        throw new Error('Conversation id is required.')
+    }
+
+    const database = getDatabase(ctx)
+    const { chatluna, conversation: conversationService } =
+        getConversationService(ctx)
+    const conversation =
+        await conversationService.getConversation!(conversationId)
+    if (conversation == null) {
+        throw new Error('Conversation not found.')
+    }
+
+    if (conversation.status !== 'active') {
+        throw new Error('Only active conversations can be deleted.')
+    }
+
+    await emitConversationDeleteEvent(
+        ctx,
+        'chatluna/before-conversation-delete',
+        conversation
+    )
+
+    const updated = await conversationService.touchConversation!(
+        conversation.id,
+        {
+            status: 'deleted',
+            archivedAt: null,
+            archiveId: null
+        }
+    )
+    if (updated == null) {
+        throw new Error('Conversation not found.')
+    }
+
+    await unbindConversation(ctx, conversation.id)
+    await database.remove('chatluna_message', {
+        conversationId: conversation.id
+    })
+    await conversationService.removeAcl!(conversation.id)
+    await chatluna.clearCache!(updated)
+    await emitConversationDeleteEvent(
+        ctx,
+        'chatluna/after-conversation-delete',
+        updated
+    )
+
+    return { success: true }
 }
 
 const getPresetService = (ctx: Context) => {
