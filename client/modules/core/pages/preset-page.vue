@@ -122,6 +122,16 @@
                                 未保存
                             </el-tag>
                             <el-button
+                                v-if="canDelete"
+                                type="danger"
+                                plain
+                                :icon="DeleteIcon"
+                                :loading="deleting"
+                                @click="deletePreset"
+                            >
+                                删除
+                            </el-button>
+                            <el-button
                                 :disabled="!hasEditor"
                                 :loading="validationLoading"
                                 @click="validatePreset"
@@ -267,7 +277,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, Memo, Plus, Refresh } from '@element-plus/icons-vue'
+import {
+    Check,
+    Delete as DeleteIcon,
+    Memo,
+    Plus,
+    Refresh
+} from '@element-plus/icons-vue'
 import * as api from '../api'
 import { useCoreCompactMode } from '../use-compact-mode'
 import type {
@@ -316,6 +332,7 @@ const listLoading = ref(false)
 const detailLoading = ref(false)
 const validationLoading = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const keyword = ref('')
 const listReason = ref('')
 const presets = ref<ChatLunaCorePresetListItem[]>([])
@@ -373,6 +390,10 @@ const canSave = computed(() => {
     if (!createMode.value) return true
 
     return createFilename.value.trim().length > 0
+})
+
+const canDelete = computed(() => {
+    return !createMode.value && selectedPreset.value != null
 })
 
 const editorTitle = computed(() => {
@@ -680,6 +701,49 @@ const savePreset = async () => {
         ElMessage.error(`保存 ChatLuna 预设失败：${message}`)
     } finally {
         saving.value = false
+    }
+}
+
+const deletePreset = async () => {
+    const preset = selectedPreset.value
+    if (!preset) return
+
+    try {
+        await ElMessageBox.confirm(
+            `确认删除预设文件 "${preset.filename}"？此操作会从 Koishi data 目录中删除该文件，且不可撤销。`,
+            '删除预设文件',
+            {
+                type: 'warning',
+                confirmButtonText: '删除',
+                cancelButtonText: '取消',
+                confirmButtonClass: 'el-button--danger'
+            }
+        )
+    } catch {
+        return
+    }
+
+    deleting.value = true
+
+    try {
+        await api.deleteChatLunaCorePreset({ id: preset.id })
+        ElMessage.success('ChatLuna 预设已删除')
+
+        selectedId.value = null
+        selectedPreset.value = null
+        rawText.value = ''
+        originalRawText.value = ''
+        validationResult.value = null
+        await fetchPresets()
+
+        if (presets.value[0]) {
+            await loadPresetDetail(presets.value[0].id)
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        ElMessage.error(`删除 ChatLuna 预设失败：${message}`)
+    } finally {
+        deleting.value = false
     }
 }
 

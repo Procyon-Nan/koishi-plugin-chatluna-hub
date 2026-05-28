@@ -87,6 +87,10 @@ export interface ChatLunaCorePresetUpdateInput {
     rawText: string
 }
 
+export interface ChatLunaCorePresetDeleteInput {
+    id: string
+}
+
 export type ChatLunaConversationRouteMode =
     | 'personal'
     | 'shared'
@@ -1917,4 +1921,27 @@ export const updateChatLunaCorePreset = async (
     return getChatLunaCorePreset(ctx, {
         id: encodePresetId(presetId.source, filename)
     })
+}
+
+export const deleteChatLunaCorePreset = async (
+    ctx: Context,
+    input: ChatLunaCorePresetDeleteInput
+): Promise<{ success: true }> => {
+    const presetId = parsePresetId(input.id)
+    const presetDir = resolvePresetSourceDir(ctx, presetId.source)
+    const { filePath } = resolvePresetFile(
+        presetDir,
+        presetId.filename,
+        presetId.source
+    )
+
+    await fs.unlink(filePath)
+
+    try {
+        await reloadPresetSource(ctx, presetId.source)
+    } catch {
+        // The file has already been deleted; list refresh will surface reload issues.
+    }
+
+    return { success: true }
 }

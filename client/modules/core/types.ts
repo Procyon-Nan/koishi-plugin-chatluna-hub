@@ -87,6 +87,10 @@ export interface ChatLunaCorePresetUpdateInput {
     rawText: string
 }
 
+export interface ChatLunaCorePresetDeleteInput {
+    id: string
+}
+
 export type ChatLunaConversationRouteMode =
     | 'personal'
     | 'shared'
@@ -273,5 +277,8 @@ declare module '@koishijs/client' {
         'chatluna-hub/core/presets/update': (
             input: ChatLunaCorePresetUpdateInput
         ) => ChatLunaCorePresetDetail
+        'chatluna-hub/core/presets/delete': (
+            input: ChatLunaCorePresetDeleteInput
+        ) => { success: true }
     }
 }

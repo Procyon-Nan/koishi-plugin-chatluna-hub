@@ -22,6 +22,7 @@ import {
     type ChatLunaConversationRouteListResult,
     type ChatLunaCoreModelListResult,
     type ChatLunaCorePresetCreateInput,
+    type ChatLunaCorePresetDeleteInput,
     type ChatLunaCorePresetDetail,
     type ChatLunaCorePresetGetInput,
     type ChatLunaCorePresetListResult,
@@ -29,6 +30,7 @@ import {
     type ChatLunaCorePresetValidateInput,
     type ChatLunaCorePresetValidationResult,
     createChatLunaCorePreset,
+    deleteChatLunaCorePreset,
     deleteChatLunaConversation,
     type DeleteChatLunaConversationInput,
     getChatLunaCorePreset,
@@ -418,6 +420,12 @@ export class ChatLunaHubService extends Service {
     ): Promise<ChatLunaCorePresetDetail> {
         return updateChatLunaCorePreset(this.ctx, input)
     }
+
+    async deleteCorePreset(
+        input: ChatLunaCorePresetDeleteInput
+    ): Promise<{ success: true }> {
+        return deleteChatLunaCorePreset(this.ctx, input)
+    }
 }
 
 class ChatLunaHubConsoleService extends DataService<HubConsoleData> {
@@ -608,6 +616,16 @@ export function apply(ctx: Context, config: Config = {}) {
             }
         )
 
+        ctx.console.addListener(
+            'chatluna-hub/core/presets/delete',
+            async (input) => {
+                return await ctx.chatluna_hub.deleteCorePreset(input)
+            },
+            {
+                authority: 4
+            }
+        )
+
         ctx.plugin(ChatLunaHubConsoleService)
     })
 }
@@ -659,6 +677,9 @@ declare module '@koishijs/plugin-console' {
         'chatluna-hub/core/presets/update': (
             input: ChatLunaCorePresetUpdateInput
         ) => Promise<ChatLunaCorePresetDetail>
+        'chatluna-hub/core/presets/delete': (
+            input: ChatLunaCorePresetDeleteInput
+        ) => Promise<{ success: true }>
     }
 
     namespace Console {
@@ -705,6 +726,9 @@ declare module '@koishijs/console' {
         'chatluna-hub/core/presets/update': (
             input: ChatLunaCorePresetUpdateInput
         ) => Promise<ChatLunaCorePresetDetail>
+        'chatluna-hub/core/presets/delete': (
+            input: ChatLunaCorePresetDeleteInput
+        ) => Promise<{ success: true }>
     }
 
     namespace Console {

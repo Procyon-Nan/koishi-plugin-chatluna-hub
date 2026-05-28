@@ -10,6 +10,7 @@ import type {
     ChatLunaConversationRouteListResult,
     ChatLunaCoreModelListResult,
     ChatLunaCorePresetCreateInput,
+    ChatLunaCorePresetDeleteInput,
     ChatLunaCorePresetDetail,
     ChatLunaCorePresetGetInput,
     ChatLunaCorePresetListResult,
@@ -96,4 +97,10 @@ export async function updateChatLunaCorePreset(
     input: ChatLunaCorePresetUpdateInput
 ): Promise<ChatLunaCorePresetDetail> {
     return await send('chatluna-hub/core/presets/update', input)
+}
+
+export async function deleteChatLunaCorePreset(
+    input: ChatLunaCorePresetDeleteInput
+): Promise<{ success: true }> {
+    return await send('chatluna-hub/core/presets/delete', input)
 }
