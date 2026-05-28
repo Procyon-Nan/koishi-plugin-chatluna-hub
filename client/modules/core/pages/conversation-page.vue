@@ -22,272 +22,461 @@
             </div>
         </header>
 
-        <el-card shadow="never" class="toolbar-card">
-            <template #header>
-                <div class="card-header">
-                    <span>ChatLuna 会话</span>
-                    <span class="card-tip">仅展示当前活跃会话</span>
+        <div class="conversation-workspace">
+            <el-card shadow="never" class="route-card">
+                <template #header>
+                    <div class="route-card-header">
+                        <div class="route-card-heading">
+                            <span class="route-card-title">路由 / 会话组</span>
+                            <span class="route-card-subtitle">
+                                按私聊、群聊和自定义路由归档
+                            </span>
+                        </div>
+                        <span class="route-total-badge">
+                            {{ routeTotal }} 个会话
+                        </span>
+                    </div>
+                </template>
+
+                <div class="route-list" v-loading="routesLoading">
+                    <button
+                        class="route-item"
+                        :class="{ active: selectedRouteId === allRouteId }"
+                        type="button"
+                        @click="selectRoute(allRouteId)"
+                    >
+                        <span class="route-icon">
+                            <el-icon>
+                                <FolderOpened />
+                            </el-icon>
+                        </span>
+                        <span class="route-meta">
+                            <span class="route-title">全部会话</span>
+                            <span class="route-detail">所有活跃 ChatLuna 会话</span>
+                        </span>
+                        <span class="route-badges">
+                            <span
+                                v-if="routeCurrentTotal > 0"
+                                class="route-current"
+                            >
+                                活跃
+                            </span>
+                            <span class="route-count">{{ routeTotal }}</span>
+                        </span>
+                    </button>
+
+                    <template
+                        v-for="section in routeSections"
+                        :key="section.key"
+                    >
+                        <div v-if="section.routes.length > 0" class="route-section">
+                            <div class="route-section-title">
+                                <span>{{ section.label }}</span>
+                                <span>{{ section.count }}</span>
+                            </div>
+                            <button
+                                v-for="route in section.routes"
+                                :key="route.id"
+                                class="route-item"
+                                :class="{ active: selectedRouteId === route.id }"
+                                type="button"
+                                @click="selectRoute(route.id)"
+                            >
+                                <span class="route-icon">
+                                    <el-icon>
+                                        <component :is="section.icon" />
+                                    </el-icon>
+                                </span>
+                                <span class="route-meta">
+                                    <span class="route-title">
+                                        {{ route.label }}
+                                    </span>
+                                    <span class="route-detail">
+                                        {{ route.detail }}
+                                    </span>
+                                </span>
+                                <span class="route-badges">
+                                    <span
+                                        v-if="route.currentCount > 0"
+                                        class="route-current"
+                                    >
+                                        活跃
+                                    </span>
+                                    <span class="route-count">
+                                        {{ route.count }}
+                                    </span>
+                                </span>
+                            </button>
+                        </div>
+                    </template>
                 </div>
-            </template>
+            </el-card>
 
-            <div class="conversation-toolbar">
-                <el-input
-                    v-model="keyword"
-                    placeholder="搜索标题、模型、预设、用户或群聊 ID"
-                    clearable
-                    @keyup.enter="refreshConversations"
-                    @clear="refreshConversations"
-                >
-                    <template #prepend>搜索</template>
-                </el-input>
+            <el-card shadow="never" class="conversation-card">
+                <template #header>
+                    <div class="conversation-card-header">
+                        <div>
+                            <div class="card-title">{{ activeRouteTitle }}</div>
+                            <div class="card-tip">
+                                修改后需保存才会写入 ChatLuna 会话字段
+                            </div>
+                        </div>
+                        <div class="header-actions">
+                            <span
+                                v-if="selectedConversations.length > 0"
+                                class="selected-count"
+                            >
+                                已选择 {{ selectedConversations.length }} 项
+                            </span>
+                            <el-dropdown
+                                trigger="click"
+                                :disabled="selectedConversations.length === 0"
+                                @command="handleBatchCommand"
+                            >
+                                <el-button
+                                    :disabled="selectedConversations.length === 0"
+                                    type="primary"
+                                    plain
+                                >
+                                    批量操作
+                                </el-button>
+                                <template #dropdown>
+                                    <el-dropdown-menu>
+                                        <el-dropdown-item command="model">
+                                            切换模型
+                                        </el-dropdown-item>
+                                        <el-dropdown-item command="preset">
+                                            切换预设
+                                        </el-dropdown-item>
+                                        <el-dropdown-item
+                                            command="delete"
+                                            divided
+                                        >
+                                            删除会话
+                                        </el-dropdown-item>
+                                    </el-dropdown-menu>
+                                </template>
+                            </el-dropdown>
+                        </div>
+                    </div>
+                </template>
 
-                <el-button
-                    :loading="loading"
-                    type="primary"
-                    @click="refreshConversations"
-                >
-                    刷新
-                </el-button>
-            </div>
-        </el-card>
+                <div class="conversation-toolbar">
+                    <el-input
+                        v-model="keyword"
+                        placeholder="搜索标题、模型、预设、用户或群聊 ID"
+                        clearable
+                        @keyup.enter="refreshCurrentRoute"
+                        @clear="refreshCurrentRoute"
+                    >
+                        <template #prefix>
+                            <el-icon>
+                                <Search />
+                            </el-icon>
+                        </template>
+                    </el-input>
 
-        <el-card shadow="never" class="table-card">
-            <template #header>
-                <div class="card-header">
-                    <span>会话列表</span>
-                    <span class="card-tip">修改后需保存才会写入 ChatLuna 会话字段</span>
+                    <el-select v-model="sortPreset" @change="applySortPreset">
+                        <el-option label="最近对话" value="lastChatAt:descending" />
+                        <el-option label="标题名称" value="title:ascending" />
+                    </el-select>
+
+                    <el-button
+                        :loading="loading || routesLoading"
+                        type="primary"
+                        @click="refreshConversations"
+                    >
+                        <el-icon>
+                            <Refresh />
+                        </el-icon>
+                    </el-button>
                 </div>
-            </template>
 
-            <el-table
-                class="conversation-table"
-                :data="conversations"
-                :row-key="getRowKey"
-                border
-                v-loading="loading"
-                empty-text="暂无 ChatLuna 会话"
-                max-height="560"
-            >
-                <el-table-column
-                    label="状态"
-                    width="88"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
+                <el-table
+                    ref="tableRef"
+                    class="conversation-table"
+                    :data="conversations"
+                    :row-key="getRowKey"
+                    border
+                    v-loading="loading"
+                    empty-text="暂无 ChatLuna 会话"
+                    max-height="620"
+                    @selection-change="onSelectionChange"
                 >
-                    <template #default="scope">
-                        <el-tooltip
-                            :content="formatStatusTip(scope.row)"
-                            placement="top"
-                        >
-                            <el-tag
-                                :type="scope.row.isCurrent ? 'success' : 'info'"
-                                size="small"
-                                effect="plain"
+                    <el-table-column
+                        type="selection"
+                        width="48"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    />
+
+                    <el-table-column
+                        label="状态"
+                        width="86"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    >
+                        <template #default="scope">
+                            <el-tooltip
+                                :content="formatStatusTip(scope.row)"
+                                placement="top"
                             >
-                                {{ scope.row.isCurrent ? '当前' : '可用' }}
-                            </el-tag>
-                        </el-tooltip>
-                    </template>
-                </el-table-column>
+                                <el-tag
+                                    :type="
+                                        scope.row.isCurrent ? 'success' : 'info'
+                                    "
+                                    size="small"
+                                    effect="plain"
+                                >
+                                    {{ scope.row.isCurrent ? '活跃' : '可用' }}
+                                </el-tag>
+                            </el-tooltip>
+                        </template>
+                    </el-table-column>
 
-                <el-table-column
-                    prop="seq"
-                    label="#"
-                    width="72"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                />
-                <el-table-column
-                    prop="title"
-                    label="标题"
-                    min-width="180"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                    show-overflow-tooltip
-                />
+                    <el-table-column
+                        prop="seq"
+                        label="序号"
+                        width="82"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    />
 
-                <el-table-column
-                    label="路由"
-                    min-width="220"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                    show-overflow-tooltip
-                >
-                    <template #default="scope">
-                        <el-tag
-                            :type="routeTagType(scope.row.route.mode)"
-                            size="small"
-                            effect="plain"
-                        >
-                            {{ routeModeLabel(scope.row.route.mode) }}
-                        </el-tag>
-                        <span class="route-text">{{
-                            formatRoute(scope.row.route)
-                        }}</span>
-                    </template>
-                </el-table-column>
+                    <el-table-column
+                        prop="title"
+                        label="标题"
+                        min-width="180"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                        show-overflow-tooltip
+                    />
 
-                <el-table-column
-                    prop="createdBy"
-                    label="创建者"
-                    min-width="120"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                    show-overflow-tooltip
-                />
+                    <el-table-column
+                        prop="createdBy"
+                        label="创建者"
+                        width="118"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                        show-overflow-tooltip
+                    />
 
-                <el-table-column
-                    label="模型"
-                    min-width="240"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                >
-                    <template #default="scope">
-                        <el-select
-                            v-if="drafts[scope.row.id]"
-                            v-model="drafts[scope.row.id].model"
-                            filterable
-                            placeholder="选择模型"
-                            class="usage-select"
-                            :loading="optionsLoading"
-                            :disabled="isConversationBusy(scope.row)"
-                        >
-                            <el-option
-                                v-for="model in options.models"
-                                :key="model.value"
-                                :label="model.label"
-                                :value="model.value"
-                            />
-                        </el-select>
-                    </template>
-                </el-table-column>
-
-                <el-table-column
-                    label="预设"
-                    min-width="200"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                >
-                    <template #default="scope">
-                        <el-select
-                            v-if="drafts[scope.row.id]"
-                            v-model="drafts[scope.row.id].preset"
-                            filterable
-                            placeholder="选择预设"
-                            class="usage-select"
-                            :loading="optionsLoading"
-                            :disabled="isConversationBusy(scope.row)"
-                        >
-                            <el-option
-                                v-for="preset in options.presets"
-                                :key="preset.value"
-                                :label="preset.label"
-                                :value="preset.value"
-                            />
-                        </el-select>
-                    </template>
-                </el-table-column>
-
-                <el-table-column
-                    prop="chatMode"
-                    label="模式"
-                    width="120"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                    show-overflow-tooltip
-                />
-
-                <el-table-column
-                    label="最近对话"
-                    min-width="160"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                >
-                    <template #default="scope">
-                        {{ formatTime(scope.row.lastChatAt) }}
-                    </template>
-                </el-table-column>
-
-                <el-table-column
-                    label="操作"
-                    width="220"
-                    :resizable="false"
-                    align="center"
-                    header-align="center"
-                >
-                    <template #default="scope">
-                        <el-space>
-                            <el-button
-                                size="small"
-                                type="primary"
-                                :disabled="
-                                    !isConversationDirty(scope.row) ||
-                                    isConversationBusy(scope.row)
-                                "
-                                :loading="savingConversationId === scope.row.id"
-                                @click="saveConversation(scope.row)"
-                            >
-                                保存
-                            </el-button>
-                            <el-button
-                                size="small"
-                                :disabled="
-                                    !isConversationDirty(scope.row) ||
-                                    isConversationBusy(scope.row)
-                                "
-                                @click="resetDraft(scope.row)"
-                            >
-                                还原
-                            </el-button>
-                            <el-button
-                                size="small"
-                                type="danger"
+                    <el-table-column
+                        label="模型"
+                        min-width="220"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    >
+                        <template #default="scope">
+                            <el-select
+                                v-if="drafts[scope.row.id]"
+                                v-model="drafts[scope.row.id].model"
+                                filterable
+                                placeholder="选择模型"
+                                class="usage-select"
+                                :loading="optionsLoading"
                                 :disabled="isConversationBusy(scope.row)"
-                                :loading="deletingConversationId === scope.row.id"
-                                @click="removeConversation(scope.row)"
                             >
-                                删除
-                            </el-button>
-                        </el-space>
-                    </template>
-                </el-table-column>
-            </el-table>
+                                <el-option
+                                    v-for="model in options.models"
+                                    :key="model.value"
+                                    :label="model.label"
+                                    :value="model.value"
+                                />
+                            </el-select>
+                        </template>
+                    </el-table-column>
 
-            <div class="pagination-row">
-                <el-pagination
-                    v-model:current-page="page"
-                    v-model:page-size="pageSize"
-                    :page-sizes="[10, 20, 50, 100]"
-                    :total="total"
-                    layout="total, sizes, prev, pager, next"
-                    @current-change="fetchConversations"
-                    @size-change="onPageSizeChange"
+                    <el-table-column
+                        label="预设"
+                        min-width="180"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    >
+                        <template #default="scope">
+                            <el-select
+                                v-if="drafts[scope.row.id]"
+                                v-model="drafts[scope.row.id].preset"
+                                filterable
+                                placeholder="选择预设"
+                                class="usage-select"
+                                :loading="optionsLoading"
+                                :disabled="isConversationBusy(scope.row)"
+                            >
+                                <el-option
+                                    v-for="preset in options.presets"
+                                    :key="preset.value"
+                                    :label="preset.label"
+                                    :value="preset.value"
+                                />
+                            </el-select>
+                        </template>
+                    </el-table-column>
+
+                    <el-table-column
+                        prop="chatMode"
+                        label="模式"
+                        width="112"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                        show-overflow-tooltip
+                    />
+
+                    <el-table-column
+                        label="最近对话"
+                        width="150"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    >
+                        <template #default="scope">
+                            {{ formatTime(scope.row.lastChatAt) }}
+                        </template>
+                    </el-table-column>
+
+                    <el-table-column
+                        label="操作"
+                        width="210"
+                        :resizable="false"
+                        align="center"
+                        header-align="center"
+                    >
+                        <template #default="scope">
+                            <el-space>
+                                <el-button
+                                    size="small"
+                                    type="primary"
+                                    :disabled="
+                                        !isConversationDirty(scope.row) ||
+                                        isConversationBusy(scope.row)
+                                    "
+                                    :loading="
+                                        savingConversationIds.has(scope.row.id)
+                                    "
+                                    @click="saveConversation(scope.row)"
+                                >
+                                    保存
+                                </el-button>
+                                <el-button
+                                    size="small"
+                                    :disabled="
+                                        !isConversationDirty(scope.row) ||
+                                        isConversationBusy(scope.row)
+                                    "
+                                    @click="resetDraft(scope.row)"
+                                >
+                                    还原
+                                </el-button>
+                                <el-button
+                                    size="small"
+                                    type="danger"
+                                    :disabled="isConversationBusy(scope.row)"
+                                    :loading="
+                                        deletingConversationIds.has(scope.row.id)
+                                    "
+                                    @click="removeConversation(scope.row)"
+                                >
+                                    删除
+                                </el-button>
+                            </el-space>
+                        </template>
+                    </el-table-column>
+                </el-table>
+
+                <div class="pagination-row">
+                    <el-pagination
+                        v-model:current-page="page"
+                        v-model:page-size="pageSize"
+                        :page-sizes="[10, 20, 50, 100]"
+                        :total="total"
+                        layout="total, sizes, prev, pager, next"
+                        @current-change="fetchConversations"
+                        @size-change="onPageSizeChange"
+                    />
+                </div>
+            </el-card>
+        </div>
+
+        <el-dialog
+            v-model="batchDialog.visible"
+            :title="batchDialogTitle"
+            width="420px"
+        >
+            <el-select
+                v-if="batchDialog.field === 'model'"
+                v-model="batchDialog.value"
+                filterable
+                placeholder="选择模型"
+                class="batch-select"
+                :loading="optionsLoading"
+            >
+                <el-option
+                    v-for="model in options.models"
+                    :key="model.value"
+                    :label="model.label"
+                    :value="model.value"
                 />
-            </div>
-        </el-card>
+            </el-select>
+
+            <el-select
+                v-else
+                v-model="batchDialog.value"
+                filterable
+                placeholder="选择预设"
+                class="batch-select"
+                :loading="optionsLoading"
+            >
+                <el-option
+                    v-for="preset in options.presets"
+                    :key="preset.value"
+                    :label="preset.label"
+                    :value="preset.value"
+                />
+            </el-select>
+
+            <template #footer>
+                <el-button @click="batchDialog.visible = false">
+                    取消
+                </el-button>
+                <el-button
+                    type="primary"
+                    :disabled="!batchDialog.value"
+                    :loading="batchSaving"
+                    @click="applyBatchUsageAndSave"
+                >
+                    应用到选中对话
+                </el-button>
+            </template>
+        </el-dialog>
     </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatRound } from '@element-plus/icons-vue'
+import {
+    ChatRound,
+    Connection,
+    FolderOpened,
+    Refresh,
+    Search,
+    User
+} from '@element-plus/icons-vue'
 import * as api from '../api'
 import { useCoreCompactMode } from '../use-compact-mode'
 import type {
     ChatLunaConversationListItem,
     ChatLunaConversationOptions,
-    ChatLunaConversationRouteInfo,
-    ChatLunaConversationRouteMode
+    ChatLunaConversationRouteGroup,
+    ChatLunaConversationSortKey,
+    ChatLunaConversationSortOrder
 } from '../types'
 
 interface ConversationDraft {
@@ -295,6 +484,22 @@ interface ConversationDraft {
     preset: string
 }
 
+interface ConversationTableRef {
+    clearSelection: () => void
+}
+
+interface RouteSection {
+    key: string
+    label: string
+    icon: Component
+    routes: ChatLunaConversationRouteGroup[]
+    count: number
+}
+
+type BatchUsageField = 'model' | 'preset'
+type BatchCommand = 'model' | 'preset' | 'delete'
+
+const allRouteId = '__all__'
 const emptyOptions = (): ChatLunaConversationOptions => ({
     models: [],
     presets: []
@@ -316,17 +521,105 @@ const formatTime = (value: string | Date | null | undefined): string => {
 }
 
 const loading = ref(false)
+const routesLoading = ref(false)
 const compactMode = useCoreCompactMode()
 const optionsLoading = ref(false)
-const savingConversationId = ref<string | null>(null)
-const deletingConversationId = ref<string | null>(null)
 const keyword = ref('')
+const sortKey = ref<ChatLunaConversationSortKey>('lastChatAt')
+const sortOrder = ref<ChatLunaConversationSortOrder>('descending')
+const sortPreset = ref('lastChatAt:descending')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const selectedRouteId = ref(allRouteId)
+const tableRef = ref<ConversationTableRef>()
 const options = ref<ChatLunaConversationOptions>(emptyOptions())
 const conversations = ref<ChatLunaConversationListItem[]>([])
+const routeGroups = ref<ChatLunaConversationRouteGroup[]>([])
+const selectedConversations = ref<ChatLunaConversationListItem[]>([])
 const drafts = reactive<Record<string, ConversationDraft>>({})
+const savingConversationIds = reactive(new Set<string>())
+const deletingConversationIds = reactive(new Set<string>())
+const batchSaving = ref(false)
+const batchDeleting = ref(false)
+const batchDialog = reactive<{
+    visible: boolean
+    field: BatchUsageField
+    value: string
+}>({
+    visible: false,
+    field: 'model',
+    value: ''
+})
+
+const routeTotal = computed(() =>
+    routeGroups.value.reduce((sum, route) => sum + route.count, 0)
+)
+
+const routeCurrentTotal = computed(() =>
+    routeGroups.value.reduce((sum, route) => sum + route.currentCount, 0)
+)
+
+const activeRoute = computed(() =>
+    routeGroups.value.find((route) => route.id === selectedRouteId.value)
+)
+
+const activeRouteTitle = computed(() => {
+    if (selectedRouteId.value === allRouteId) {
+        return '全部会话'
+    }
+
+    return activeRoute.value?.label ?? '会话列表'
+})
+
+const routeSections = computed<RouteSection[]>(() => {
+    const direct = routeGroups.value.filter(
+        (route) => route.mode === 'personal' && route.isDirect
+    )
+    const guild = routeGroups.value.filter(
+        (route) =>
+            route.mode === 'shared' ||
+            (route.mode === 'personal' && !route.isDirect)
+    )
+    const custom = routeGroups.value.filter((route) => route.mode === 'custom')
+    const unknown = routeGroups.value.filter((route) => route.mode === 'unknown')
+    const sections: RouteSection[] = [
+        {
+            key: 'direct',
+            label: '私聊',
+            icon: User,
+            routes: direct,
+            count: direct.reduce((sum, route) => sum + route.count, 0)
+        },
+        {
+            key: 'guild',
+            label: '群聊',
+            icon: Connection,
+            routes: guild,
+            count: guild.reduce((sum, route) => sum + route.count, 0)
+        },
+        {
+            key: 'custom',
+            label: '自定义',
+            icon: FolderOpened,
+            routes: custom,
+            count: custom.reduce((sum, route) => sum + route.count, 0)
+        },
+        {
+            key: 'unknown',
+            label: '未知',
+            icon: FolderOpened,
+            routes: unknown,
+            count: unknown.reduce((sum, route) => sum + route.count, 0)
+        }
+    ]
+
+    return sections
+})
+
+const batchDialogTitle = computed(() =>
+    batchDialog.field === 'model' ? '批量切换模型' : '批量切换预设'
+)
 
 const getRowKey = (row: ChatLunaConversationListItem) => row.id
 
@@ -334,42 +627,6 @@ const formatStatusTip = (conversation: ChatLunaConversationListItem) => {
     return `记录状态：${conversation.status}；当前绑定：${
         conversation.activeConversationId ?? '-'
     }`
-}
-
-const routeModeLabel = (mode: ChatLunaConversationRouteMode): string => {
-    if (mode === 'personal') return '个人'
-    if (mode === 'shared') return '共享'
-    if (mode === 'custom') return '自定义'
-    return '未知'
-}
-
-const routeTagType = (
-    mode: ChatLunaConversationRouteMode
-): 'success' | 'warning' | 'primary' | 'info' => {
-    if (mode === 'personal') return 'success'
-    if (mode === 'shared') return 'warning'
-    if (mode === 'custom') return 'primary'
-    return 'info'
-}
-
-const formatRoute = (route: ChatLunaConversationRouteInfo): string => {
-    if (route.mode === 'custom') {
-        return route.routeKey ?? route.baseBindingKey
-    }
-
-    if (route.mode === 'shared') {
-        return `群聊 ${route.guildId ?? '-'}`
-    }
-
-    if (route.mode === 'personal' && route.isDirect) {
-        return `私聊 ${route.userId ?? '-'}`
-    }
-
-    if (route.mode === 'personal') {
-        return `群聊 ${route.guildId ?? '-'} / 用户 ${route.userId ?? '-'}`
-    }
-
-    return route.baseBindingKey
 }
 
 const syncDrafts = (items: ChatLunaConversationListItem[]) => {
@@ -389,6 +646,11 @@ const syncDrafts = (items: ChatLunaConversationListItem[]) => {
     }
 }
 
+const clearSelection = () => {
+    selectedConversations.value = []
+    tableRef.value?.clearSelection()
+}
+
 const fetchOptions = async () => {
     optionsLoading.value = true
 
@@ -402,16 +664,44 @@ const fetchOptions = async () => {
     }
 }
 
-const fetchConversations = async (_nextPage?: number) => {
+const fetchRoutes = async () => {
+    routesLoading.value = true
+
+    try {
+        const result = await api.listChatLunaConversationRoutes()
+        routeGroups.value = result.routes
+
+        if (
+            selectedRouteId.value !== allRouteId &&
+            !result.routes.some((route) => route.id === selectedRouteId.value)
+        ) {
+            selectedRouteId.value = allRouteId
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        ElMessage.error(`加载 ChatLuna 路由分组失败：${message}`)
+    } finally {
+        routesLoading.value = false
+    }
+}
+
+const fetchConversations = async () => {
     loading.value = true
 
     try {
         const result = await api.listChatLunaConversations({
             keyword: keyword.value.trim() || undefined,
+            routeBaseBindingKey:
+                selectedRouteId.value === allRouteId
+                    ? undefined
+                    : selectedRouteId.value,
+            sortKey: sortKey.value,
+            sortOrder: sortOrder.value,
             page: page.value,
             pageSize: pageSize.value
         })
 
+        clearSelection()
         syncDrafts(result.items)
         conversations.value = result.items
         total.value = result.total
@@ -427,18 +717,50 @@ const fetchConversations = async (_nextPage?: number) => {
 
 const refreshConversations = async () => {
     page.value = 1
-    await Promise.all([fetchOptions(), fetchConversations()])
+    await Promise.all([fetchOptions(), fetchRoutes()])
+    await fetchConversations()
 }
 
-const onPageSizeChange = (_nextSize?: number) => {
+const refreshCurrentRoute = async () => {
+    page.value = 1
+    await fetchConversations()
+}
+
+const selectRoute = (routeId: string) => {
+    if (selectedRouteId.value === routeId) return
+
+    selectedRouteId.value = routeId
     page.value = 1
     void fetchConversations()
 }
 
+const applySortPreset = () => {
+    const [key, order] = sortPreset.value.split(':') as [
+        ChatLunaConversationSortKey,
+        ChatLunaConversationSortOrder
+    ]
+
+    sortKey.value = key
+    sortOrder.value = order
+    page.value = 1
+    void fetchConversations()
+}
+
+const onPageSizeChange = () => {
+    page.value = 1
+    void fetchConversations()
+}
+
+const onSelectionChange = (selection: ChatLunaConversationListItem[]) => {
+    selectedConversations.value = selection
+}
+
 const isConversationBusy = (conversation: ChatLunaConversationListItem) => {
     return (
-        savingConversationId.value === conversation.id ||
-        deletingConversationId.value === conversation.id
+        savingConversationIds.has(conversation.id) ||
+        deletingConversationIds.has(conversation.id) ||
+        batchSaving.value ||
+        batchDeleting.value
     )
 }
 
@@ -457,6 +779,18 @@ const resetDraft = (conversation: ChatLunaConversationListItem) => {
     }
 }
 
+const updateConversationInList = (
+    updated: ChatLunaConversationListItem
+) => {
+    const index = conversations.value.findIndex((item) => item.id === updated.id)
+
+    if (index >= 0) {
+        conversations.value[index] = updated
+    }
+
+    resetDraft(updated)
+}
+
 const saveConversation = async (conversation: ChatLunaConversationListItem) => {
     const draft = drafts[conversation.id]
 
@@ -464,7 +798,7 @@ const saveConversation = async (conversation: ChatLunaConversationListItem) => {
         return
     }
 
-    savingConversationId.value = conversation.id
+    savingConversationIds.add(conversation.id)
 
     try {
         const updated = await api.updateChatLunaConversationUsage({
@@ -473,21 +807,14 @@ const saveConversation = async (conversation: ChatLunaConversationListItem) => {
             preset:
                 draft.preset !== conversation.preset ? draft.preset : undefined
         })
-        const index = conversations.value.findIndex(
-            (item) => item.id === updated.id
-        )
 
-        if (index >= 0) {
-            conversations.value[index] = updated
-        }
-
-        resetDraft(updated)
+        updateConversationInList(updated)
         ElMessage.success('ChatLuna 会话已更新')
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         ElMessage.error(`保存 ChatLuna 会话失败：${message}`)
     } finally {
-        savingConversationId.value = null
+        savingConversationIds.delete(conversation.id)
     }
 }
 
@@ -496,7 +823,11 @@ const removeConversation = async (
 ) => {
     try {
         await ElMessageBox.confirm(
-            `删除会话「${conversation.title || conversation.id}」后，会移除该 ChatLuna 会话的消息记录与权限记录，并解除当前绑定；该操作不能从此界面恢复。是否继续？`,
+            [
+                `删除会话「${conversation.title || conversation.id}」后，`,
+                '会移除该 ChatLuna 会话的消息记录与权限记录，',
+                '并解除当前绑定；该操作不能从此界面恢复。是否继续？'
+            ].join(''),
             '删除 ChatLuna 会话',
             {
                 type: 'warning',
@@ -508,7 +839,7 @@ const removeConversation = async (
         return
     }
 
-    deletingConversationId.value = conversation.id
+    deletingConversationIds.add(conversation.id)
 
     try {
         await api.deleteChatLunaConversation({
@@ -520,13 +851,123 @@ const removeConversation = async (
         }
 
         ElMessage.success('ChatLuna 会话已删除')
+        await fetchRoutes()
         await fetchConversations()
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         ElMessage.error(`删除 ChatLuna 会话失败：${message}`)
     } finally {
-        deletingConversationId.value = null
+        deletingConversationIds.delete(conversation.id)
     }
+}
+
+const openBatchUsageDialog = (field: BatchUsageField) => {
+    if (selectedConversations.value.length === 0) return
+
+    batchDialog.field = field
+    batchDialog.value = ''
+    batchDialog.visible = true
+}
+
+const applyBatchUsageAndSave = async () => {
+    if (!batchDialog.value) return
+
+    const conversationIds = selectedConversations.value.map((item) => item.id)
+    if (conversationIds.length === 0) {
+        return
+    }
+
+    batchSaving.value = true
+
+    try {
+        const result = await api.batchUpdateChatLunaConversationUsage({
+            conversationIds,
+            model:
+                batchDialog.field === 'model' ? batchDialog.value : undefined,
+            preset:
+                batchDialog.field === 'preset' ? batchDialog.value : undefined
+        })
+
+        for (const updated of result.updated) {
+            updateConversationInList(updated)
+        }
+
+        if (result.failed.length > 0) {
+            ElMessage.warning(
+                `已更新 ${result.updated.length} 个会话，${result.failed.length} 个失败`
+            )
+        } else {
+            ElMessage.success(`已更新 ${result.updated.length} 个会话`)
+        }
+
+        batchDialog.visible = false
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        ElMessage.error(`批量更新 ChatLuna 会话失败：${message}`)
+    } finally {
+        batchSaving.value = false
+    }
+}
+
+const deleteSelectedConversations = async () => {
+    if (selectedConversations.value.length === 0) return
+
+    try {
+        await ElMessageBox.confirm(
+            [
+                `将删除选中的 ${selectedConversations.value.length} 个 ChatLuna 会话，`,
+                '并移除相关消息记录与权限记录。是否继续？'
+            ].join(''),
+            '批量删除 ChatLuna 会话',
+            {
+                type: 'warning',
+                confirmButtonText: '确认删除',
+                cancelButtonText: '取消'
+            }
+        )
+    } catch {
+        return
+    }
+
+    batchDeleting.value = true
+
+    try {
+        const result = await api.batchDeleteChatLunaConversation({
+            conversationIds: selectedConversations.value.map((item) => item.id)
+        })
+
+        if (result.deleted.length > 0 && result.failed.length === 0) {
+            ElMessage.success(`已删除 ${result.deleted.length} 个会话`)
+        } else {
+            ElMessage.warning(
+                `已删除 ${result.deleted.length} 个会话，${result.failed.length} 个失败`
+            )
+        }
+
+        if (
+            result.deleted.length >= conversations.value.length &&
+            page.value > 1
+        ) {
+            page.value -= 1
+        }
+
+        await fetchRoutes()
+        await fetchConversations()
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        ElMessage.error(`批量删除 ChatLuna 会话失败：${message}`)
+    } finally {
+        batchDeleting.value = false
+    }
+}
+
+const handleBatchCommand = (command: BatchCommand) => {
+    if (command === 'model' || command === 'preset') {
+        openBatchUsageDialog(command)
+        return
+    }
+
+    void deleteSelectedConversations()
 }
 
 onMounted(() => {
@@ -588,16 +1029,58 @@ onMounted(() => {
     justify-content: flex-end;
 }
 
-.toolbar-card,
-.table-card {
+.conversation-workspace {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 20px;
+    align-items: stretch;
+}
+
+.core-page.compact .conversation-workspace {
+    grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.route-card,
+.conversation-card {
     border-radius: 8px;
 }
 
-.card-header {
+.route-card {
+    border-color: color-mix(in srgb, var(--k-color-primary) 10%, var(--k-color-divider));
+}
+
+.route-card :deep(.el-card__header) {
+    padding: 16px 16px 12px;
+}
+
+.route-card :deep(.el-card__body),
+.conversation-card :deep(.el-card__body) {
+    min-width: 0;
+}
+
+.route-card :deep(.el-card__body) {
+    padding: 14px;
+}
+
+.conversation-card :deep(.el-card__body) {
+    min-height: 720px;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-header,
+.conversation-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+}
+
+.card-title {
+    color: var(--k-text-dark);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
 }
 
 .card-tip {
@@ -605,18 +1088,198 @@ onMounted(() => {
     font-size: 13px;
 }
 
-.conversation-toolbar {
-    display: grid;
-    grid-template-columns: minmax(260px, 1fr) auto;
-    gap: 12px;
+.header-actions {
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.usage-select {
+.selected-count {
+    color: var(--k-text-light);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.route-card-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.route-card-heading {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.route-card-title {
+    color: var(--k-text-dark);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.route-card-subtitle {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.route-total-badge {
+    height: 28px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 10px;
+    color: var(--k-text-normal);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--k-color-fill);
+    white-space: nowrap;
+}
+
+.route-list {
+    max-height: 680px;
+    overflow: auto;
+    padding-right: 2px;
+    display: grid;
+    gap: 12px;
+}
+
+.route-section {
+    display: grid;
+    gap: 7px;
+}
+
+.route-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 8px 3px;
+    border-bottom: 1px solid color-mix(in srgb, var(--k-color-divider) 70%, transparent);
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.route-item {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    color: var(--k-text-dark);
+    background: var(--k-card-bg);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 0.16s ease,
+        border-color 0.16s ease,
+        color 0.16s ease;
+}
+
+.route-item:hover,
+.route-item.active {
+    border-color: color-mix(in srgb, var(--k-color-primary) 36%, var(--k-color-divider));
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary) 8%, var(--k-card-bg));
+}
+
+.route-item.active {
+    box-shadow: inset 3px 0 0 var(--k-color-primary);
+}
+
+.route-icon {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: inherit;
+    background: var(--k-color-fill);
+}
+
+.route-meta {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.route-title,
+.route-detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.route-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.route-detail {
+    color: var(--k-text-light);
+    font-size: 12px;
+}
+
+.route-badges {
+    display: grid;
+    justify-items: end;
+    gap: 4px;
+}
+
+.route-current {
+    height: 20px;
+    border-radius: 8px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 7px;
+    color: var(--k-color-success, #67c23a);
+    font-size: 11px;
+    font-weight: 700;
+    background: color-mix(
+        in srgb,
+        var(--k-color-success, #67c23a) 12%,
+        transparent
+    );
+    white-space: nowrap;
+}
+
+.route-count {
+    min-width: 30px;
+    height: 24px;
+    border-radius: 8px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 8px;
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--k-color-fill);
+}
+
+.conversation-toolbar {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) 150px auto;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.usage-select,
+.batch-select {
     width: 100%;
 }
 
 .conversation-table {
+    width: 100%;
     font-size: 14px;
 }
 
@@ -639,14 +1302,22 @@ onMounted(() => {
     padding: 0 6px;
 }
 
-.route-text {
-    margin-left: 8px;
-}
-
 .pagination-row {
     display: flex;
     justify-content: flex-end;
-    margin-top: 12px;
+    margin-top: auto;
+    padding-top: 12px;
+}
+
+@media (max-width: 1100px) {
+    .conversation-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .route-list {
+        max-height: 360px;
+        overflow: auto;
+    }
 }
 
 @media (max-width: 768px) {
@@ -658,17 +1329,23 @@ onMounted(() => {
         font-size: 24px;
     }
 
-    .page-actions {
+    .page-actions,
+    .header-actions {
         justify-content: flex-start;
+    }
+
+    .conversation-card-header,
+    .card-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .conversation-toolbar {
         grid-template-columns: 1fr;
     }
 
-    .card-header {
-        align-items: flex-start;
-        flex-direction: column;
+    .conversation-card :deep(.el-card__body) {
+        min-height: 0;
     }
 }
 </style>

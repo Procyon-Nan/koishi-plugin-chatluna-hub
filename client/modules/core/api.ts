@@ -1,8 +1,13 @@
 import { send } from '@koishijs/client'
 import type {
+    BatchDeleteChatLunaConversationInput,
+    BatchDeleteChatLunaConversationResult,
+    BatchUpdateChatLunaConversationUsageInput,
+    BatchUpdateChatLunaConversationUsageResult,
     ChatLunaConversationListItem,
     ChatLunaConversationListQuery,
     ChatLunaConversationOptions,
+    ChatLunaConversationRouteListResult,
     ChatLunaCoreModelListResult,
     ChatLunaCorePresetCreateInput,
     ChatLunaCorePresetDetail,
@@ -22,6 +27,12 @@ export async function listChatLunaConversations(
     return await send('chatluna-hub/core/conversations/list', params)
 }
 
+export async function listChatLunaConversationRoutes(): Promise<
+    ChatLunaConversationRouteListResult
+> {
+    return await send('chatluna-hub/core/conversations/routes')
+}
+
 export async function listChatLunaConversationOptions(): Promise<
     ChatLunaConversationOptions
 > {
@@ -34,10 +45,25 @@ export async function updateChatLunaConversationUsage(
     return await send('chatluna-hub/core/conversations/update-usage', input)
 }
 
+export async function batchUpdateChatLunaConversationUsage(
+    input: BatchUpdateChatLunaConversationUsageInput
+): Promise<BatchUpdateChatLunaConversationUsageResult> {
+    return await send(
+        'chatluna-hub/core/conversations/batch-update-usage',
+        input
+    )
+}
+
 export async function deleteChatLunaConversation(
     input: DeleteChatLunaConversationInput
 ): Promise<{ success: true }> {
     return await send('chatluna-hub/core/conversations/delete', input)
+}
+
+export async function batchDeleteChatLunaConversation(
+    input: BatchDeleteChatLunaConversationInput
+): Promise<BatchDeleteChatLunaConversationResult> {
+    return await send('chatluna-hub/core/conversations/batch-delete', input)
 }
 
 export async function listChatLunaCoreModels(): Promise<ChatLunaCoreModelListResult> {

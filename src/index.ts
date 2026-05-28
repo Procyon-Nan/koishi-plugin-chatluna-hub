@@ -10,9 +10,16 @@ import {
     isToggleableHubModule
 } from './webui/modules'
 import {
+    batchDeleteChatLunaConversation,
+    type BatchDeleteChatLunaConversationInput,
+    type BatchDeleteChatLunaConversationResult,
+    batchUpdateChatLunaConversationUsage,
+    type BatchUpdateChatLunaConversationUsageInput,
+    type BatchUpdateChatLunaConversationUsageResult,
     type ChatLunaConversationListItem,
     type ChatLunaConversationListQuery,
     type ChatLunaConversationOptions,
+    type ChatLunaConversationRouteListResult,
     type ChatLunaCoreModelListResult,
     type ChatLunaCorePresetCreateInput,
     type ChatLunaCorePresetDetail,
@@ -26,6 +33,7 @@ import {
     type DeleteChatLunaConversationInput,
     getChatLunaCorePreset,
     listChatLunaConversationOptions,
+    listChatLunaConversationRoutes,
     listChatLunaConversations,
     listChatLunaCoreModels,
     listChatLunaCorePresets,
@@ -351,6 +359,10 @@ export class ChatLunaHubService extends Service {
         return listChatLunaConversations(this.ctx, query)
     }
 
+    async listCoreConversationRoutes(): Promise<ChatLunaConversationRouteListResult> {
+        return listChatLunaConversationRoutes(this.ctx)
+    }
+
     async listCoreConversationOptions(): Promise<ChatLunaConversationOptions> {
         return listChatLunaConversationOptions(this.ctx)
     }
@@ -361,10 +373,22 @@ export class ChatLunaHubService extends Service {
         return updateChatLunaConversationUsage(this.ctx, input)
     }
 
+    async batchUpdateCoreConversationUsage(
+        input: BatchUpdateChatLunaConversationUsageInput
+    ): Promise<BatchUpdateChatLunaConversationUsageResult> {
+        return batchUpdateChatLunaConversationUsage(this.ctx, input)
+    }
+
     async deleteCoreConversation(
         input: DeleteChatLunaConversationInput
     ): Promise<{ success: true }> {
         return deleteChatLunaConversation(this.ctx, input)
+    }
+
+    async batchDeleteCoreConversation(
+        input: BatchDeleteChatLunaConversationInput
+    ): Promise<BatchDeleteChatLunaConversationResult> {
+        return batchDeleteChatLunaConversation(this.ctx, input)
     }
 
     async listCorePresets(): Promise<ChatLunaCorePresetListResult> {
@@ -473,6 +497,16 @@ export function apply(ctx: Context, config: Config = {}) {
         )
 
         ctx.console.addListener(
+            'chatluna-hub/core/conversations/routes',
+            async () => {
+                return await ctx.chatluna_hub.listCoreConversationRoutes()
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
             'chatluna-hub/core/conversations/options',
             async () => {
                 return await ctx.chatluna_hub.listCoreConversationOptions()
@@ -493,9 +527,31 @@ export function apply(ctx: Context, config: Config = {}) {
         )
 
         ctx.console.addListener(
+            'chatluna-hub/core/conversations/batch-update-usage',
+            async (input) => {
+                return await ctx.chatluna_hub.batchUpdateCoreConversationUsage(
+                    input
+                )
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
             'chatluna-hub/core/conversations/delete',
             async (input) => {
                 return await ctx.chatluna_hub.deleteCoreConversation(input)
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/conversations/batch-delete',
+            async (input) => {
+                return await ctx.chatluna_hub.batchDeleteCoreConversation(input)
             },
             {
                 authority: 4
@@ -576,13 +632,20 @@ declare module '@koishijs/plugin-console' {
         'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => Promise<PageResult<ChatLunaConversationListItem>>
+        'chatluna-hub/core/conversations/routes': () => Promise<ChatLunaConversationRouteListResult>
         'chatluna-hub/core/conversations/options': () => Promise<ChatLunaConversationOptions>
         'chatluna-hub/core/conversations/update-usage': (
             input: UpdateChatLunaConversationUsageInput
         ) => Promise<ChatLunaConversationListItem>
+        'chatluna-hub/core/conversations/batch-update-usage': (
+            input: BatchUpdateChatLunaConversationUsageInput
+        ) => Promise<BatchUpdateChatLunaConversationUsageResult>
         'chatluna-hub/core/conversations/delete': (
             input: DeleteChatLunaConversationInput
         ) => Promise<{ success: true }>
+        'chatluna-hub/core/conversations/batch-delete': (
+            input: BatchDeleteChatLunaConversationInput
+        ) => Promise<BatchDeleteChatLunaConversationResult>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput
@@ -615,13 +678,20 @@ declare module '@koishijs/console' {
         'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => Promise<PageResult<ChatLunaConversationListItem>>
+        'chatluna-hub/core/conversations/routes': () => Promise<ChatLunaConversationRouteListResult>
         'chatluna-hub/core/conversations/options': () => Promise<ChatLunaConversationOptions>
         'chatluna-hub/core/conversations/update-usage': (
             input: UpdateChatLunaConversationUsageInput
         ) => Promise<ChatLunaConversationListItem>
+        'chatluna-hub/core/conversations/batch-update-usage': (
+            input: BatchUpdateChatLunaConversationUsageInput
+        ) => Promise<BatchUpdateChatLunaConversationUsageResult>
         'chatluna-hub/core/conversations/delete': (
             input: DeleteChatLunaConversationInput
         ) => Promise<{ success: true }>
+        'chatluna-hub/core/conversations/batch-delete': (
+            input: BatchDeleteChatLunaConversationInput
+        ) => Promise<BatchDeleteChatLunaConversationResult>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput

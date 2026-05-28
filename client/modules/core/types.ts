@@ -111,8 +111,23 @@ export interface ChatLunaConversationRouteInfo {
     isDirect?: boolean | null
 }
 
+export type ChatLunaConversationSortKey =
+    | 'route'
+    | 'title'
+    | 'model'
+    | 'preset'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'lastChatAt'
+
+export type ChatLunaConversationSortOrder = 'ascending' | 'descending'
+
 export interface ChatLunaConversationListQuery {
     keyword?: string
+    routeBaseBindingKey?: string
+    routeMode?: ChatLunaConversationRouteMode
+    sortKey?: ChatLunaConversationSortKey
+    sortOrder?: ChatLunaConversationSortOrder
     page?: number
     pageSize?: number
 }
@@ -152,14 +167,68 @@ export interface ChatLunaConversationListItem {
     route: ChatLunaConversationRouteInfo
 }
 
+export interface ChatLunaConversationRouteGroup {
+    id: string
+    label: string
+    detail: string
+    mode: ChatLunaConversationRouteMode
+    baseBindingKey: string
+    platform?: string | null
+    selfId?: string | null
+    userId?: string | null
+    guildId?: string | null
+    routeKey?: string | null
+    isDirect?: boolean | null
+    count: number
+    currentCount: number
+    presetLanes: string[]
+    updatedAt: string | Date | null
+    lastChatAt: string | Date | null
+}
+
+export interface ChatLunaConversationRouteListResult {
+    routes: ChatLunaConversationRouteGroup[]
+    total: number
+    updatedAt: string
+}
+
 export interface UpdateChatLunaConversationUsageInput {
     conversationId: string
     model?: string
     preset?: string
 }
 
+export type BatchUpdateChatLunaConversationUsageItem =
+    UpdateChatLunaConversationUsageInput
+
+export interface BatchUpdateChatLunaConversationUsageInput {
+    conversationIds?: string[]
+    model?: string
+    preset?: string
+    updates?: BatchUpdateChatLunaConversationUsageItem[]
+}
+
 export interface DeleteChatLunaConversationInput {
     conversationId: string
+}
+
+export interface BatchDeleteChatLunaConversationInput {
+    conversationIds: string[]
+}
+
+export interface ChatLunaConversationBatchFailure {
+    conversationId: string
+    reason: string
+}
+
+export interface BatchUpdateChatLunaConversationUsageResult {
+    updated: ChatLunaConversationListItem[]
+    failed: ChatLunaConversationBatchFailure[]
+}
+
+export interface BatchDeleteChatLunaConversationResult {
+    deleted: string[]
+    failed: ChatLunaConversationBatchFailure[]
 }
 
 export interface PageResult<T> {
@@ -174,14 +243,22 @@ declare module '@koishijs/client' {
         'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => PageResult<ChatLunaConversationListItem>
+        'chatluna-hub/core/conversations/routes': () =>
+            ChatLunaConversationRouteListResult
         'chatluna-hub/core/conversations/options': () =>
             ChatLunaConversationOptions
         'chatluna-hub/core/conversations/update-usage': (
             input: UpdateChatLunaConversationUsageInput
         ) => ChatLunaConversationListItem
+        'chatluna-hub/core/conversations/batch-update-usage': (
+            input: BatchUpdateChatLunaConversationUsageInput
+        ) => BatchUpdateChatLunaConversationUsageResult
         'chatluna-hub/core/conversations/delete': (
             input: DeleteChatLunaConversationInput
         ) => { success: true }
+        'chatluna-hub/core/conversations/batch-delete': (
+            input: BatchDeleteChatLunaConversationInput
+        ) => BatchDeleteChatLunaConversationResult
         'chatluna-hub/core/models/list': () => ChatLunaCoreModelListResult
         'chatluna-hub/core/presets/list': () => ChatLunaCorePresetListResult
         'chatluna-hub/core/presets/get': (

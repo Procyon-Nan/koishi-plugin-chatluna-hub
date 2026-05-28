@@ -111,8 +111,23 @@ export interface ChatLunaConversationRouteInfo {
     isDirect?: boolean | null
 }
 
+export type ChatLunaConversationSortKey =
+    | 'route'
+    | 'title'
+    | 'model'
+    | 'preset'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'lastChatAt'
+
+export type ChatLunaConversationSortOrder = 'ascending' | 'descending'
+
 export interface ChatLunaConversationListQuery {
     keyword?: string
+    routeBaseBindingKey?: string
+    routeMode?: ChatLunaConversationRouteMode
+    sortKey?: ChatLunaConversationSortKey
+    sortOrder?: ChatLunaConversationSortOrder
     page?: number
     pageSize?: number
 }
@@ -152,14 +167,68 @@ export interface ChatLunaConversationListItem {
     route: ChatLunaConversationRouteInfo
 }
 
+export interface ChatLunaConversationRouteGroup {
+    id: string
+    label: string
+    detail: string
+    mode: ChatLunaConversationRouteMode
+    baseBindingKey: string
+    platform?: string | null
+    selfId?: string | null
+    userId?: string | null
+    guildId?: string | null
+    routeKey?: string | null
+    isDirect?: boolean | null
+    count: number
+    currentCount: number
+    presetLanes: string[]
+    updatedAt: string | Date | null
+    lastChatAt: string | Date | null
+}
+
+export interface ChatLunaConversationRouteListResult {
+    routes: ChatLunaConversationRouteGroup[]
+    total: number
+    updatedAt: string
+}
+
 export interface UpdateChatLunaConversationUsageInput {
     conversationId: string
     model?: string
     preset?: string
 }
 
+export type BatchUpdateChatLunaConversationUsageItem =
+    UpdateChatLunaConversationUsageInput
+
+export interface BatchUpdateChatLunaConversationUsageInput {
+    conversationIds?: string[]
+    model?: string
+    preset?: string
+    updates?: BatchUpdateChatLunaConversationUsageItem[]
+}
+
 export interface DeleteChatLunaConversationInput {
     conversationId: string
+}
+
+export interface BatchDeleteChatLunaConversationInput {
+    conversationIds: string[]
+}
+
+export interface ChatLunaConversationBatchFailure {
+    conversationId: string
+    reason: string
+}
+
+export interface BatchUpdateChatLunaConversationUsageResult {
+    updated: ChatLunaConversationListItem[]
+    failed: ChatLunaConversationBatchFailure[]
+}
+
+export interface BatchDeleteChatLunaConversationResult {
+    deleted: string[]
+    failed: ChatLunaConversationBatchFailure[]
 }
 
 export interface PageResult<T> {
@@ -557,6 +626,45 @@ const parseRouteInfo = (bindingKey: string): ChatLunaConversationRouteInfo => {
     }
 }
 
+const routeModeOrder: Record<ChatLunaConversationRouteMode, number> = {
+    shared: 0,
+    personal: 1,
+    custom: 2,
+    unknown: 3
+}
+
+const formatConversationRouteLabel = (route: ChatLunaConversationRouteInfo) => {
+    if (route.mode === 'custom') {
+        return route.routeKey ?? route.baseBindingKey
+    }
+
+    if (route.mode === 'shared') {
+        return `群聊 ${route.guildId ?? '-'}`
+    }
+
+    if (route.mode === 'personal' && route.isDirect) {
+        return `私聊 ${route.userId ?? '-'}`
+    }
+
+    if (route.mode === 'personal') {
+        return `群聊 ${route.guildId ?? '-'} / 用户 ${route.userId ?? '-'}`
+    }
+
+    return route.baseBindingKey
+}
+
+const formatConversationRouteDetail = (
+    route: ChatLunaConversationRouteInfo
+) => {
+    if (route.mode === 'custom') {
+        return route.baseBindingKey
+    }
+
+    const parts = [route.platform, route.selfId].filter(Boolean)
+
+    return parts.length > 0 ? parts.join(' / ') : route.baseBindingKey
+}
+
 const createConversationListItem = (
     conversation: ConversationRecord,
     activeConversationId?: string | null
@@ -578,6 +686,85 @@ const createConversationListItem = (
         activeConversationId: activeConversationId ?? null,
         route: parseRouteInfo(conversation.bindingKey)
     }
+}
+
+const compareRoute = (
+    left: ChatLunaConversationRouteInfo,
+    right: ChatLunaConversationRouteInfo
+) => {
+    const mode = routeModeOrder[left.mode] - routeModeOrder[right.mode]
+    if (mode !== 0) return mode
+
+    return formatConversationRouteLabel(left).localeCompare(
+        formatConversationRouteLabel(right),
+        undefined,
+        {
+            numeric: true,
+            sensitivity: 'base'
+        }
+    )
+}
+
+const compareConversationFallback = (
+    left: ChatLunaConversationListItem,
+    right: ChatLunaConversationListItem
+) => {
+    const route = compareRoute(left.route, right.route)
+    if (route !== 0) return route
+
+    const bindingKey = left.bindingKey.localeCompare(right.bindingKey)
+    if (bindingKey !== 0) return bindingKey
+
+    const seq = (left.seq ?? 0) - (right.seq ?? 0)
+    if (seq !== 0) return seq
+
+    const created = toTimestamp(left.createdAt) - toTimestamp(right.createdAt)
+    if (created !== 0) return created
+
+    return left.id.localeCompare(right.id)
+}
+
+const compareConversationBySortKey = (
+    left: ChatLunaConversationListItem,
+    right: ChatLunaConversationListItem,
+    sortKey: ChatLunaConversationSortKey
+) => {
+    if (sortKey === 'route') {
+        return compareConversationFallback(left, right)
+    }
+
+    if (
+        sortKey === 'createdAt' ||
+        sortKey === 'updatedAt' ||
+        sortKey === 'lastChatAt'
+    ) {
+        return toTimestamp(left[sortKey]) - toTimestamp(right[sortKey])
+    }
+
+    return String(left[sortKey] ?? '').localeCompare(
+        String(right[sortKey] ?? ''),
+        undefined,
+        {
+            numeric: true,
+            sensitivity: 'base'
+        }
+    )
+}
+
+const sortConversations = (
+    items: ChatLunaConversationListItem[],
+    query: ChatLunaConversationListQuery
+) => {
+    const sortKey = query.sortKey ?? 'route'
+    const direction = query.sortOrder === 'descending' ? -1 : 1
+
+    return items.sort((left, right) => {
+        const primary =
+            compareConversationBySortKey(left, right, sortKey) * direction
+
+        if (primary !== 0) return primary
+        return compareConversationFallback(left, right)
+    })
 }
 
 const includesConversationKeyword = (
@@ -607,6 +794,54 @@ const includesConversationKeyword = (
         String(value ?? '')
             .toLocaleLowerCase()
             .includes(keyword)
+    )
+}
+
+const matchesConversationQuery = (
+    item: ChatLunaConversationListItem,
+    query: ChatLunaConversationListQuery
+) => {
+    const routeBaseBindingKey = query.routeBaseBindingKey?.trim()
+    const keyword = query.keyword?.trim().toLocaleLowerCase()
+
+    if (
+        routeBaseBindingKey != null &&
+        routeBaseBindingKey.length > 0 &&
+        item.route.baseBindingKey !== routeBaseBindingKey
+    ) {
+        return false
+    }
+
+    if (query.routeMode != null && item.route.mode !== query.routeMode) {
+        return false
+    }
+
+    return keyword == null || keyword.length === 0
+        ? true
+        : includesConversationKeyword(item, keyword)
+}
+
+const loadActiveConversationItems = async (ctx: Context) => {
+    const database = getDatabase(ctx)
+    const conversations = (await database.get('chatluna_conversation', {
+        status: 'active'
+    })) as ConversationRecord[]
+    const bindings = (await database.get(
+        'chatluna_binding',
+        {}
+    )) as BindingRecord[]
+    const activeByBindingKey = new Map(
+        bindings.map((binding) => [
+            binding.bindingKey,
+            binding.activeConversationId ?? null
+        ])
+    )
+
+    return conversations.map((conversation) =>
+        createConversationListItem(
+            conversation,
+            activeByBindingKey.get(conversation.bindingKey)
+        )
     )
 }
 
@@ -682,9 +917,12 @@ const emitConversationDeleteEvent = async (
         | 'chatluna/after-conversation-delete',
     conversation: ConversationRecord
 ) => {
-    await (ctx.root as unknown as ChatLunaConversationEventRoot).parallel(name, {
-        conversation
-    })
+    await (ctx.root as unknown as ChatLunaConversationEventRoot).parallel(
+        name,
+        {
+            conversation
+        }
+    )
 }
 
 export const listChatLunaConversationOptions = (
@@ -744,53 +982,14 @@ export const listChatLunaConversations = async (
     ctx: Context,
     query: ChatLunaConversationListQuery
 ): Promise<PageResult<ChatLunaConversationListItem>> => {
-    const database = getDatabase(ctx)
     const page = normalizePage(query.page)
     const pageSize = normalizePageSize(query.pageSize)
-    const keyword = query.keyword?.trim().toLocaleLowerCase()
-    const conversations = (await database.get('chatluna_conversation', {
-        status: 'active'
-    })) as ConversationRecord[]
-    const bindings = (await database.get(
-        'chatluna_binding',
-        {}
-    )) as BindingRecord[]
-    const activeByBindingKey = new Map(
-        bindings.map((binding) => [
-            binding.bindingKey,
-            binding.activeConversationId ?? null
-        ])
+    const items = sortConversations(
+        (await loadActiveConversationItems(ctx)).filter((item) =>
+            matchesConversationQuery(item, query)
+        ),
+        query
     )
-    const items = conversations
-        .map((conversation) =>
-            createConversationListItem(
-                conversation,
-                activeByBindingKey.get(conversation.bindingKey)
-            )
-        )
-        .filter((item) =>
-            keyword == null || keyword.length === 0
-                ? true
-                : includesConversationKeyword(item, keyword)
-        )
-        .sort((left, right) => {
-            const route = left.route.baseBindingKey.localeCompare(
-                right.route.baseBindingKey
-            )
-            if (route !== 0) return route
-
-            const bindingKey = left.bindingKey.localeCompare(right.bindingKey)
-            if (bindingKey !== 0) return bindingKey
-
-            const seq = (left.seq ?? 0) - (right.seq ?? 0)
-            if (seq !== 0) return seq
-
-            const created =
-                toTimestamp(left.createdAt) - toTimestamp(right.createdAt)
-            if (created !== 0) return created
-
-            return left.id.localeCompare(right.id)
-        })
     const start = (page - 1) * pageSize
 
     return {
@@ -798,6 +997,79 @@ export const listChatLunaConversations = async (
         page,
         pageSize,
         total: items.length
+    }
+}
+
+export const listChatLunaConversationRoutes = async (
+    ctx: Context
+): Promise<ChatLunaConversationRouteListResult> => {
+    const items = await loadActiveConversationItems(ctx)
+    const routeMap = new Map<string, ChatLunaConversationRouteGroup>()
+
+    for (const item of items) {
+        const route = item.route
+        const current = routeMap.get(route.baseBindingKey)
+        const updatedAt = toTimestamp(item.updatedAt)
+        const lastChatAt = toTimestamp(item.lastChatAt)
+
+        if (current == null) {
+            routeMap.set(route.baseBindingKey, {
+                id: route.baseBindingKey,
+                label: formatConversationRouteLabel(route),
+                detail: formatConversationRouteDetail(route),
+                mode: route.mode,
+                baseBindingKey: route.baseBindingKey,
+                platform: route.platform ?? null,
+                selfId: route.selfId ?? null,
+                userId: route.userId ?? null,
+                guildId: route.guildId ?? null,
+                routeKey: route.routeKey ?? null,
+                isDirect: route.isDirect ?? null,
+                count: 1,
+                currentCount: item.isCurrent ? 1 : 0,
+                presetLanes: route.presetLane ? [route.presetLane] : [],
+                updatedAt: updatedAt > 0 ? item.updatedAt : null,
+                lastChatAt: lastChatAt > 0 ? (item.lastChatAt ?? null) : null
+            })
+            continue
+        }
+
+        current.count += 1
+        current.currentCount += item.isCurrent ? 1 : 0
+
+        if (
+            route.presetLane &&
+            !current.presetLanes.includes(route.presetLane)
+        ) {
+            current.presetLanes.push(route.presetLane)
+        }
+
+        if (updatedAt > toTimestamp(current.updatedAt)) {
+            current.updatedAt = item.updatedAt
+        }
+
+        if (lastChatAt > toTimestamp(current.lastChatAt)) {
+            current.lastChatAt = item.lastChatAt ?? null
+        }
+    }
+
+    const routes = Array.from(routeMap.values()).sort((left, right) =>
+        compareRoute(left, right)
+    )
+
+    for (const route of routes) {
+        route.presetLanes.sort((left, right) =>
+            left.localeCompare(right, undefined, {
+                numeric: true,
+                sensitivity: 'base'
+            })
+        )
+    }
+
+    return {
+        routes,
+        total: items.length,
+        updatedAt: new Date().toISOString()
     }
 }
 
@@ -918,6 +1190,108 @@ export const deleteChatLunaConversation = async (
     )
 
     return { success: true }
+}
+
+const normalizeConversationIds = (conversationIds: string[] | undefined) => {
+    return Array.from(
+        new Set(
+            (conversationIds ?? [])
+                .map((conversationId) => conversationId.trim())
+                .filter(Boolean)
+        )
+    )
+}
+
+export const batchUpdateChatLunaConversationUsage = async (
+    ctx: Context,
+    input: BatchUpdateChatLunaConversationUsageInput
+): Promise<BatchUpdateChatLunaConversationUsageResult> => {
+    const updates: BatchUpdateChatLunaConversationUsageItem[] = []
+
+    if (input.updates != null && input.updates.length > 0) {
+        for (const item of input.updates) {
+            const conversationId = item.conversationId?.trim()
+            if (!conversationId) continue
+
+            updates.push({
+                conversationId,
+                model: item.model,
+                preset: item.preset
+            })
+        }
+    } else {
+        for (const conversationId of normalizeConversationIds(
+            input.conversationIds
+        )) {
+            updates.push({
+                conversationId,
+                model: input.model,
+                preset: input.preset
+            })
+        }
+    }
+
+    if (updates.length === 0) {
+        throw new Error('Conversation ids are required.')
+    }
+
+    const updated: ChatLunaConversationListItem[] = []
+    const failed: ChatLunaConversationBatchFailure[] = []
+
+    for (const item of updates) {
+        try {
+            updated.push(
+                await updateChatLunaConversationUsage(ctx, {
+                    conversationId: item.conversationId,
+                    model: item.model,
+                    preset: item.preset
+                })
+            )
+        } catch (error) {
+            failed.push({
+                conversationId: item.conversationId,
+                reason: coerceReason(error)
+            })
+        }
+    }
+
+    return {
+        updated,
+        failed
+    }
+}
+
+export const batchDeleteChatLunaConversation = async (
+    ctx: Context,
+    input: BatchDeleteChatLunaConversationInput
+): Promise<BatchDeleteChatLunaConversationResult> => {
+    const conversationIds = normalizeConversationIds(input.conversationIds)
+
+    if (conversationIds.length === 0) {
+        throw new Error('Conversation ids are required.')
+    }
+
+    const deleted: string[] = []
+    const failed: ChatLunaConversationBatchFailure[] = []
+
+    for (const conversationId of conversationIds) {
+        try {
+            await deleteChatLunaConversation(ctx, {
+                conversationId
+            })
+            deleted.push(conversationId)
+        } catch (error) {
+            failed.push({
+                conversationId,
+                reason: coerceReason(error)
+            })
+        }
+    }
+
+    return {
+        deleted,
+        failed
+    }
 }
 
 const getPresetService = (ctx: Context) => {
