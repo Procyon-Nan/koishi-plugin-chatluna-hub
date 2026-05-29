@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { ChatRound, DataAnalysis, Memo } from '@element-plus/icons-vue'
+import { ChatRound, DataAnalysis, Document, Memo } from '@element-plus/icons-vue'
 import type { CoreTab } from './types'
 
 interface NavItem {
@@ -41,7 +41,8 @@ const emit = defineEmits<{
 const items: NavItem[] = [
     { key: 'conversation', label: '会话管理', icon: ChatRound },
     { key: 'model', label: '模型管理', icon: DataAnalysis },
-    { key: 'preset', label: '预设管理', icon: Memo }
+    { key: 'preset', label: '预设管理', icon: Memo },
+    { key: 'log', label: '请求日志', icon: Document }
 ]
 
 const active = computed(() => {

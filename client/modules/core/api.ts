@@ -8,6 +8,10 @@ import type {
     ChatLunaConversationListQuery,
     ChatLunaConversationOptions,
     ChatLunaConversationRouteListResult,
+    ChatLunaCoreLogDetail,
+    ChatLunaCoreLogGetInput,
+    ChatLunaCoreLogListQuery,
+    ChatLunaCoreLogListResult,
     ChatLunaCoreModelListResult,
     ChatLunaCorePresetCreateInput,
     ChatLunaCorePresetDeleteInput,
@@ -65,6 +69,22 @@ export async function batchDeleteChatLunaConversation(
     input: BatchDeleteChatLunaConversationInput
 ): Promise<BatchDeleteChatLunaConversationResult> {
     return await send('chatluna-hub/core/conversations/batch-delete', input)
+}
+
+export async function listChatLunaCoreLogs(
+    params: ChatLunaCoreLogListQuery
+): Promise<ChatLunaCoreLogListResult> {
+    return await send('chatluna-hub/core/logs/list', params)
+}
+
+export async function getChatLunaCoreLog(
+    input: ChatLunaCoreLogGetInput
+): Promise<ChatLunaCoreLogDetail> {
+    return await send('chatluna-hub/core/logs/get', input)
+}
+
+export async function clearChatLunaCoreLogs(): Promise<{ success: true }> {
+    return await send('chatluna-hub/core/logs/clear')
 }
 
 export async function listChatLunaCoreModels(): Promise<ChatLunaCoreModelListResult> {

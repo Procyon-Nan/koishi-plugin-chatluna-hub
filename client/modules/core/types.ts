@@ -1,4 +1,4 @@
-export type CoreTab = 'conversation' | 'model' | 'preset'
+export type CoreTab = 'conversation' | 'model' | 'preset' | 'log'
 
 export type ChatLunaCoreModelType =
     | 'llm'
@@ -30,6 +30,83 @@ export interface ChatLunaCoreModelListResult {
     summary: ChatLunaCoreModelSummary
     updatedAt: string
     reason?: string
+}
+
+export type ChatLunaCoreLogStatus = 'pending' | 'success' | 'error'
+
+export type ChatLunaCoreLogRunType = 'chat-model' | 'llm'
+
+export interface ChatLunaCoreLogRunSummary {
+    id: string
+    runId: string
+    parentRunId?: string | null
+    runName?: string | null
+    type: ChatLunaCoreLogRunType
+    status: ChatLunaCoreLogStatus
+    startedAt: string
+    completedAt?: string | null
+    durationMs?: number | null
+    requestSize: number
+    responseSize: number
+    error?: string | null
+    usageMetadata?: unknown
+}
+
+export interface ChatLunaCoreLogRun extends ChatLunaCoreLogRunSummary {
+    requestBody: string
+    responseBody?: string | null
+}
+
+export interface ChatLunaCoreLogListItem {
+    id: string
+    requestId: string
+    conversationId: string
+    conversationTitle: string
+    bindingKey: string
+    model: string
+    preset: string
+    chatMode: string
+    platform?: string | null
+    userId?: string | null
+    guildId?: string | null
+    channelId?: string | null
+    messageSummary: string
+    status: ChatLunaCoreLogStatus
+    stream: boolean
+    startedAt: string
+    updatedAt: string
+    completedAt?: string | null
+    durationMs?: number | null
+    runCount: number
+    errorCount: number
+    requestSize: number
+    responseSize: number
+    latestRunName?: string | null
+}
+
+export interface ChatLunaCoreLogDetail extends ChatLunaCoreLogListItem {
+    messageBody: string
+    route: ChatLunaConversationRouteInfo
+    runs: ChatLunaCoreLogRun[]
+}
+
+export interface ChatLunaCoreLogListQuery {
+    keyword?: string
+    status?: ChatLunaCoreLogStatus | 'all'
+    page?: number
+    pageSize?: number
+}
+
+export interface ChatLunaCoreLogListResult {
+    items: ChatLunaCoreLogListItem[]
+    page: number
+    pageSize: number
+    total: number
+    updatedAt: string
+}
+
+export interface ChatLunaCoreLogGetInput {
+    id: string
 }
 
 export interface ChatLunaCorePresetSummary {
@@ -263,6 +340,13 @@ declare module '@koishijs/client' {
         'chatluna-hub/core/conversations/batch-delete': (
             input: BatchDeleteChatLunaConversationInput
         ) => BatchDeleteChatLunaConversationResult
+        'chatluna-hub/core/logs/list': (
+            query: ChatLunaCoreLogListQuery
+        ) => ChatLunaCoreLogListResult
+        'chatluna-hub/core/logs/get': (
+            input: ChatLunaCoreLogGetInput
+        ) => ChatLunaCoreLogDetail
+        'chatluna-hub/core/logs/clear': () => { success: true }
         'chatluna-hub/core/models/list': () => ChatLunaCoreModelListResult
         'chatluna-hub/core/presets/list': () => ChatLunaCorePresetListResult
         'chatluna-hub/core/presets/get': (

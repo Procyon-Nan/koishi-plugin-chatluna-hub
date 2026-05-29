@@ -26,6 +26,14 @@
                             class="view-container"
                         />
                     </KeepAlive>
+
+                    <KeepAlive>
+                        <log-page
+                            v-if="activeTab === 'log'"
+                            key="log"
+                            class="view-container"
+                        />
+                    </KeepAlive>
                 </div>
             </el-scrollbar>
         </div>
@@ -38,6 +46,7 @@
 import { ref } from 'vue'
 import CoreSidebar from './sidebar.vue'
 import ConversationPage from './pages/conversation-page.vue'
+import LogPage from './pages/log-page.vue'
 import ModelPage from './pages/model-page.vue'
 import PresetPage from './pages/preset-page.vue'
 import type { CoreTab } from './types'
@@ -66,15 +75,30 @@ const handleTabChange = (tab: CoreTab) => {
     width: 100%;
 }
 
+.core-main :deep(.el-scrollbar) {
+    height: 100%;
+}
+
+.core-main :deep(.el-scrollbar__view) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+
 .core-content {
     width: 100%;
     min-width: 0;
+    flex: 1;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     padding: 28px 96px 120px;
     margin: 0 auto;
 }
 
 .view-container {
+    flex: 1;
     min-height: 500px;
 }
 

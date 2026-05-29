@@ -20,6 +20,11 @@ import {
     type ChatLunaConversationListQuery,
     type ChatLunaConversationOptions,
     type ChatLunaConversationRouteListResult,
+    type ChatLunaCoreLogDetail,
+    type ChatLunaCoreLogGetInput,
+    type ChatLunaCoreLogListQuery,
+    type ChatLunaCoreLogListResult,
+    ChatLunaCoreLogStore,
     type ChatLunaCoreModelListResult,
     type ChatLunaCorePresetCreateInput,
     type ChatLunaCorePresetDeleteInput,
@@ -78,6 +83,10 @@ interface PluginConfigMatch {
     config: unknown
     parentConfig: Record<string, unknown>
     parentContext?: Context
+}
+
+interface ChatLunaCallbackProviderService {
+    resolveCallbacks?: (input: unknown) => Promise<unknown>
 }
 
 const normalizePluginName = (name: string | undefined) => {
@@ -198,11 +207,35 @@ const coerceReason = (error: unknown) => {
 }
 
 export class ChatLunaHubService extends Service {
+    private readonly coreLogStore: ChatLunaCoreLogStore
+
+    private disposeCoreLogProvider?: () => void
+
     constructor(
         public readonly ctx: Context,
         public readonly config: Config = {}
     ) {
         super(ctx, 'chatluna_hub')
+
+        this.coreLogStore = new ChatLunaCoreLogStore({
+            filePath: resolve(
+                ctx.baseDir,
+                'data',
+                'chatluna-hub',
+                'core-logs.json'
+            ),
+            logger: ctx.logger('chatluna-hub')
+        })
+
+        // Load persisted logs once the service starts; failures are non-fatal.
+        ctx.on('ready', () => {
+            void this.coreLogStore.load()
+        })
+
+        ctx.on('dispose', () => {
+            this.unregisterCoreLogProvider()
+            void this.coreLogStore.dispose()
+        })
     }
 
     async getConsoleData(): Promise<HubConsoleData> {
@@ -355,6 +388,91 @@ export class ChatLunaHubService extends Service {
         return listChatLunaCoreModels(this.ctx)
     }
 
+    registerCoreLogProvider(chatluna: ChatLunaCallbackProviderService) {
+        this.unregisterCoreLogProvider()
+
+        const logger = this.ctx.logger('chatluna-hub')
+        const target = chatluna
+
+        if (typeof target.resolveCallbacks !== 'function') {
+            logger.warn(
+                'chatluna.resolveCallbacks is unavailable; core logs cannot capture model runs.'
+            )
+            return () => {}
+        }
+
+        const original = target.resolveCallbacks.bind(target)
+        const store = this.coreLogStore
+
+        // Patch resolveCallbacks instead of using registerCallbacksProvider:
+        // the official path adds handlers to the non-inheritable slot, so they
+        // never reach the nested LLM run. Here we re-add them as inheritable.
+        // Instrumentation must never alter chat control flow — on any failure
+        // we log and return the original manager untouched.
+        const patched = async (input: unknown) => {
+            const manager = await original(input)
+
+            try {
+                return store.instrumentCallbacks(manager, input)
+            } catch (error) {
+                logger.warn(
+                    'core log instrumentation failed: %s',
+                    coerceReason(error)
+                )
+                return manager
+            }
+        }
+
+        target.resolveCallbacks = patched
+
+        const dispose = () => {
+            if (target.resolveCallbacks === patched) {
+                target.resolveCallbacks = original
+            } else {
+                // Another consumer patched resolveCallbacks after us. Restoring
+                // now would clobber their patch, so we leave the chain intact
+                // and only drop our reference.
+                logger.warn(
+                    'chatluna.resolveCallbacks was patched by another consumer; ' +
+                        'skipping restore to avoid breaking it.'
+                )
+            }
+        }
+
+        this.disposeCoreLogProvider = dispose
+
+        return () => {
+            if (this.disposeCoreLogProvider === dispose) {
+                this.disposeCoreLogProvider = undefined
+            }
+
+            dispose()
+        }
+    }
+
+    unregisterCoreLogProvider() {
+        this.disposeCoreLogProvider?.()
+        this.disposeCoreLogProvider = undefined
+    }
+
+    async listCoreLogs(
+        query: ChatLunaCoreLogListQuery
+    ): Promise<ChatLunaCoreLogListResult> {
+        return this.coreLogStore.list(query)
+    }
+
+    async getCoreLog(
+        input: ChatLunaCoreLogGetInput
+    ): Promise<ChatLunaCoreLogDetail> {
+        return this.coreLogStore.get(input)
+    }
+
+    async clearCoreLogs(): Promise<{ success: true }> {
+        this.coreLogStore.clear()
+
+        return { success: true }
+    }
+
     async listCoreConversations(
         query: ChatLunaConversationListQuery
     ): Promise<PageResult<ChatLunaConversationListItem>> {
@@ -450,6 +568,17 @@ class ChatLunaHubConsoleService extends DataService<HubConsoleData> {
 export function apply(ctx: Context, config: Config = {}) {
     ctx.plugin(ChatLunaHubService, config)
 
+    ctx.inject(['chatluna_hub', 'chatluna'], (ctx) => {
+        const chatluna = ctx.get(
+            'chatluna'
+        ) as ChatLunaCallbackProviderService | null
+
+        if (!chatluna) return
+
+        const dispose = ctx.chatluna_hub.registerCoreLogProvider(chatluna)
+        ctx.on('dispose', dispose)
+    })
+
     ctx.inject(['console', 'chatluna_hub'], (ctx) => {
         const base = ctx.loader?.baseDir ?? process.cwd()
         ctx.console.addEntry({
@@ -491,6 +620,36 @@ export function apply(ctx: Context, config: Config = {}) {
             },
             {
                 authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/logs/list',
+            async (query) => {
+                return await ctx.chatluna_hub.listCoreLogs(query ?? {})
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/logs/get',
+            async (input) => {
+                return await ctx.chatluna_hub.getCoreLog(input)
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/logs/clear',
+            async () => {
+                return await ctx.chatluna_hub.clearCoreLogs()
+            },
+            {
+                authority: 4
             }
         )
 
@@ -631,7 +790,7 @@ export function apply(ctx: Context, config: Config = {}) {
 }
 
 export const inject = {
-    optional: ['console']
+    optional: ['console', 'chatluna']
 }
 
 declare module 'koishi' {
@@ -664,6 +823,13 @@ declare module '@koishijs/plugin-console' {
         'chatluna-hub/core/conversations/batch-delete': (
             input: BatchDeleteChatLunaConversationInput
         ) => Promise<BatchDeleteChatLunaConversationResult>
+        'chatluna-hub/core/logs/list': (
+            query: ChatLunaCoreLogListQuery
+        ) => Promise<ChatLunaCoreLogListResult>
+        'chatluna-hub/core/logs/get': (
+            input: ChatLunaCoreLogGetInput
+        ) => Promise<ChatLunaCoreLogDetail>
+        'chatluna-hub/core/logs/clear': () => Promise<{ success: true }>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput
@@ -713,6 +879,13 @@ declare module '@koishijs/console' {
         'chatluna-hub/core/conversations/batch-delete': (
             input: BatchDeleteChatLunaConversationInput
         ) => Promise<BatchDeleteChatLunaConversationResult>
+        'chatluna-hub/core/logs/list': (
+            query: ChatLunaCoreLogListQuery
+        ) => Promise<ChatLunaCoreLogListResult>
+        'chatluna-hub/core/logs/get': (
+            input: ChatLunaCoreLogGetInput
+        ) => Promise<ChatLunaCoreLogDetail>
+        'chatluna-hub/core/logs/clear': () => Promise<{ success: true }>
         'chatluna-hub/core/presets/list': () => Promise<ChatLunaCorePresetListResult>
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput
