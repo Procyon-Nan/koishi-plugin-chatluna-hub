@@ -2,15 +2,34 @@
     <section class="core-page" :class="{ compact: compactMode }">
         <header class="page-header">
             <div class="page-icon">
-                <el-icon :size="28">
+                <el-icon :size="26">
                     <Memo />
                 </el-icon>
             </div>
-            <div>
+            <div class="page-heading">
                 <span class="page-kicker">ChatLuna Core</span>
                 <h1>预设管理</h1>
+                <p class="page-subtitle">
+                    编辑主插件与 Character 预设的 YAML 原文
+                </p>
             </div>
             <div class="page-actions">
+                <div class="stat-pills">
+                    <span class="stat-pill">
+                        <span class="stat-pill-value">{{ presets.length }}</span>
+                        <span class="stat-pill-label">预设</span>
+                    </span>
+                    <span class="stat-pill is-core">
+                        <span class="stat-pill-value">{{ coreCount }}</span>
+                        <span class="stat-pill-label">主插件</span>
+                    </span>
+                    <span class="stat-pill is-character">
+                        <span class="stat-pill-value">{{
+                            characterCount
+                        }}</span>
+                        <span class="stat-pill-label">伪装</span>
+                    </span>
+                </div>
                 <el-button
                     size="small"
                     :type="compactMode ? 'primary' : 'default'"
@@ -77,21 +96,23 @@
                         :class="{
                             active: !createMode && selectedId === preset.id
                         }"
+                        :data-source="preset.source"
                         @click="selectPreset(preset.id)"
                     >
                         <span class="preset-list-title-row">
                             <span class="preset-list-title">
                                 {{ preset.filename }}
                             </span>
-                            <el-tag size="small" effect="plain">
+                            <el-tag size="small" effect="plain" round>
                                 {{ preset.sourceLabel }}
                             </el-tag>
                         </span>
                         <span class="preset-list-meta">
+                            <el-icon><Document /></el-icon>
                             {{ formatPresetCount(preset) }} ·
                             {{ formatTime(preset.updatedAt) }}
                         </span>
-                        <span class="keyword-row">
+                        <span v-if="preset.keywords.length" class="keyword-row">
                             <el-tag
                                 v-for="item in preset.keywords"
                                 :key="item"
@@ -223,35 +244,62 @@
                         :closable="false"
                     />
 
-                    <div
-                        class="code-editor"
-                        :style="{ '--line-gutter-width': lineGutterWidth }"
-                    >
-                        <pre
-                            ref="lineGutter"
-                            class="line-gutter"
-                            aria-hidden="true"
-                        ><span
-                            v-for="line in lineNumbers"
-                            :key="line"
-                        >{{ line }}</span></pre>
-                        <div class="editor-input-wrap">
-                            <div class="indent-guide-viewport" aria-hidden="true">
+                    <div class="code-window">
+                        <div class="code-window-bar">
+                            <span class="window-dots">
+                                <i></i><i></i><i></i>
+                            </span>
+                            <span class="window-name">
+                                {{ editorFileLabel }}
+                            </span>
+                            <el-button
+                                size="small"
+                                text
+                                :icon="CopyDocument"
+                                class="copy-btn"
+                                @click="copyEditor"
+                            >
+                                复制
+                            </el-button>
+                        </div>
+                        <div
+                            class="code-editor"
+                            :style="{
+                                '--line-gutter-width': lineGutterWidth
+                            }"
+                        >
+                            <pre
+                                ref="lineGutter"
+                                class="line-gutter"
+                                aria-hidden="true"
+                            ><span
+                                v-for="line in lineNumbers"
+                                :key="line"
+                            >{{ line }}</span></pre>
+                            <div class="editor-input-wrap">
                                 <div
-                                    ref="indentGuideLayer"
-                                    class="indent-guide-layer"
+                                    class="indent-guide-viewport"
+                                    aria-hidden="true"
                                 >
                                     <div
-                                        v-for="(guides, row) in indentGuideRows"
-                                        :key="row"
-                                        class="indent-guide-row"
+                                        ref="indentGuideLayer"
+                                        class="indent-guide-layer"
                                     >
-                                        <span
-                                            v-for="level in guides"
-                                            :key="level"
-                                            class="indent-guide"
-                                            :style="getIndentGuideStyle(level)"
-                                        />
+                                        <div
+                                            v-for="(
+                                                guides, row
+                                            ) in indentGuideRows"
+                                            :key="row"
+                                            class="indent-guide-row"
+                                        >
+                                            <span
+                                                v-for="level in guides"
+                                                :key="level"
+                                                class="indent-guide"
+                                                :style="
+                                                    getIndentGuideStyle(level)
+                                                "
+                                            />
                                     </div>
                                 </div>
                             </div>
@@ -266,6 +314,7 @@
                                 @scroll="syncEditorScroll"
                                 @keydown="handleEditorKeydown"
                             />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -279,7 +328,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Check,
+    CopyDocument,
     Delete as DeleteIcon,
+    Document,
     Memo,
     Plus,
     Refresh
@@ -364,6 +415,14 @@ const indentGuideSize = computed(() => {
 
 const normalizedKeyword = computed(() => keyword.value.trim().toLowerCase())
 
+const coreCount = computed(
+    () => presets.value.filter((preset) => preset.source === 'core').length
+)
+
+const characterCount = computed(
+    () => presets.value.filter((preset) => preset.source === 'character').length
+)
+
 const filteredPresets = computed(() => {
     const text = normalizedKeyword.value
 
@@ -425,6 +484,23 @@ const summaryKeywords = computed(() => {
         []
     )
 })
+
+const editorFileLabel = computed(() => {
+    if (createMode.value) {
+        return createFilename.value.trim() || '未命名.yml'
+    }
+
+    return selectedPreset.value?.filename ?? 'preset.yml'
+})
+
+const copyEditor = async () => {
+    try {
+        await navigator.clipboard.writeText(rawText.value)
+        ElMessage.success('已复制到剪贴板')
+    } catch {
+        ElMessage.error('复制失败')
+    }
+}
 
 const lineNumbers = computed(() => {
     return rawText.value.split('\n').map((_, index) => index + 1)
@@ -763,9 +839,11 @@ onMounted(async () => {
 
 <style scoped>
 .core-page {
+    box-sizing: border-box;
     width: min(1800px, 100%);
     margin: 0 auto;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 22px;
 }
 
@@ -774,45 +852,141 @@ onMounted(async () => {
 }
 
 .page-header {
+    position: relative;
+    flex-shrink: 0;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 16px;
-}
-
-.page-icon {
-    width: 58px;
-    height: 58px;
+    gap: 18px;
+    padding: 22px 26px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    color: var(--k-color-primary);
-    background: var(--k-card-bg);
+    border-radius: 16px;
+    overflow: hidden;
+    background:
+        radial-gradient(
+            120% 160% at 0% 0%,
+            color-mix(in srgb, var(--k-color-primary), transparent 86%),
+            transparent 60%
+        ),
+        var(--k-card-bg);
     box-shadow: var(--k-card-shadow);
 }
 
+.page-header::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
+        transparent
+    );
+}
+
+.page-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(
+        135deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
+    );
+    box-shadow: 0 8px 20px
+        color-mix(in srgb, var(--k-color-primary), transparent 65%);
+}
+
+.page-heading {
+    min-width: 0;
+}
+
 .page-kicker {
-    display: block;
-    margin-bottom: 6px;
-    color: var(--k-text-light);
-    font-size: 12px;
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
 }
 
 .page-header h1 {
-    margin: 0;
+    margin: 2px 0 0;
     color: var(--k-text-dark);
-    font-size: 28px;
+    font-size: 26px;
+    font-weight: 700;
     line-height: 1.15;
+}
+
+.page-subtitle {
+    margin: 4px 0 0;
+    color: var(--k-text-light);
+    font-size: 13px;
 }
 
 .page-actions {
     display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.stat-pills {
+    display: flex;
+    gap: 8px;
+}
+
+.stat-pill {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    min-width: 62px;
+    padding: 8px 12px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: var(--k-card-bg);
+    line-height: 1.1;
+}
+
+.stat-pill-value {
+    color: var(--k-text-dark);
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-pill-label {
+    margin-top: 3px;
+    color: var(--k-text-light);
+    font-size: 11px;
+}
+
+.stat-pill.is-core {
+    border-color: color-mix(
+        in srgb,
+        var(--k-color-primary),
+        transparent 55%
+    );
+}
+
+.stat-pill.is-core .stat-pill-value {
+    color: var(--k-color-primary);
+}
+
+.stat-pill.is-character {
+    border-color: color-mix(in srgb, #7c5cff, transparent 55%);
+}
+
+.stat-pill.is-character .stat-pill-value {
+    color: #7c5cff;
 }
 
 .preset-workspace {
@@ -824,7 +998,8 @@ onMounted(async () => {
 
 .preset-list-card,
 .preset-editor-card {
-    border-radius: 8px;
+    min-width: 0;
+    border-radius: 12px;
 }
 
 .card-header,
@@ -833,6 +1008,11 @@ onMounted(async () => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+}
+
+.card-header > span {
+    font-size: 15px;
+    font-weight: 650;
 }
 
 .list-toolbar {
@@ -846,28 +1026,59 @@ onMounted(async () => {
     height: 590px;
 }
 
+.preset-list-scroll :deep(.el-scrollbar__view) {
+    padding-right: 2px;
+}
+
 .preset-list-item {
+    position: relative;
     width: 100%;
     min-width: 0;
     margin: 0 0 10px;
-    padding: 12px;
+    padding: 12px 12px 12px 18px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
+    border-radius: 10px;
     display: grid;
     gap: 8px;
     text-align: left;
     color: var(--k-text-dark);
     background: var(--k-card-bg);
     cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
 }
 
-.preset-list-item:hover,
+.preset-list-item::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 8px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--k-color-primary);
+    opacity: 0.55;
+}
+
+.preset-list-item[data-source='character']::before {
+    background: #7c5cff;
+}
+
+.preset-list-item:hover {
+    border-color: color-mix(
+        in srgb,
+        var(--k-color-primary),
+        transparent 40%
+    );
+    transform: translateX(2px);
+}
+
 .preset-list-item.active {
     border-color: var(--k-color-primary);
-}
-
-.preset-list-item.active {
     box-shadow: 0 0 0 1px var(--k-color-primary) inset;
+    background: color-mix(in srgb, var(--k-color-primary), transparent 94%);
 }
 
 .preset-list-title-row {
@@ -884,6 +1095,18 @@ onMounted(async () => {
     white-space: nowrap;
     font-size: 15px;
     font-weight: 650;
+}
+
+.preset-list-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.preset-list-meta .el-icon {
+    flex-shrink: 0;
+    color: var(--k-color-primary);
+    font-size: 13px;
 }
 
 .preset-list-meta,
@@ -955,6 +1178,69 @@ onMounted(async () => {
     font-weight: 600;
 }
 
+.code-window {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--k-card-bg);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, var(--k-text-dark), transparent 92%),
+        0 8px 24px color-mix(in srgb, var(--k-text-dark), transparent 94%);
+}
+
+.code-window-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--k-color-divider);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 55%);
+}
+
+.window-dots {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.window-dots i {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--k-color-divider);
+}
+
+.window-dots i:nth-child(1) {
+    background: #ff5f56;
+}
+
+.window-dots i:nth-child(2) {
+    background: #ffbd2e;
+}
+
+.window-dots i:nth-child(3) {
+    background: #27c93f;
+}
+
+.window-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: 0.02em;
+}
+
+.copy-btn {
+    flex-shrink: 0;
+}
+
 .code-editor {
     --editor-line-height: 22px;
     --editor-padding-x: 14px;
@@ -975,9 +1261,9 @@ onMounted(async () => {
         var(--k-text-dark) 30%
     );
     box-sizing: border-box;
-    height: clamp(560px, calc(100vh - 310px), 920px);
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
+    height: clamp(560px, calc(100vh - 360px), 920px);
+    border: 0;
+    border-radius: 0;
     display: grid;
     grid-template-columns: var(--line-gutter-width) minmax(0, 1fr);
     overflow: hidden;
@@ -1129,7 +1415,12 @@ onMounted(async () => {
     }
 
     .page-actions {
+        align-items: flex-start;
         justify-content: flex-start;
+    }
+
+    .stat-pills {
+        flex-wrap: wrap;
     }
 
     .card-header,
