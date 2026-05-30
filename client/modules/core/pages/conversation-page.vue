@@ -2,15 +2,36 @@
     <section class="core-page" :class="{ compact: compactMode }">
         <header class="page-header">
             <div class="page-icon">
-                <el-icon :size="28">
+                <el-icon :size="26">
                     <ChatRound />
                 </el-icon>
             </div>
-            <div>
+            <div class="page-heading">
                 <span class="page-kicker">ChatLuna Core</span>
                 <h1>会话管理</h1>
+                <p class="page-subtitle">
+                    按路由归档，批量调整模型与预设
+                </p>
             </div>
             <div class="page-actions">
+                <div class="stat-pills">
+                    <span class="stat-pill">
+                        <span class="stat-pill-value">{{ routeTotal }}</span>
+                        <span class="stat-pill-label">会话</span>
+                    </span>
+                    <span class="stat-pill is-active">
+                        <span class="stat-pill-value">
+                            {{ routeCurrentTotal }}
+                        </span>
+                        <span class="stat-pill-label">活跃</span>
+                    </span>
+                    <span class="stat-pill is-route">
+                        <span class="stat-pill-value">
+                            {{ routeGroupCount }}
+                        </span>
+                        <span class="stat-pill-label">路由</span>
+                    </span>
+                </div>
                 <el-button
                     size="small"
                     :type="compactMode ? 'primary' : 'default'"
@@ -197,7 +218,7 @@
                     class="conversation-table"
                     :data="conversations"
                     :row-key="getRowKey"
-                    border
+                    :row-class-name="tableRowClass"
                     v-loading="loading"
                     empty-text="暂无 ChatLuna 会话"
                     max-height="620"
@@ -213,7 +234,7 @@
 
                     <el-table-column
                         label="状态"
-                        width="86"
+                        width="92"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -223,15 +244,17 @@
                                 :content="formatStatusTip(scope.row)"
                                 placement="top"
                             >
-                                <el-tag
-                                    :type="
-                                        scope.row.isCurrent ? 'success' : 'info'
+                                <span
+                                    class="status-chip"
+                                    :class="
+                                        scope.row.isCurrent
+                                            ? 'is-active'
+                                            : 'is-idle'
                                     "
-                                    size="small"
-                                    effect="plain"
                                 >
+                                    <span class="status-dot" />
                                     {{ scope.row.isCurrent ? '活跃' : '可用' }}
-                                </el-tag>
+                                </span>
                             </el-tooltip>
                         </template>
                     </el-table-column>
@@ -560,6 +583,8 @@ const routeCurrentTotal = computed(() =>
     routeGroups.value.reduce((sum, route) => sum + route.currentCount, 0)
 )
 
+const routeGroupCount = computed(() => routeGroups.value.length)
+
 const activeRoute = computed(() =>
     routeGroups.value.find((route) => route.id === selectedRouteId.value)
 )
@@ -622,6 +647,15 @@ const batchDialogTitle = computed(() =>
 )
 
 const getRowKey = (row: ChatLunaConversationListItem) => row.id
+
+const tableRowClass = ({ row }: { row: ChatLunaConversationListItem }) => {
+    const classes: string[] = []
+
+    if (row.isCurrent) classes.push('row-active')
+    if (isConversationDirty(row)) classes.push('row-dirty')
+
+    return classes.join(' ')
+}
 
 const formatStatusTip = (conversation: ChatLunaConversationListItem) => {
     return `记录状态：${conversation.status}；当前绑定：${
@@ -977,9 +1011,11 @@ onMounted(() => {
 
 <style scoped>
 .core-page {
+    box-sizing: border-box;
     width: min(1800px, 100%);
     margin: 0 auto;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 22px;
 }
 
@@ -988,45 +1024,141 @@ onMounted(() => {
 }
 
 .page-header {
+    position: relative;
+    flex-shrink: 0;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 16px;
-}
-
-.page-icon {
-    width: 58px;
-    height: 58px;
+    gap: 18px;
+    padding: 22px 26px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    color: var(--k-color-primary);
-    background: var(--k-card-bg);
+    border-radius: 16px;
+    overflow: hidden;
+    background:
+        radial-gradient(
+            120% 160% at 0% 0%,
+            color-mix(in srgb, var(--k-color-primary), transparent 86%),
+            transparent 60%
+        ),
+        var(--k-card-bg);
     box-shadow: var(--k-card-shadow);
 }
 
+.page-header::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
+        transparent
+    );
+}
+
+.page-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(
+        135deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
+    );
+    box-shadow: 0 8px 20px
+        color-mix(in srgb, var(--k-color-primary), transparent 65%);
+}
+
+.page-heading {
+    min-width: 0;
+}
+
 .page-kicker {
-    display: block;
-    margin-bottom: 6px;
-    color: var(--k-text-light);
-    font-size: 12px;
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
 }
 
 .page-header h1 {
-    margin: 0;
+    margin: 2px 0 0;
     color: var(--k-text-dark);
-    font-size: 28px;
+    font-size: 26px;
+    font-weight: 700;
     line-height: 1.15;
+}
+
+.page-subtitle {
+    margin: 4px 0 0;
+    color: var(--k-text-light);
+    font-size: 13px;
 }
 
 .page-actions {
     display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.stat-pills {
+    display: flex;
+    gap: 8px;
+}
+
+.stat-pill {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    min-width: 62px;
+    padding: 8px 12px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: var(--k-card-bg);
+    line-height: 1.1;
+}
+
+.stat-pill-value {
+    color: var(--k-text-dark);
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-pill-label {
+    margin-top: 3px;
+    color: var(--k-text-light);
+    font-size: 11px;
+}
+
+.stat-pill.is-active {
+    border-color: color-mix(
+        in srgb,
+        var(--k-color-success, #67c23a),
+        transparent 55%
+    );
+}
+
+.stat-pill.is-active .stat-pill-value {
+    color: var(--k-color-success, #67c23a);
+}
+
+.stat-pill.is-route {
+    border-color: color-mix(in srgb, #7c5cff, transparent 55%);
+}
+
+.stat-pill.is-route .stat-pill-value {
+    color: #7c5cff;
 }
 
 .conversation-workspace {
@@ -1042,11 +1174,8 @@ onMounted(() => {
 
 .route-card,
 .conversation-card {
-    border-radius: 8px;
-}
-
-.route-card {
-    border-color: color-mix(in srgb, var(--k-color-primary) 10%, var(--k-color-divider));
+    min-width: 0;
+    border-radius: 14px;
 }
 
 .route-card :deep(.el-card__header) {
@@ -1096,8 +1225,12 @@ onMounted(() => {
 }
 
 .selected-count {
-    color: var(--k-text-light);
-    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: var(--k-color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
     white-space: nowrap;
 }
 
@@ -1127,25 +1260,25 @@ onMounted(() => {
 }
 
 .route-total-badge {
-    height: 28px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
+    height: 26px;
+    border-radius: 999px;
     display: inline-grid;
     place-items: center;
-    padding: 0 10px;
-    color: var(--k-text-normal);
+    padding: 0 12px;
+    color: var(--k-color-primary);
     font-size: 12px;
     font-weight: 700;
-    background: var(--k-color-fill);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
     white-space: nowrap;
 }
 
 .route-list {
     max-height: 680px;
     overflow: auto;
-    padding-right: 2px;
+    padding-right: 4px;
     display: grid;
     gap: 12px;
+    scrollbar-width: thin;
 }
 
 .route-section {
@@ -1158,18 +1291,20 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     padding: 8px 8px 3px;
-    border-bottom: 1px solid color-mix(in srgb, var(--k-color-divider) 70%, transparent);
     color: var(--k-text-light);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .route-item {
+    position: relative;
     width: 100%;
     min-height: 60px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 12px;
+    padding: 10px 10px 10px 14px;
     display: grid;
     grid-template-columns: 36px minmax(0, 1fr) auto;
     align-items: center;
@@ -1178,32 +1313,72 @@ onMounted(() => {
     background: var(--k-card-bg);
     text-align: left;
     cursor: pointer;
+    overflow: hidden;
     transition:
         background 0.16s ease,
         border-color 0.16s ease,
-        color 0.16s ease;
+        color 0.16s ease,
+        transform 0.16s ease;
 }
 
-.route-item:hover,
+.route-item::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 3px;
+    height: 0;
+    border-radius: 0 999px 999px 0;
+    background: linear-gradient(
+        180deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), #7c5cff 60%)
+    );
+    transform: translateY(-50%);
+    transition: height 0.18s ease;
+}
+
+.route-item:hover {
+    border-color: color-mix(
+        in srgb,
+        var(--k-color-primary) 36%,
+        var(--k-color-divider)
+    );
+    transform: translateX(2px);
+}
+
 .route-item.active {
-    border-color: color-mix(in srgb, var(--k-color-primary) 36%, var(--k-color-divider));
+    border-color: color-mix(
+        in srgb,
+        var(--k-color-primary) 50%,
+        var(--k-color-divider)
+    );
     color: var(--k-color-primary);
     background: color-mix(in srgb, var(--k-color-primary) 8%, var(--k-card-bg));
 }
 
-.route-item.active {
-    box-shadow: inset 3px 0 0 var(--k-color-primary);
+.route-item.active::before {
+    height: 60%;
 }
 
 .route-icon {
     width: 36px;
     height: 36px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
     color: inherit;
-    background: var(--k-color-fill);
+    background: color-mix(in srgb, var(--k-color-fill), transparent 20%);
+    transition: background 0.16s ease;
+}
+
+.route-item.active .route-icon {
+    color: #fff;
+    background: linear-gradient(
+        135deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
+    );
 }
 
 .route-meta {
@@ -1237,16 +1412,16 @@ onMounted(() => {
 
 .route-current {
     height: 20px;
-    border-radius: 8px;
+    border-radius: 999px;
     display: inline-grid;
     place-items: center;
-    padding: 0 7px;
+    padding: 0 8px;
     color: var(--k-color-success, #67c23a);
     font-size: 11px;
     font-weight: 700;
     background: color-mix(
         in srgb,
-        var(--k-color-success, #67c23a) 12%,
+        var(--k-color-success, #67c23a) 14%,
         transparent
     );
     white-space: nowrap;
@@ -1255,14 +1430,19 @@ onMounted(() => {
 .route-count {
     min-width: 30px;
     height: 24px;
-    border-radius: 8px;
+    border-radius: 999px;
     display: inline-grid;
     place-items: center;
-    padding: 0 8px;
+    padding: 0 9px;
     color: var(--k-text-light);
     font-size: 12px;
     font-weight: 700;
-    background: var(--k-color-fill);
+    background: color-mix(in srgb, var(--k-color-fill), transparent 15%);
+}
+
+.route-item.active .route-count {
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 86%);
 }
 
 .conversation-toolbar {
@@ -1271,6 +1451,10 @@ onMounted(() => {
     gap: 12px;
     align-items: center;
     margin-bottom: 14px;
+    padding: 10px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 45%);
 }
 
 .usage-select,
@@ -1278,24 +1462,148 @@ onMounted(() => {
     width: 100%;
 }
 
+/* ---- Premium borderless table ---- */
 .conversation-table {
     width: 100%;
     font-size: 14px;
+    --el-table-border-color: transparent;
+    --el-table-border: none;
+}
+
+.conversation-table :deep(.el-table__inner-wrapper)::before {
+    display: none;
 }
 
 .conversation-table :deep(.cell) {
-    padding: 0 8px;
+    padding: 0 10px;
     font-size: 14px;
     line-height: 20px;
 }
 
-.conversation-table :deep(th .cell) {
-    font-size: 14px;
-    font-weight: 600;
+/* Frosted, uppercase header */
+.conversation-table :deep(thead th.el-table__cell) {
+    border-bottom: 1px solid var(--k-color-divider);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 55%);
 }
 
-.conversation-table :deep(.el-tag) {
-    font-size: 13px;
+.conversation-table :deep(th .cell) {
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+/* Rows: quiet separators, lift on hover */
+.conversation-table :deep(td.el-table__cell) {
+    border-bottom: 1px solid
+        color-mix(in srgb, var(--k-color-divider) 60%, transparent);
+}
+
+.conversation-table :deep(.el-table__row) {
+    transition: background 0.14s ease;
+}
+
+.conversation-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+    background: color-mix(in srgb, var(--k-color-primary) 5%, transparent);
+}
+
+/* Live left accent: active rows (primary) and unsaved rows (warning) */
+.conversation-table :deep(.el-table__row > td.el-table__cell:first-child) {
+    position: relative;
+}
+
+.conversation-table
+    :deep(.el-table__row.row-active > td.el-table__cell:first-child)::before,
+.conversation-table
+    :deep(.el-table__row.row-dirty > td.el-table__cell:first-child)::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 999px 999px 0;
+}
+
+.conversation-table
+    :deep(.el-table__row.row-active > td.el-table__cell:first-child)::before {
+    background: var(--k-color-primary);
+}
+
+.conversation-table
+    :deep(.el-table__row.row-dirty > td.el-table__cell:first-child)::before {
+    background: var(--k-color-warning, #e6a23c);
+}
+
+.conversation-table
+    :deep(.el-table__row.row-dirty > td.el-table__cell) {
+    background: color-mix(
+        in srgb,
+        var(--k-color-warning, #e6a23c) 6%,
+        transparent
+    );
+}
+
+/* Inline selects styled as quiet chips that come alive on focus/hover */
+.conversation-table :deep(.usage-select .el-select__wrapper) {
+    border-radius: 9px;
+    box-shadow: 0 0 0 1px transparent inset;
+    background: color-mix(in srgb, var(--k-color-fill), transparent 25%);
+    transition:
+        box-shadow 0.16s ease,
+        background 0.16s ease;
+}
+
+.conversation-table :deep(.usage-select:hover .el-select__wrapper) {
+    background: color-mix(in srgb, var(--k-color-primary) 8%, transparent);
+}
+
+.conversation-table
+    :deep(.usage-select .el-select__wrapper.is-focused) {
+    background: var(--k-card-bg);
+    box-shadow: 0 0 0 1px var(--k-color-primary) inset;
+}
+
+/* Status chip with dot */
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.status-chip.is-active {
+    color: var(--k-color-success, #67c23a);
+    background: color-mix(
+        in srgb,
+        var(--k-color-success, #67c23a) 14%,
+        transparent
+    );
+}
+
+.status-chip.is-active .status-dot {
+    background: var(--k-color-success, #67c23a);
+    box-shadow: 0 0 0 3px
+        color-mix(in srgb, var(--k-color-success, #67c23a), transparent 75%);
+}
+
+.status-chip.is-idle {
+    color: var(--k-text-light);
+    background: color-mix(in srgb, var(--k-color-fill), transparent 10%);
+}
+
+.status-chip.is-idle .status-dot {
+    background: var(--k-text-light);
 }
 
 .core-page.compact .conversation-table :deep(.cell) {
@@ -1306,7 +1614,14 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
     margin-top: auto;
-    padding-top: 12px;
+    padding-top: 14px;
+}
+
+/* ---- Dark mode polish ---- */
+.dark .conversation-table :deep(thead th.el-table__cell),
+html.dark .conversation-table :deep(thead th.el-table__cell),
+.theme-root.dark .conversation-table :deep(thead th.el-table__cell) {
+    background: color-mix(in srgb, var(--k-card-bg), #000 12%);
 }
 
 @media (max-width: 1100px) {
@@ -1329,9 +1644,17 @@ onMounted(() => {
         font-size: 24px;
     }
 
+    .page-actions {
+        align-items: flex-start;
+    }
+
     .page-actions,
     .header-actions {
         justify-content: flex-start;
+    }
+
+    .stat-pills {
+        flex-wrap: wrap;
     }
 
     .conversation-card-header,
