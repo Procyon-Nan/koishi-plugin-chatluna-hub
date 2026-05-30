@@ -912,8 +912,8 @@ const isPointWithinEffectiveRange = (point: Point) => {
 
 const nodeStyle = (node: GraphNode) =>
     ({
-        '--node-x': `${(node.x / 1000) * 100}%`,
-        '--node-y': `${(node.y / 620) * 100}%`,
+        '--node-px': `${(node.x / 1000) * stageSize.width}px`,
+        '--node-py': `${(node.y / 620) * stageSize.height}px`,
         '--node-size': `${node.size}px`,
         '--node-tone': node.tone,
         '--float-delay': `${getFloatDelay(node.id)}s`
@@ -1693,6 +1693,29 @@ onBeforeUnmount(() => {
     min-height: 560px;
     overflow: hidden;
     color: var(--k-text-dark);
+    /* Soft corner glows for depth, kept very faint so the dot grid reads cleanly */
+    background:
+        radial-gradient(ellipse 56% 52% at 14% 10%, color-mix(in srgb, var(--k-color-primary), transparent 91%), transparent 60%),
+        radial-gradient(ellipse 52% 50% at 88% 90%, color-mix(in srgb, mediumpurple, transparent 92%), transparent 58%);
+}
+
+/* Structured dot-matrix texture sitting above the corner glows */
+.relationship-home::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--k-text-light), transparent 64%) 1px,
+        transparent 1.4px
+    );
+    background-size: 24px 24px;
+    background-position: -12px -12px;
+    /* Fade the grid toward the edges so it frames the network instead of boxing it in */
+    -webkit-mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
+    mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
+    opacity: 0.5;
 }
 
 .graph-container-box {
@@ -1701,6 +1724,7 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    z-index: 1;
 }
 
 .hub-module-detail-panel {
@@ -1709,17 +1733,38 @@ onBeforeUnmount(() => {
     right: 28px;
     width: 500px;
     height: 800px; /* Fixed height so size is not affected by text content */
-    border: 1px solid var(--k-color-divider);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: var(--k-card-shadow);
+    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 64%);
+    border-radius: 16px;
+    background:
+        radial-gradient(ellipse 120% 40% at 50% 0%, color-mix(in srgb, var(--k-color-primary), transparent 92%), transparent 70%),
+        color-mix(in srgb, var(--k-card-bg), transparent 8%);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow:
+        var(--k-card-shadow),
+        0 18px 50px color-mix(in srgb, var(--k-text-dark), transparent 90%);
     display: flex;
     flex-direction: column;
     z-index: 5;
     transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
+}
+
+/* Luminous top edge accent on the detail panel */
+.hub-module-detail-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 12%;
+    right: 12%;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--k-color-primary), transparent 30%),
+        transparent
+    );
+    pointer-events: none;
 }
 
 .detail-panel-scroll {
@@ -2061,31 +2106,58 @@ onBeforeUnmount(() => {
 
 .graph-header h1 {
     margin: 0;
-    color: var(--k-text-dark);
     font-size: 30px;
     line-height: 1.15;
-    font-weight: 760;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    background: linear-gradient(
+        100deg,
+        var(--k-text-dark) 12%,
+        color-mix(in srgb, var(--k-color-primary), var(--k-text-dark) 30%) 52%,
+        color-mix(in srgb, mediumpurple, var(--k-text-dark) 20%) 90%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--k-text-dark);
 }
 
 .graph-header p {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
     color: var(--k-text-light);
     font-size: 14px;
     line-height: 1.45;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.graph-header p::before {
+    content: "";
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--k-color-primary), transparent);
 }
 
 .ecosystem-meter {
     top: 24px;
     right: 28px;
     min-width: 150px;
-    padding: 10px 12px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 60%);
+    border-radius: 12px;
     display: grid;
     gap: 4px;
     color: var(--k-text-dark);
-    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
-    box-shadow: var(--k-card-shadow);
+    background:
+        radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--k-color-primary), transparent 88%), transparent 60%),
+        color-mix(in srgb, var(--k-card-bg), transparent 12%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow:
+        var(--k-card-shadow),
+        0 0 22px color-mix(in srgb, var(--k-color-primary), transparent 90%);
 }
 
 .ecosystem-meter span,
@@ -2096,8 +2168,13 @@ onBeforeUnmount(() => {
 }
 
 .ecosystem-meter strong {
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1.1;
+    font-weight: 800;
+    background: linear-gradient(120deg, var(--k-color-primary), color-mix(in srgb, mediumpurple, var(--k-color-primary) 40%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .range-control {
@@ -2105,11 +2182,15 @@ onBeforeUnmount(() => {
     bottom: max(24px, env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
     width: min(260px, calc(100% - 36px));
-    padding: 9px 10px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--k-card-bg), transparent 8%);
-    box-shadow: var(--k-card-shadow);
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 60%);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--k-card-bg), transparent 12%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow:
+        var(--k-card-shadow),
+        0 0 22px color-mix(in srgb, var(--k-color-primary), transparent 92%);
 }
 
 .range-control-row {
@@ -2162,6 +2243,10 @@ onBeforeUnmount(() => {
     inset: 0;
     width: 100%;
     height: 100%;
+}
+
+.graph-stage {
+    z-index: 1;
 }
 
 .edge-layer {
@@ -2237,10 +2322,18 @@ onBeforeUnmount(() => {
 
 /* Removed .edge-joint styles since joint circles are deleted */
 
+/* Registered so hover scale can interpolate independently of the per-frame
+   position transform, keeping orbital motion off the layout/transition path. */
+@property --node-scale {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 1;
+}
+
 .graph-node {
     position: absolute;
-    left: var(--node-x);
-    top: var(--node-y);
+    left: 0;
+    top: 0;
     width: calc(var(--node-size) + 42px);
     min-height: calc(var(--node-size) + 50px);
     padding: 0;
@@ -2254,16 +2347,22 @@ onBeforeUnmount(() => {
     cursor: pointer;
     touch-action: none;
     user-select: none;
-    transform: translate(-50%, calc(var(--node-size) / -2));
+    /* Compositor-only positioning: translate by absolute px every frame, then
+       centre the node and apply hover scale. No layout, no paint. */
+    transform:
+        translate(var(--node-px, 0px), var(--node-py, 0px))
+        translate(-50%, calc(var(--node-size) / -2))
+        scale(var(--node-scale, 1));
+    will-change: transform;
     transition:
         opacity 0.2s ease,
-        transform 0.22s ease;
+        --node-scale 0.22s ease;
 }
 
 .graph-node:hover,
 .graph-node:focus-visible,
 .graph-node.disturbed {
-    transform: translate(-50%, calc(var(--node-size) / -2)) scale(1.035);
+    --node-scale: 1.035;
 }
 
 .graph-node:focus-visible {
@@ -2305,23 +2404,24 @@ onBeforeUnmount(() => {
     background:
         radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--k-card-bg), var(--node-tone) 12%), transparent 58%),
         color-mix(in srgb, var(--k-card-bg), var(--node-tone) 8%);
+    /* Static shadow: painted once into the node's compositor layer, so orbital
+       motion just translates the cached texture instead of repainting it. The
+       breathing feel is carried by .node-glow (opacity/scale only). */
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 46%) inset,
         0 16px 34px color-mix(in srgb, var(--k-text-dark), transparent 88%),
         0 0 28px color-mix(in srgb, var(--node-tone), transparent 72%);
     overflow: hidden;
-    animation: node-breathe 4.6s ease-in-out infinite;
 }
 
 .satellite:not(.dragging) .node-disc {
-    animation:
-        node-breathe 4.6s ease-in-out infinite,
-        node-float 6.8s ease-in-out infinite;
-    animation-delay: 0s, var(--float-delay);
+    animation: node-float 6.8s ease-in-out infinite;
+    animation-delay: var(--float-delay);
 }
 
 .orbit-active .satellite:not(.dragging) .node-disc {
-    animation: node-breathe 4.6s ease-in-out infinite !important;
+    /* Suppress the idle float while the node is already moving along its orbit */
+    animation: none !important;
 }
 
 .node-disc::after {
@@ -2410,23 +2510,6 @@ onBeforeUnmount(() => {
 }
 
 /* Removed @keyframes joint-pulse since joint circles are deleted */
-
-@keyframes node-breathe {
-    0%,
-    100% {
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 46%) inset,
-            0 16px 34px color-mix(in srgb, var(--k-text-dark), transparent 88%),
-            0 0 22px color-mix(in srgb, var(--node-tone), transparent 76%);
-    }
-
-    50% {
-        box-shadow:
-            0 0 0 1px color-mix(in srgb, var(--node-tone), transparent 58%) inset,
-            0 18px 38px color-mix(in srgb, var(--k-text-dark), transparent 86%),
-            0 0 34px color-mix(in srgb, var(--node-tone), transparent 66%);
-    }
-}
 
 @keyframes node-float {
     0%,
@@ -2552,7 +2635,7 @@ onBeforeUnmount(() => {
     .graph-node:hover,
     .graph-node:focus-visible,
     .graph-node.disturbed {
-        transform: translate(-50%, calc(var(--node-size) / -2));
+        --node-scale: 1;
     }
 }
 </style>
