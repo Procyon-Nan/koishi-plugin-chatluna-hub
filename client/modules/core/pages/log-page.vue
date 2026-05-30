@@ -17,7 +17,7 @@
                 <div class="stat-pills">
                     <span class="stat-pill">
                         <span class="stat-pill-value">{{ total }}</span>
-                        <span class="stat-pill-label">条记录</span>
+                        <span class="stat-pill-label">记录</span>
                     </span>
                     <span class="stat-pill is-success">
                         <span class="stat-pill-value">{{ successCount }}</span>
@@ -43,7 +43,7 @@
             <el-card shadow="never" class="log-list-card">
                 <template #header>
                     <div class="card-header">
-                        <span>回复请求</span>
+                        <span class="card-title">请求记录</span>
                         <div class="card-actions">
                             <el-button
                                 :icon="Refresh"
@@ -81,7 +81,7 @@
 
                 <el-scrollbar class="log-list-scroll">
                     <div v-if="logList.length === 0" class="empty-state">
-                        暂无已捕获回复
+                        暂无已捕获请求
                     </div>
 
                     <button
@@ -180,7 +180,7 @@
                 </template>
 
                 <div v-if="!detail" class="detail-empty">
-                    选择左侧回复后查看完整请求体与响应体
+                    选择左侧请求后查看完整请求体与响应体
                 </div>
 
                 <div v-else class="detail-body">
@@ -491,7 +491,13 @@ const formatTime = (value: string | null | undefined) => {
     const date = new Date(value)
     if (!Number.isFinite(date.getTime())) return '-'
 
-    return date.toLocaleString()
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+
+    return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 const formatDuration = (value: number | null | undefined) => {
@@ -601,7 +607,7 @@ const clearLogs = async () => {
     try {
         await ElMessageBox.confirm(
             [
-                '确认清空 ChatLuna Hub 当前捕获的回复日志？',
+                '确认清空 ChatLuna Hub 当前捕获的请求日志？',
                 '此操作只会清空 Hub 内存日志，不影响 ChatLuna 会话记录。'
             ].join(''),
             '清空日志',
@@ -873,6 +879,12 @@ onBeforeUnmount(() => {
     justify-content: flex-end;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.card-title {
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--k-text-dark);
 }
 
 .list-toolbar {

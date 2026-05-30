@@ -69,11 +69,29 @@
                             placeholder="搜索适配器或平台"
                             clearable
                         />
-                        <el-segmented
-                            v-model="adapterScope"
-                            :options="adapterScopeOptions"
-                            size="small"
-                        />
+                        <div class="scope-tabs">
+                            <button
+                                v-for="option in adapterScopeOptions"
+                                :key="option.value"
+                                type="button"
+                                class="scope-tab"
+                                :class="{
+                                    'is-active': adapterScope === option.value
+                                }"
+                                @click="adapterScope = option.value"
+                            >
+                                <span
+                                    class="scope-dot"
+                                    :class="`is-${option.value}`"
+                                />
+                                <span class="scope-label">{{
+                                    option.label
+                                }}</span>
+                                <span class="scope-count">{{
+                                    scopeCount(option.value)
+                                }}</span>
+                            </button>
+                        </div>
                         <el-button
                             type="primary"
                             :icon="Plus"
@@ -345,18 +363,54 @@
 
         <el-dialog
             v-model="pickerVisible"
-            title="添加适配器"
-            width="600px"
-            class="adapter-dialog"
+            width="720px"
+            class="adapter-dialog picker-dialog"
+            align-center
             append-to-body
+            :show-close="false"
         >
-            <p class="dialog-tip">
-                选择要添加的适配器类型。平台名可自定义的适配器（如 OpenAI
-                Like）可重复添加多份配置实例；平台固定的适配器每种仅可配置一份。
-            </p>
-            <div class="type-grid">
+            <template #header>
+                <div class="dialog-hero">
+                    <div class="dialog-hero-icon">
+                        <el-icon :size="22"><Plus /></el-icon>
+                    </div>
+                    <div class="dialog-hero-text">
+                        <span class="dialog-hero-kicker">Adapter</span>
+                        <h3>添加适配器</h3>
+                        <p>
+                            选择适配器类型。平台名可自定义的适配器可重复添加多份配置实例，平台固定的适配器每种仅可配置一份。
+                        </p>
+                    </div>
+                    <el-button
+                        class="dialog-hero-close"
+                        text
+                        :icon="Close"
+                        @click="pickerVisible = false"
+                    />
+                </div>
+            </template>
+
+            <el-input
+                v-model="pickerKeyword"
+                class="picker-search"
+                placeholder="搜索适配器名称或平台"
+                clearable
+            >
+                <template #prefix>
+                    <el-icon><Search /></el-icon>
+                </template>
+            </el-input>
+
+            <div
+                v-if="filteredPickerTypes.length === 0"
+                class="picker-empty"
+            >
+                没有匹配的适配器类型
+            </div>
+
+            <div v-else class="type-grid">
                 <button
-                    v-for="type in types"
+                    v-for="type in filteredPickerTypes"
                     :key="type.id"
                     type="button"
                     class="type-tile"
@@ -365,35 +419,68 @@
                     :title="type.createReason"
                     @click="chooseType(type)"
                 >
-                    <span class="type-title">{{ type.title }}</span>
-                    <span class="type-platform">{{ type.platformDefault }}</span>
-                    <span v-if="type.instanceCount > 0" class="type-count">
-                        已配置 {{ type.instanceCount }} 份
+                    <span class="type-avatar">{{ typeInitial(type) }}</span>
+                    <span class="type-info">
+                        <span class="type-title">{{ type.title }}</span>
+                        <span class="type-platform">{{
+                            type.platformDefault
+                        }}</span>
                     </span>
-                    <span v-else-if="!type.canCreate" class="type-blocked">
+                    <span
+                        v-if="type.instanceCount > 0"
+                        class="type-badge is-count"
+                    >
+                        已配置 {{ type.instanceCount }}
+                    </span>
+                    <span
+                        v-else-if="!type.canCreate"
+                        class="type-badge is-blocked"
+                    >
                         不可添加
                     </span>
+                    <el-icon v-else class="type-arrow"><ArrowRight /></el-icon>
                 </button>
             </div>
         </el-dialog>
 
         <el-dialog
             v-model="editorVisible"
-            :title="editorTitle"
-            width="640px"
-            class="adapter-dialog"
+            width="680px"
+            class="adapter-dialog editor-dialog"
+            align-center
             append-to-body
+            :show-close="false"
         >
-            <div v-if="editorDescriptor" class="dialog-body">
-                <p class="dialog-tip">
-                    凭据将写入 Koishi 配置文件
-                    <code>{{ editorDescriptor.pluginName }}</code>
-                    并自动重载该插件。同一实例的多条凭据为负载均衡池，取模型时以选中的凭据为准，并非多个平台同时生效。
-                </p>
+            <template #header>
+                <div class="dialog-hero" v-if="editorDescriptor">
+                    <div class="dialog-hero-icon">
+                        <el-icon :size="22"><Setting /></el-icon>
+                    </div>
+                    <div class="dialog-hero-text">
+                        <span class="dialog-hero-kicker">
+                            {{ editorInstanceKey ? '编辑配置' : '新建配置' }}
+                        </span>
+                        <h3>{{ editorDescriptor.title }}</h3>
+                        <p>
+                            配置写入
+                            <code>{{ editorDescriptor.pluginName }}</code>
+                            并自动重载。
+                        </p>
+                    </div>
+                    <el-button
+                        class="dialog-hero-close"
+                        text
+                        :icon="Close"
+                        @click="editorVisible = false"
+                    />
+                </div>
+            </template>
 
+            <div v-if="editorDescriptor" class="dialog-body">
                 <el-form
                     v-if="editorDescriptor.platformConfigurable"
                     label-position="top"
+                    class="editor-form"
                 >
                     <el-form-item label="平台名称">
                         <el-input
@@ -406,58 +493,78 @@
                     </el-form-item>
                 </el-form>
 
-                <div class="cred-list">
-                    <div
-                        v-for="(entry, index) in editorCredentials"
-                        :key="index"
-                        class="cred-row"
-                    >
-                        <el-input
-                            v-if="editorShowApiKey"
-                            v-model="entry.apiKey"
-                            class="cred-key"
-                            type="password"
-                            show-password
-                            placeholder="API Key"
-                        />
-                        <el-input
-                            v-if="editorShowEndpoint"
-                            v-model="entry.apiEndpoint"
-                            class="cred-endpoint"
-                            :placeholder="
-                                editorDescriptor.endpointPlaceholder || 'API 端点'
-                            "
-                        />
-                        <el-switch
-                            v-model="entry.enabled"
-                            class="cred-enabled"
-                            inline-prompt
-                            active-text="启用"
-                            inactive-text="停用"
-                        />
+                <div class="cred-section">
+                    <div class="cred-section-head">
+                        <span class="cred-section-title">
+                            凭据
+                            <span class="cred-section-count">{{
+                                editorCredentials.length
+                            }}</span>
+                        </span>
+                        <span class="cred-section-hint">
+                            多条凭据组成负载均衡池，取模型时以选中凭据为准。
+                        </span>
+                    </div>
+
+                    <div class="cred-list">
+                        <div
+                            v-for="(entry, index) in editorCredentials"
+                            :key="index"
+                            class="cred-row"
+                            :class="{ 'is-off': !entry.enabled }"
+                        >
+                            <span class="cred-index">{{ index + 1 }}</span>
+                            <div class="cred-fields">
+                                <el-input
+                                    v-if="editorShowApiKey"
+                                    v-model="entry.apiKey"
+                                    class="cred-key"
+                                    type="password"
+                                    show-password
+                                    placeholder="API Key"
+                                />
+                                <el-input
+                                    v-if="editorShowEndpoint"
+                                    v-model="entry.apiEndpoint"
+                                    class="cred-endpoint"
+                                    :placeholder="
+                                        editorDescriptor.endpointPlaceholder ||
+                                        'API 端点'
+                                    "
+                                />
+                            </div>
+                            <el-switch
+                                v-model="entry.enabled"
+                                class="cred-enabled"
+                                inline-prompt
+                                active-text="启用"
+                                inactive-text="停用"
+                            />
+                            <el-button
+                                class="cred-remove"
+                                text
+                                type="danger"
+                                :icon="DeleteIcon"
+                                @click="removeCredential(index)"
+                            />
+                        </div>
+
+                        <div
+                            v-if="editorCredentials.length === 0"
+                            class="cred-empty"
+                        >
+                            暂无凭据，点击下方按钮添加一条。
+                        </div>
+
                         <el-button
-                            text
-                            type="danger"
-                            :icon="DeleteIcon"
-                            @click="removeCredential(index)"
-                        />
+                            class="cred-add"
+                            :icon="Plus"
+                            plain
+                            @click="addCredential"
+                        >
+                            添加凭据
+                        </el-button>
                     </div>
-
-                    <div
-                        v-if="editorCredentials.length === 0"
-                        class="cred-empty"
-                    >
-                        暂无凭据，点击下方按钮添加一条。
-                    </div>
-
-                    <el-button
-                        class="cred-add"
-                        :icon="Plus"
-                        plain
-                        @click="addCredential"
-                    >
-                        添加凭据
-                    </el-button>
                 </div>
             </div>
 
@@ -479,11 +586,14 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+    ArrowRight,
+    Close,
     DataAnalysis,
     Delete as DeleteIcon,
     Key,
     Plus,
     Refresh,
+    Search,
     Setting
 } from '@element-plus/icons-vue'
 import * as api from '../api'
@@ -552,7 +662,7 @@ const statusLabels: Record<ChatLunaAdapterStatus, string> = {
     unsupported: '需原生配置'
 }
 
-const adapterScopeOptions = [
+const adapterScopeOptions: { label: string; value: AdapterScope }[] = [
     { label: '全部', value: 'all' },
     { label: '运行中', value: 'running' },
     { label: '已停用', value: 'disabled' }
@@ -574,6 +684,7 @@ const adapterScope = ref<AdapterScope>('all')
 const busyKey = ref<string | null>(null)
 
 const pickerVisible = ref(false)
+const pickerKeyword = ref('')
 const editorVisible = ref(false)
 const editorDescriptor = ref<EditorDescriptor | null>(null)
 const editorInstanceKey = ref<string | undefined>(undefined)
@@ -621,6 +732,34 @@ const filteredInstances = computed(() => {
     })
 })
 
+const scopeCount = (scope: AdapterScope) => {
+    if (scope === 'running') {
+        return instances.value.filter((item) => item.status === 'running')
+            .length
+    }
+    if (scope === 'disabled') {
+        return instances.value.filter((item) => item.disabled).length
+    }
+    return instances.value.length
+}
+
+const filteredPickerTypes = computed(() => {
+    const text = pickerKeyword.value.trim().toLowerCase()
+    if (!text) return types.value
+
+    return types.value.filter((type) =>
+        [type.title, type.platformDefault, type.pluginName]
+            .join(' ')
+            .toLowerCase()
+            .includes(text)
+    )
+})
+
+const typeInitial = (type: ChatLunaAdapterType) => {
+    const source = type.title || type.platformDefault || '?'
+    return source.trim().charAt(0).toUpperCase()
+}
+
 const platformLabel = (platform: string) => {
     const title = adapterData.value.platformMap[platform]
     return title ? `${title} · ${platform}` : platform
@@ -629,14 +768,6 @@ const platformLabel = (platform: string) => {
 const adapterTitleOf = (platform: string) => {
     return adapterData.value.platformMap[platform] ?? platform
 }
-
-const editorTitle = computed(() => {
-    const descriptor = editorDescriptor.value
-    if (!descriptor) return '配置适配器'
-    return editorInstanceKey.value
-        ? `${descriptor.title} · 编辑配置`
-        : `${descriptor.title} · 新建配置`
-})
 
 const editorShowApiKey = computed(() => {
     return editorDescriptor.value?.credentialKind !== 'endpoint-enabled'
@@ -655,6 +786,7 @@ const createCredentialEntry = (): ChatLunaAdapterCredentialEntry => ({
 })
 
 const openCreatePicker = () => {
+    pickerKeyword.value = ''
     pickerVisible.value = true
 }
 
@@ -906,12 +1038,13 @@ const formatTime = (value: string) => {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
 
+    const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
     const hour = String(date.getHours()).padStart(2, '0')
     const minute = String(date.getMinutes()).padStart(2, '0')
 
-    return `${month}-${day} ${hour}:${minute}`
+    return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
 const fetchModels = async () => {
@@ -1131,6 +1264,80 @@ onMounted(() => {
     width: 200px;
 }
 
+.scope-tabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 10px;
+    background: var(--k-color-fill);
+}
+
+.scope-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--k-text-light);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.scope-tab:hover {
+    color: var(--k-text-dark);
+}
+
+.scope-tab.is-active {
+    color: var(--k-text-dark);
+    font-weight: 600;
+    background: var(--k-card-bg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.scope-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--k-text-light);
+}
+
+.scope-tab.is-active .scope-dot.is-running {
+    background: var(--k-color-success);
+}
+
+.scope-tab.is-active .scope-dot.is-disabled {
+    background: var(--k-color-danger);
+}
+
+.scope-tab.is-active .scope-dot.is-all {
+    background: var(--k-color-primary);
+}
+
+.scope-count {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--k-text-light), transparent 82%);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.scope-tab.is-active .scope-count {
+    background: color-mix(in srgb, var(--k-color-primary), transparent 84%);
+    color: var(--k-color-primary);
+}
+
 .empty-state {
     min-height: 120px;
     display: grid;
@@ -1311,6 +1518,123 @@ onMounted(() => {
     gap: 16px;
 }
 
+.adapter-dialog :deep(.el-dialog__header) {
+    margin-right: 0;
+    padding: 0;
+}
+
+.adapter-dialog :deep(.el-dialog__body) {
+    padding-top: 18px;
+}
+
+.dialog-hero {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 20px 22px;
+    border-radius: 12px 12px 0 0;
+    background:
+        radial-gradient(
+            120% 160% at 0% 0%,
+            color-mix(in srgb, var(--k-color-primary), transparent 86%),
+            transparent 62%
+        ),
+        var(--k-card-bg);
+    border-bottom: 1px solid var(--k-color-divider);
+}
+
+.dialog-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    border-radius: 12px 12px 0 0;
+    background: linear-gradient(
+        90deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
+        transparent
+    );
+}
+
+.dialog-hero-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(
+        135deg,
+        var(--k-color-primary),
+        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
+    );
+    box-shadow: 0 8px 18px
+        color-mix(in srgb, var(--k-color-primary), transparent 68%);
+}
+
+.dialog-hero-text {
+    min-width: 0;
+    flex: 1;
+}
+
+.dialog-hero-kicker {
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.dialog-hero-text h3 {
+    margin: 2px 0 0;
+    color: var(--k-text-dark);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.dialog-hero-text p {
+    margin: 5px 0 0;
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.dialog-hero-text code {
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--k-color-fill);
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    color: var(--k-text-dark);
+}
+
+.dialog-hero-close {
+    flex-shrink: 0;
+    margin: -4px -8px 0 0;
+}
+
+.picker-search {
+    margin-bottom: 14px;
+}
+
+.picker-empty {
+    min-height: 100px;
+    display: grid;
+    place-items: center;
+    color: var(--k-text-light);
+    font-size: 14px;
+}
+
 .dialog-tip {
     margin: 0;
     font-size: 13px;
@@ -1328,6 +1652,51 @@ onMounted(() => {
     color: var(--k-text-dark);
 }
 
+.editor-form {
+    padding: 14px 16px 4px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: var(--k-color-fill);
+}
+
+.cred-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cred-section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cred-section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--k-text-dark);
+}
+
+.cred-section-count {
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--k-color-primary), transparent 86%);
+    color: var(--k-color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.cred-section-hint {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .cred-list {
     display: flex;
     flex-direction: column;
@@ -1338,6 +1707,39 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 10px;
+    background: var(--k-card-bg);
+    transition:
+        border-color 0.15s ease,
+        opacity 0.15s ease;
+}
+
+.cred-row.is-off {
+    opacity: 0.6;
+}
+
+.cred-index {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    background: var(--k-color-fill);
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.cred-fields {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
 }
 
 .cred-key {
@@ -1351,6 +1753,10 @@ onMounted(() => {
 }
 
 .cred-enabled {
+    flex-shrink: 0;
+}
+
+.cred-remove {
     flex-shrink: 0;
 }
 
@@ -1376,14 +1782,17 @@ onMounted(() => {
 
 .type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 10px;
+    max-height: 52vh;
+    overflow-y: auto;
+    padding: 2px;
 }
 
 .type-tile {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    gap: 12px;
     padding: 12px 14px;
     border: 1px solid var(--k-color-divider);
     border-radius: 12px;
@@ -1402,15 +1811,44 @@ onMounted(() => {
     box-shadow: var(--k-card-shadow);
 }
 
+.type-tile:hover:not(.is-disabled) .type-arrow {
+    color: var(--k-color-primary);
+    transform: translateX(2px);
+}
+
 .type-tile.is-disabled {
-    opacity: 0.5;
+    opacity: 0.55;
     cursor: not-allowed;
+}
+
+.type-avatar {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 86%);
+}
+
+.type-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
 }
 
 .type-title {
     font-size: 14px;
     font-weight: 650;
     color: var(--k-text-dark);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .type-platform {
@@ -1418,18 +1856,35 @@ onMounted(() => {
     color: var(--k-text-light);
     font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.type-count {
-    margin-top: 2px;
+.type-badge {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
     font-size: 11px;
+    font-weight: 600;
+}
+
+.type-badge.is-count {
     color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
 }
 
-.type-blocked {
-    margin-top: 2px;
-    font-size: 11px;
+.type-badge.is-blocked {
     color: var(--k-text-light);
+    background: var(--k-color-fill);
+}
+
+.type-arrow {
+    flex-shrink: 0;
+    color: var(--k-color-divider);
+    transition:
+        color 0.15s ease,
+        transform 0.15s ease;
 }
 
 .adapter-col {

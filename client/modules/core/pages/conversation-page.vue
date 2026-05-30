@@ -203,13 +203,11 @@
                     </el-select>
 
                     <el-button
+                        :icon="Refresh"
                         :loading="loading || routesLoading"
-                        type="primary"
                         @click="refreshConversations"
                     >
-                        <el-icon>
-                            <Refresh />
-                        </el-icon>
+                        刷新
                     </el-button>
                 </div>
 
@@ -1164,7 +1162,7 @@ onMounted(() => {
 .conversation-workspace {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);
-    gap: 20px;
+    gap: 16px;
     align-items: stretch;
 }
 
@@ -1175,7 +1173,7 @@ onMounted(() => {
 .route-card,
 .conversation-card {
     min-width: 0;
-    border-radius: 14px;
+    border-radius: 12px;
 }
 
 .route-card :deep(.el-card__header) {
@@ -1207,8 +1205,8 @@ onMounted(() => {
 
 .card-title {
     color: var(--k-text-dark);
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 650;
     line-height: 1.4;
 }
 
@@ -1250,7 +1248,7 @@ onMounted(() => {
 .route-card-title {
     color: var(--k-text-dark);
     font-size: 15px;
-    font-weight: 800;
+    font-weight: 650;
 }
 
 .route-card-subtitle {
