@@ -10,6 +10,23 @@ import {
     isToggleableHubModule
 } from './webui/modules'
 import {
+    findPluginConfigMatches,
+    getLoader,
+    type PluginConfigMatch,
+    renameConfigKey
+} from './webui/loader'
+import {
+    type ChatLunaAdapterDeleteInput,
+    type ChatLunaAdapterListResult,
+    type ChatLunaAdapterMutationResult,
+    type ChatLunaAdapterSaveInput,
+    type ChatLunaAdapterToggleInput,
+    deleteChatLunaAdapter,
+    listChatLunaAdapters,
+    saveChatLunaAdapter,
+    toggleChatLunaAdapter
+} from './webui/adapters'
+import {
     batchDeleteChatLunaConversation,
     type BatchDeleteChatLunaConversationInput,
     type BatchDeleteChatLunaConversationResult,
@@ -63,142 +80,8 @@ export const Config: Schema<Config> = Schema.object({
         .description('隐藏 Koishi 侧边栏依赖图页面入口')
 })
 
-const loaderRecord = Symbol.for('koishi.loader.record')
-
-interface LoaderLike {
-    config?: {
-        plugins?: Record<string, unknown>
-    }
-    entry?: Context
-    writable?: boolean
-    reload?: (parent: Context, key: string, source: unknown) => Promise<unknown>
-    unload?: (parent: Context, key: string) => void
-    writeConfig?: () => Promise<void>
-}
-
-interface PluginConfigMatch {
-    key: string
-    activeKey: string
-    disabled: boolean
-    config: unknown
-    parentConfig: Record<string, unknown>
-    parentContext?: Context
-}
-
 interface ChatLunaCallbackProviderService {
     resolveCallbacks?: (input: unknown) => Promise<unknown>
-}
-
-const normalizePluginName = (name: string | undefined) => {
-    return name
-        ?.replace(/^@koishijs\/plugin-/, '')
-        .replace(/^@[^/]+\/koishi-plugin-/, '')
-        .replace(/^koishi-plugin-/, '')
-        .replace(/^@[^/]+\//, '')
-        .toLowerCase()
-}
-
-const getLoader = (ctx: Context): LoaderLike | undefined => {
-    return (ctx as Context & { loader?: LoaderLike }).loader
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-const getPluginNameFromConfigKey = (key: string) => {
-    const activeKey = key.startsWith('~') ? key.slice(1) : key
-    const [name] = activeKey.split(':', 1)
-
-    return normalizePluginName(name)
-}
-
-const getActiveConfigKey = (key: string) => {
-    return key.startsWith('~') ? key.slice(1) : key
-}
-
-const getForkContext = (parent: Context | undefined, key: string) => {
-    if (!parent) return
-
-    const records = (
-        parent.scope as unknown as Record<
-            symbol,
-            Record<string, { ctx?: Context }> | undefined
-        >
-    )[loaderRecord]
-
-    return records?.[key]?.ctx
-}
-
-const insertConfigKey = (
-    config: Record<string, unknown>,
-    key: string,
-    value: unknown,
-    rest: string[]
-) => {
-    const temp: Record<string, unknown> = {
-        [key]: value
-    }
-
-    for (const item of rest) {
-        if (item === key) continue
-        temp[item] = config[item]
-        delete config[item]
-    }
-
-    Object.assign(config, temp)
-}
-
-const renameConfigKey = (
-    config: Record<string, unknown>,
-    oldKey: string,
-    newKey: string,
-    value: unknown
-) => {
-    const keys = Object.keys(config)
-    const index = keys.findIndex((key) => key === oldKey || key === newKey)
-    const rest = index < 0 ? [] : keys.slice(index + 1)
-
-    delete config[oldKey]
-    delete config[newKey]
-    insertConfigKey(config, newKey, value, rest)
-}
-
-const findPluginConfigMatches = (
-    config: Record<string, unknown>,
-    pluginName: string,
-    parentContext: Context | undefined,
-    matches: PluginConfigMatch[]
-) => {
-    const target = normalizePluginName(pluginName)
-    if (!target) return
-
-    for (const [key, value] of Object.entries(config)) {
-        if (key.startsWith('$')) continue
-
-        const activeKey = getActiveConfigKey(key)
-        const plugin = getPluginNameFromConfigKey(key)
-        const disabled = key.startsWith('~')
-
-        if (plugin === target) {
-            matches.push({
-                key,
-                activeKey,
-                disabled,
-                config: value,
-                parentConfig: config,
-                parentContext
-            })
-        }
-
-        if (plugin !== 'group' || !isRecord(value)) continue
-        findPluginConfigMatches(
-            value,
-            pluginName,
-            getForkContext(parentContext, activeKey),
-            matches
-        )
-    }
 }
 
 const coerceReason = (error: unknown) => {
@@ -386,6 +269,28 @@ export class ChatLunaHubService extends Service {
 
     async listCoreModels(): Promise<ChatLunaCoreModelListResult> {
         return listChatLunaCoreModels(this.ctx)
+    }
+
+    listAdapters(): ChatLunaAdapterListResult {
+        return listChatLunaAdapters(this.ctx)
+    }
+
+    async saveAdapter(
+        input: ChatLunaAdapterSaveInput
+    ): Promise<ChatLunaAdapterMutationResult> {
+        return saveChatLunaAdapter(this.ctx, input)
+    }
+
+    async toggleAdapter(
+        input: ChatLunaAdapterToggleInput
+    ): Promise<ChatLunaAdapterMutationResult> {
+        return toggleChatLunaAdapter(this.ctx, input)
+    }
+
+    async deleteAdapter(
+        input: ChatLunaAdapterDeleteInput
+    ): Promise<ChatLunaAdapterMutationResult> {
+        return deleteChatLunaAdapter(this.ctx, input)
     }
 
     registerCoreLogProvider(chatluna: ChatLunaCallbackProviderService) {
@@ -624,6 +529,52 @@ export function apply(ctx: Context, config: Config = {}) {
         )
 
         ctx.console.addListener(
+            'chatluna-hub/core/adapters/list',
+            async () => {
+                return ctx.chatluna_hub.listAdapters()
+            },
+            {
+                authority: 3
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/adapters/save',
+            async (input) => {
+                const result = await ctx.chatluna_hub.saveAdapter(input)
+                await ctx.console.refresh('chatluna_hub_webui')
+                return result
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/adapters/toggle',
+            async (input) => {
+                const result = await ctx.chatluna_hub.toggleAdapter(input)
+                await ctx.console.refresh('chatluna_hub_webui')
+                return result
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
+            'chatluna-hub/core/adapters/delete',
+            async (input) => {
+                const result = await ctx.chatluna_hub.deleteAdapter(input)
+                await ctx.console.refresh('chatluna_hub_webui')
+                return result
+            },
+            {
+                authority: 4
+            }
+        )
+
+        ctx.console.addListener(
             'chatluna-hub/core/logs/list',
             async (query) => {
                 return await ctx.chatluna_hub.listCoreLogs(query ?? {})
@@ -806,6 +757,16 @@ declare module '@koishijs/plugin-console' {
             enabled: boolean
         ) => Promise<HubModuleToggleResult>
         'chatluna-hub/core/models/list': () => Promise<ChatLunaCoreModelListResult>
+        'chatluna-hub/core/adapters/list': () => Promise<ChatLunaAdapterListResult>
+        'chatluna-hub/core/adapters/save': (
+            input: ChatLunaAdapterSaveInput
+        ) => Promise<ChatLunaAdapterMutationResult>
+        'chatluna-hub/core/adapters/toggle': (
+            input: ChatLunaAdapterToggleInput
+        ) => Promise<ChatLunaAdapterMutationResult>
+        'chatluna-hub/core/adapters/delete': (
+            input: ChatLunaAdapterDeleteInput
+        ) => Promise<ChatLunaAdapterMutationResult>
         'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => Promise<PageResult<ChatLunaConversationListItem>>
@@ -862,6 +823,16 @@ declare module '@koishijs/console' {
             enabled: boolean
         ) => Promise<HubModuleToggleResult>
         'chatluna-hub/core/models/list': () => Promise<ChatLunaCoreModelListResult>
+        'chatluna-hub/core/adapters/list': () => Promise<ChatLunaAdapterListResult>
+        'chatluna-hub/core/adapters/save': (
+            input: ChatLunaAdapterSaveInput
+        ) => Promise<ChatLunaAdapterMutationResult>
+        'chatluna-hub/core/adapters/toggle': (
+            input: ChatLunaAdapterToggleInput
+        ) => Promise<ChatLunaAdapterMutationResult>
+        'chatluna-hub/core/adapters/delete': (
+            input: ChatLunaAdapterDeleteInput
+        ) => Promise<ChatLunaAdapterMutationResult>
         'chatluna-hub/core/conversations/list': (
             query: ChatLunaConversationListQuery
         ) => Promise<PageResult<ChatLunaConversationListItem>>
@@ -913,3 +884,5 @@ declare module '@koishijs/console' {
 
 export * from './webui/modules'
 export * from './webui/core'
+export * from './webui/loader'
+export * from './webui/adapters'

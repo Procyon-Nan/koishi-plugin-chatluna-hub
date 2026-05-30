@@ -32,6 +32,85 @@ export interface ChatLunaCoreModelListResult {
     reason?: string
 }
 
+export type ChatLunaAdapterCredentialKind =
+    | 'api-endpoint-enabled'
+    | 'api-enabled'
+    | 'endpoint-enabled'
+    | 'opaque'
+
+export type ChatLunaAdapterStatus =
+    | 'running'
+    | 'configured'
+    | 'available'
+    | 'unsupported'
+
+export interface ChatLunaAdapterCredentialEntry {
+    apiKey: string
+    apiEndpoint: string
+    enabled: boolean
+}
+
+export interface ChatLunaAdapterInstance {
+    instanceKey: string
+    adapterId: string
+    title: string
+    pluginName: string
+    credentialKind: ChatLunaAdapterCredentialKind
+    platformConfigurable: boolean
+    endpointPlaceholder?: string
+    disabled: boolean
+    platform: string
+    credentials: ChatLunaAdapterCredentialEntry[]
+    extraConfig: Record<string, unknown>
+    modelCount: number
+    status: ChatLunaAdapterStatus
+}
+
+export interface ChatLunaAdapterType {
+    id: string
+    title: string
+    pluginName: string
+    credentialKind: ChatLunaAdapterCredentialKind
+    platformConfigurable: boolean
+    endpointPlaceholder?: string
+    platformDefault: string
+    instanceCount: number
+    canCreate: boolean
+    createReason?: string
+}
+
+export interface ChatLunaAdapterListResult {
+    instances: ChatLunaAdapterInstance[]
+    types: ChatLunaAdapterType[]
+    platformMap: Record<string, string>
+    writable: boolean
+    updatedAt: string
+    reason?: string
+}
+
+export interface ChatLunaAdapterSaveInput {
+    adapterId: string
+    instanceKey?: string
+    platform?: string
+    credentials: ChatLunaAdapterCredentialEntry[]
+}
+
+export interface ChatLunaAdapterToggleInput {
+    instanceKey: string
+    enabled: boolean
+}
+
+export interface ChatLunaAdapterDeleteInput {
+    instanceKey: string
+}
+
+export interface ChatLunaAdapterMutationResult {
+    ok: boolean
+    instanceKey?: string
+    status?: ChatLunaAdapterStatus
+    reason?: string
+}
+
 export type ChatLunaCoreLogStatus = 'pending' | 'success' | 'error'
 
 export type ChatLunaCoreLogRunType = 'chat-model' | 'llm'
@@ -348,6 +427,16 @@ declare module '@koishijs/client' {
         ) => ChatLunaCoreLogDetail
         'chatluna-hub/core/logs/clear': () => { success: true }
         'chatluna-hub/core/models/list': () => ChatLunaCoreModelListResult
+        'chatluna-hub/core/adapters/list': () => ChatLunaAdapterListResult
+        'chatluna-hub/core/adapters/save': (
+            input: ChatLunaAdapterSaveInput
+        ) => ChatLunaAdapterMutationResult
+        'chatluna-hub/core/adapters/toggle': (
+            input: ChatLunaAdapterToggleInput
+        ) => ChatLunaAdapterMutationResult
+        'chatluna-hub/core/adapters/delete': (
+            input: ChatLunaAdapterDeleteInput
+        ) => ChatLunaAdapterMutationResult
         'chatluna-hub/core/presets/list': () => ChatLunaCorePresetListResult
         'chatluna-hub/core/presets/get': (
             input: ChatLunaCorePresetGetInput

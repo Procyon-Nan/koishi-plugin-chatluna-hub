@@ -4,6 +4,11 @@ import type {
     BatchDeleteChatLunaConversationResult,
     BatchUpdateChatLunaConversationUsageInput,
     BatchUpdateChatLunaConversationUsageResult,
+    ChatLunaAdapterDeleteInput,
+    ChatLunaAdapterListResult,
+    ChatLunaAdapterMutationResult,
+    ChatLunaAdapterSaveInput,
+    ChatLunaAdapterToggleInput,
     ChatLunaConversationListItem,
     ChatLunaConversationListQuery,
     ChatLunaConversationOptions,
@@ -89,6 +94,28 @@ export async function clearChatLunaCoreLogs(): Promise<{ success: true }> {
 
 export async function listChatLunaCoreModels(): Promise<ChatLunaCoreModelListResult> {
     return await send('chatluna-hub/core/models/list')
+}
+
+export async function listChatLunaAdapters(): Promise<ChatLunaAdapterListResult> {
+    return await send('chatluna-hub/core/adapters/list')
+}
+
+export async function saveChatLunaAdapter(
+    input: ChatLunaAdapterSaveInput
+): Promise<ChatLunaAdapterMutationResult> {
+    return await send('chatluna-hub/core/adapters/save', input)
+}
+
+export async function toggleChatLunaAdapter(
+    input: ChatLunaAdapterToggleInput
+): Promise<ChatLunaAdapterMutationResult> {
+    return await send('chatluna-hub/core/adapters/toggle', input)
+}
+
+export async function deleteChatLunaAdapter(
+    input: ChatLunaAdapterDeleteInput
+): Promise<ChatLunaAdapterMutationResult> {
+    return await send('chatluna-hub/core/adapters/delete', input)
 }
 
 export async function listChatLunaCorePresets(): Promise<ChatLunaCorePresetListResult> {
