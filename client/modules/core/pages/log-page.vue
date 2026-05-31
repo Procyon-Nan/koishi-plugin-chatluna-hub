@@ -1,43 +1,22 @@
 <template>
     <section class="core-page" :class="{ compact: compactMode }">
-        <header class="page-header">
-            <div class="page-icon">
+        <CorePageHeader
+            kicker="ChatLuna Core"
+            title="请求日志"
+            subtitle="实时捕获模型调用的请求体与响应体"
+            mobile-variant="row"
+            :pills="[
+                { value: total, label: '记录' },
+                { value: successCount, label: '成功', variant: 'success' },
+                { value: errorCount, label: '错误', variant: 'error' }
+            ]"
+        >
+            <template #icon>
                 <el-icon :size="26">
                     <Document />
                 </el-icon>
-            </div>
-            <div class="page-heading">
-                <span class="page-kicker">ChatLuna Core</span>
-                <h1>请求日志</h1>
-                <p class="page-subtitle">
-                    实时捕获模型调用的请求体与响应体
-                </p>
-            </div>
-            <div class="page-actions">
-                <div class="stat-pills">
-                    <span class="stat-pill">
-                        <span class="stat-pill-value">{{ total }}</span>
-                        <span class="stat-pill-label">记录</span>
-                    </span>
-                    <span class="stat-pill is-success">
-                        <span class="stat-pill-value">{{ successCount }}</span>
-                        <span class="stat-pill-label">成功</span>
-                    </span>
-                    <span class="stat-pill is-error">
-                        <span class="stat-pill-value">{{ errorCount }}</span>
-                        <span class="stat-pill-label">错误</span>
-                    </span>
-                </div>
-                <el-button
-                    size="small"
-                    :type="compactMode ? 'primary' : 'default'"
-                    plain
-                    @click="compactMode = !compactMode"
-                >
-                    {{ compactMode ? '紧凑模式' : '宽屏模式' }}
-                </el-button>
-            </div>
-        </header>
+            </template>
+        </CorePageHeader>
 
         <div class="log-workspace">
             <el-card shadow="never" class="log-list-card">
@@ -116,7 +95,7 @@
                             {{ listSourceLabel(item) }}
                         </span>
                         <span class="log-list-meta">
-                            {{ formatTime(item.startedAt) }} ·
+                            {{ formatDateTime(item.startedAt, '-') }} ·
                             {{ item.model || '-' }} · {{ item.preset || '-' }}
                         </span>
                         <span class="log-list-footer">
@@ -246,88 +225,40 @@
                         <span class="run-summary-type">
                             {{ runTypeLabel(selectedRun) }}
                         </span>
-                        <span>{{ formatTime(selectedRun.startedAt) }}</span>
+                        <span>{{ formatDateTime(selectedRun.startedAt, '-') }}</span>
                         <span>{{ formatDuration(selectedRun.durationMs) }}</span>
                         <span>
-                            请求 {{ formatSize(selectedRun.requestSize) }} / 响应
-                            {{ formatSize(selectedRun.responseSize) }}
+                            请求 {{ formatBytes(selectedRun.requestSize, '-', 'MB') }} / 响应
+                            {{ formatBytes(selectedRun.responseSize, '-', 'MB') }}
                         </span>
                     </div>
 
                     <el-tabs v-if="selectedRun" v-model="activeBodyTab">
                         <el-tab-pane label="请求体" name="request">
-                            <div class="code-window">
-                                <div class="code-window-bar">
-                                    <span class="window-dots">
-                                        <i></i><i></i><i></i>
-                                    </span>
-                                    <span class="window-name">
-                                        request · {{ formatSize(selectedRun.requestSize) }}
-                                    </span>
-                                    <el-button
-                                        class="copy-btn"
-                                        size="small"
-                                        text
-                                        :icon="CopyDocument"
-                                        @click="copyBody('request')"
-                                    >
-                                        复制
-                                    </el-button>
-                                </div>
-                                <pre
-                                    class="body-viewer hljs"
-                                ><code v-html="requestBodyHtml"></code></pre>
-                            </div>
+                            <LogBodyViewer
+                                :name="`request · ${formatBytes(selectedRun.requestSize, '-', 'MB')}`"
+                                :html="requestBodyHtml"
+                                @copy="copyBody('request')"
+                            />
                         </el-tab-pane>
                         <el-tab-pane label="响应体" name="response">
-                            <div class="code-window">
-                                <div class="code-window-bar">
-                                    <span class="window-dots">
-                                        <i></i><i></i><i></i>
-                                    </span>
-                                    <span class="window-name">
-                                        response · {{ formatSize(selectedRun.responseSize) }}
-                                    </span>
-                                    <el-button
-                                        class="copy-btn"
-                                        size="small"
-                                        text
-                                        :icon="CopyDocument"
-                                        @click="copyBody('response')"
-                                    >
-                                        复制
-                                    </el-button>
-                                </div>
-                                <pre
-                                    class="body-viewer hljs"
-                                ><code v-html="responseBodyHtml"></code></pre>
-                            </div>
+                            <LogBodyViewer
+                                :name="`response · ${formatBytes(selectedRun.responseSize, '-', 'MB')}`"
+                                :html="responseBodyHtml"
+                                @copy="copyBody('response')"
+                            />
                         </el-tab-pane>
                         <el-tab-pane
                             v-if="selectedRun.error"
                             label="错误"
                             name="error"
                         >
-                            <div class="code-window is-error-window">
-                                <div class="code-window-bar">
-                                    <span class="window-dots">
-                                        <i></i><i></i><i></i>
-                                    </span>
-                                    <span class="window-name">error</span>
-                                    <el-button
-                                        class="copy-btn"
-                                        size="small"
-                                        text
-                                        :icon="CopyDocument"
-                                        @click="copyBody('error')"
-                                    >
-                                        复制
-                                    </el-button>
-                                </div>
-                                <pre
-                                    class="body-viewer hljs is-error"
-                                ><code v-html="errorBodyHtml"></code></pre>
-                            </div>
+                            <LogBodyViewer
+                                name="error"
+                                :html="errorBodyHtml"
+                                error
+                                @copy="copyBody('error')"
+                            />
                         </el-tab-pane>
                     </el-tabs>
                 </div>
@@ -341,24 +272,34 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     ChatDotRound,
-    CopyDocument,
-    Delete as DeleteIcon,
     Document,
     Platform,
     Refresh,
     Share,
-    User
+    User,
+    Delete as DeleteIcon
 } from '@element-plus/icons-vue'
 import * as api from '../api'
 import type {
-    ChatLunaConversationRouteMode,
     ChatLunaCoreLogDetail,
     ChatLunaCoreLogListItem,
-    ChatLunaCoreLogRunSummary,
     ChatLunaCoreLogStatus
 } from '../types'
 import { useCoreCompactMode } from '../use-compact-mode'
 import { highlightLogBody } from '../use-highlight'
+import { formatDateTime, formatBytes, formatDuration } from '../format'
+import { reportError } from '../use-error-toast'
+import {
+    routeModeLabel,
+    listSourceLabel,
+    shortId,
+    statusLabel,
+    statusTag,
+    runTypeLabel,
+    runLabel
+} from './log-format'
+import CorePageHeader from '../components/CorePageHeader.vue'
+import LogBodyViewer from '../components/LogBodyViewer.vue'
 
 const compactMode = useCoreCompactMode()
 
@@ -423,26 +364,6 @@ const detailMeta = computed(() => {
     ].join(' · ')
 })
 
-const routeModeLabel = (mode: ChatLunaConversationRouteMode | undefined) => {
-    if (mode === 'personal') return '私有路由'
-    if (mode === 'shared') return '共享路由'
-    if (mode === 'custom') return '自定义路由'
-    return '未知路由'
-}
-
-// Compact source label for the list row: platform + who + where.
-const listSourceLabel = (item: ChatLunaCoreLogListItem) => {
-    const who = item.userId ? `用户 ${item.userId}` : '未知用户'
-    const where = item.guildId
-        ? `群 ${item.guildId}`
-        : item.channelId
-          ? '私聊'
-          : ''
-    const platform = item.platform ? `${item.platform} · ` : ''
-
-    return `${platform}${who}${where ? ` · ${where}` : ''}`
-}
-
 // Where the request came from: who sent it and in which chat. Prefer the
 // session fields captured on the entry, falling back to the parsed route.
 const sourceInfo = computed(() => {
@@ -469,64 +390,6 @@ const sourceInfo = computed(() => {
     }
 })
 
-const shortId = (value: string) => {
-    return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value
-}
-
-const statusLabel = (status: ChatLunaCoreLogStatus) => {
-    if (status === 'success') return '成功'
-    if (status === 'error') return '错误'
-    return '进行中'
-}
-
-const statusTag = (status: ChatLunaCoreLogStatus) => {
-    if (status === 'success') return 'success'
-    if (status === 'error') return 'danger'
-    return 'warning'
-}
-
-const formatTime = (value: string | null | undefined) => {
-    if (!value) return '-'
-
-    const date = new Date(value)
-    if (!Number.isFinite(date.getTime())) return '-'
-
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const hour = String(date.getHours()).padStart(2, '0')
-    const minute = String(date.getMinutes()).padStart(2, '0')
-
-    return `${year}-${month}-${day} ${hour}:${minute}`
-}
-
-const formatDuration = (value: number | null | undefined) => {
-    if (value == null || !Number.isFinite(value)) return '-'
-    if (value < 1000) return `${Math.round(value)} ms`
-
-    return `${(value / 1000).toFixed(2)} s`
-}
-
-const formatSize = (value: number | null | undefined) => {
-    if (value == null || !Number.isFinite(value)) return '-'
-    if (value < 1024) return `${value} B`
-    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-
-    return `${(value / 1024 / 1024).toFixed(2)} MB`
-}
-
-const runLabel = (run: ChatLunaCoreLogRunSummary) => {
-    return `${statusLabel(run.status)} · ${runTypeLabel(run)} · ${shortId(
-        run.runId
-    )}`
-}
-
-// runName is the LangChain class path (e.g. .../ChatLunaChatModel), which is
-// not a model name. Show a friendly call-type label instead.
-const runTypeLabel = (run: ChatLunaCoreLogRunSummary) => {
-    return run.type === 'chat-model' ? '对话模型' : '语言模型'
-}
-
 const loadLog = async (id: string) => {
     if (!id) return
 
@@ -547,7 +410,7 @@ const loadLog = async (id: string) => {
             activeBodyTab.value = 'request'
         }
     } catch (error) {
-        ElMessage.error(`加载 ChatLuna 日志失败：${String(error)}`)
+        reportError(error, '加载 ChatLuna 日志失败')
     } finally {
         detailLoading.value = false
     }
@@ -580,7 +443,7 @@ const fetchLogs = async () => {
             detail.value = null
         }
     } catch (error) {
-        ElMessage.error(`加载 ChatLuna 日志列表失败：${String(error)}`)
+        reportError(error, '加载 ChatLuna 日志列表失败')
     } finally {
         listLoading.value = false
     }
@@ -629,7 +492,7 @@ const clearLogs = async () => {
         detail.value = null
         await fetchLogs()
     } catch (error) {
-        ElMessage.error(`清空 ChatLuna 日志失败：${String(error)}`)
+        reportError(error, '清空 ChatLuna 日志失败')
     }
 }
 
@@ -687,148 +550,6 @@ onBeforeUnmount(() => {
 
 .core-page.compact {
     width: min(1440px, 100%);
-}
-
-.page-header {
-    position: relative;
-    flex-shrink: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    padding: 22px 26px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 16px;
-    overflow: hidden;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 60%
-        ),
-        var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
-}
-
-.page-header::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
-}
-
-.page-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 20px
-        color-mix(in srgb, var(--k-color-primary), transparent 65%);
-}
-
-.page-heading {
-    min-width: 0;
-}
-
-.page-kicker {
-    display: inline-block;
-    margin-bottom: 4px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.page-header h1 {
-    margin: 2px 0 0;
-    color: var(--k-text-dark);
-    font-size: 26px;
-    font-weight: 700;
-    line-height: 1.15;
-}
-
-.page-subtitle {
-    margin: 4px 0 0;
-    color: var(--k-text-light);
-    font-size: 13px;
-}
-
-.page-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 12px;
-}
-
-.stat-pills {
-    display: flex;
-    gap: 8px;
-}
-
-.stat-pill {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 62px;
-    padding: 8px 12px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    background: var(--k-card-bg);
-    line-height: 1.1;
-}
-
-.stat-pill-value {
-    color: var(--k-text-dark);
-    font-size: 18px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.stat-pill-label {
-    margin-top: 3px;
-    color: var(--k-text-light);
-    font-size: 11px;
-}
-
-.stat-pill.is-success {
-    border-color: color-mix(
-        in srgb,
-        var(--k-color-success, #67c23a),
-        transparent 55%
-    );
-}
-
-.stat-pill.is-success .stat-pill-value {
-    color: var(--k-color-success, #67c23a);
-}
-
-.stat-pill.is-error {
-    border-color: color-mix(
-        in srgb,
-        var(--k-color-danger, #f56c6c),
-        transparent 55%
-    );
-}
-
-.stat-pill.is-error .stat-pill-value {
-    color: var(--k-color-danger, #f56c6c);
 }
 
 .log-workspace {
@@ -1103,8 +824,7 @@ onBeforeUnmount(() => {
     gap: 6px;
 }
 
-.message-panel pre,
-.body-viewer {
+.message-panel pre {
     --log-scrollbar-track: color-mix(
         in srgb,
         var(--k-card-bg),
@@ -1200,67 +920,6 @@ onBeforeUnmount(() => {
     color: var(--k-color-primary);
 }
 
-.code-window {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--k-card-bg);
-    box-shadow:
-        0 1px 2px color-mix(in srgb, var(--k-text-dark), transparent 92%),
-        0 8px 24px color-mix(in srgb, var(--k-text-dark), transparent 94%);
-}
-
-.code-window-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--k-color-divider);
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 55%);
-}
-
-.window-dots {
-    display: inline-flex;
-    gap: 6px;
-}
-
-.window-dots i {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    background: var(--k-color-divider);
-}
-
-.window-dots i:nth-child(1) {
-    background: #ff5f56;
-}
-
-.window-dots i:nth-child(2) {
-    background: #ffbd2e;
-}
-
-.window-dots i:nth-child(3) {
-    background: #27c93f;
-}
-
-.window-name {
-    flex: 1;
-    min-width: 0;
-    color: var(--k-text-light);
-    font-size: 12px;
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    letter-spacing: 0.02em;
-}
-
-.copy-btn {
-    flex-shrink: 0;
-}
-
 /* Let the tab system grow to fill the remaining card height and keep the code
    window scrolling internally instead of stretching the card. */
 .detail-body :deep(.el-tabs) {
@@ -1284,104 +943,22 @@ onBeforeUnmount(() => {
     flex-direction: column;
 }
 
-.is-error-window .window-dots i:nth-child(1) {
-    box-shadow: 0 0 0 3px color-mix(in srgb, #ff5f56, transparent 70%);
-}
-
-.body-viewer {
-    flex: 1;
-    min-height: 0;
-    height: auto;
-    padding: 14px 16px;
-    border: 0;
-    border-radius: 0;
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre;
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 22%);
-}
-
-.body-viewer code {
-    display: block;
-    min-width: 0;
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    font: inherit;
-    color: inherit;
-    white-space: inherit;
-}
-
-/* highlight.js token palette mapped onto the koishi theme. Tokens are injected
-   via v-html (no scope attribute), so the selectors must be wrapped in :deep()
-   or the scoped data-v attribute lands on .hljs-* and never matches. */
-.body-viewer :deep(.hljs-attr),
-.body-viewer :deep(.hljs-attribute) {
-    color: var(--hljs-key, #0a66c2);
-    font-weight: 600;
-}
-
-.body-viewer :deep(.hljs-string) {
-    color: var(--hljs-string, #1a7f37);
-}
-
-.body-viewer :deep(.hljs-number),
-.body-viewer :deep(.hljs-literal) {
-    color: var(--hljs-number, #b3261e);
-}
-
-.body-viewer :deep(.hljs-punctuation) {
-    color: var(--k-text-light);
-}
-
-.body-viewer.is-error {
-    color: var(--k-color-danger, #d03050);
-}
-
-.dark .body-viewer :deep(.hljs-attr),
-.dark .body-viewer :deep(.hljs-attribute),
-html.dark .body-viewer :deep(.hljs-attr),
-html.dark .body-viewer :deep(.hljs-attribute),
-.theme-root.dark .body-viewer :deep(.hljs-attr),
-.theme-root.dark .body-viewer :deep(.hljs-attribute) {
-    color: #79c0ff;
-}
-
-.dark .body-viewer :deep(.hljs-string),
-html.dark .body-viewer :deep(.hljs-string),
-.theme-root.dark .body-viewer :deep(.hljs-string) {
-    color: #7ee787;
-}
-
-.dark .body-viewer :deep(.hljs-number),
-.dark .body-viewer :deep(.hljs-literal),
-html.dark .body-viewer :deep(.hljs-number),
-html.dark .body-viewer :deep(.hljs-literal),
-.theme-root.dark .body-viewer :deep(.hljs-number),
-.theme-root.dark .body-viewer :deep(.hljs-literal) {
-    color: #ff7b72;
-}
-
-.message-panel pre::-webkit-scrollbar,
-.body-viewer::-webkit-scrollbar {
+.message-panel pre::-webkit-scrollbar {
     width: 10px;
     height: 10px;
 }
 
-.message-panel pre::-webkit-scrollbar-track,
-.body-viewer::-webkit-scrollbar-track {
+.message-panel pre::-webkit-scrollbar-track {
     background: var(--log-scrollbar-track);
 }
 
-.message-panel pre::-webkit-scrollbar-thumb,
-.body-viewer::-webkit-scrollbar-thumb {
+.message-panel pre::-webkit-scrollbar-thumb {
     border: 2px solid var(--log-scrollbar-track);
     border-radius: 999px;
     background: var(--log-scrollbar-thumb);
 }
 
-.message-panel pre::-webkit-scrollbar-corner,
-.body-viewer::-webkit-scrollbar-corner {
+.message-panel pre::-webkit-scrollbar-corner {
     background: var(--log-scrollbar-track);
 }
 
@@ -1406,24 +983,6 @@ html.dark .body-viewer :deep(.hljs-literal),
 }
 
 @media (max-width: 768px) {
-    .page-header {
-        grid-template-columns: auto 1fr;
-        gap: 14px;
-        padding: 18px;
-    }
-
-    .page-actions {
-        grid-column: 1 / -1;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-    }
-
-    .page-header h1 {
-        font-size: 22px;
-    }
-
     .card-header,
     .detail-header {
         align-items: flex-start;
@@ -1437,10 +996,6 @@ html.dark .body-viewer :deep(.hljs-literal),
 
     .run-select {
         min-width: 0;
-    }
-
-    .body-viewer {
-        height: 420px;
     }
 }
 </style>

@@ -1,45 +1,23 @@
 <template>
     <section class="core-page" :class="{ compact: compactMode }">
-        <header class="page-header">
-            <div class="page-icon">
-                <el-icon :size="26">
-                    <Memo />
-                </el-icon>
-            </div>
-            <div class="page-heading">
-                <span class="page-kicker">ChatLuna Core</span>
-                <h1>预设管理</h1>
-                <p class="page-subtitle">
-                    编辑主插件与 Character 预设的 YAML 原文
-                </p>
-            </div>
-            <div class="page-actions">
-                <div class="stat-pills">
-                    <span class="stat-pill">
-                        <span class="stat-pill-value">{{ presets.length }}</span>
-                        <span class="stat-pill-label">预设</span>
-                    </span>
-                    <span class="stat-pill is-core">
-                        <span class="stat-pill-value">{{ coreCount }}</span>
-                        <span class="stat-pill-label">主插件</span>
-                    </span>
-                    <span class="stat-pill is-character">
-                        <span class="stat-pill-value">{{
-                            characterCount
-                        }}</span>
-                        <span class="stat-pill-label">Character</span>
-                    </span>
-                </div>
-                <el-button
-                    size="small"
-                    :type="compactMode ? 'primary' : 'default'"
-                    plain
-                    @click="compactMode = !compactMode"
-                >
-                    {{ compactMode ? '紧凑模式' : '宽屏模式' }}
-                </el-button>
-            </div>
-        </header>
+        <CorePageHeader
+            kicker="ChatLuna Core"
+            title="预设管理"
+            subtitle="编辑主插件与 Character 预设的 YAML 原文"
+            :pills="[
+                { value: presets.length, label: '预设' },
+                { value: coreCount, label: '主插件', variant: 'core' },
+                {
+                    value: characterCount,
+                    label: 'Character',
+                    variant: 'character'
+                }
+            ]"
+        >
+            <template #icon>
+                <el-icon :size="26"><Memo /></el-icon>
+            </template>
+        </CorePageHeader>
 
         <el-alert
             v-if="listReason"
@@ -244,79 +222,10 @@
                         :closable="false"
                     />
 
-                    <div class="code-window">
-                        <div class="code-window-bar">
-                            <span class="window-dots">
-                                <i></i><i></i><i></i>
-                            </span>
-                            <span class="window-name">
-                                {{ editorFileLabel }}
-                            </span>
-                            <el-button
-                                size="small"
-                                text
-                                :icon="CopyDocument"
-                                class="copy-btn"
-                                @click="copyEditor"
-                            >
-                                复制
-                            </el-button>
-                        </div>
-                        <div
-                            class="code-editor"
-                            :style="{
-                                '--line-gutter-width': lineGutterWidth
-                            }"
-                        >
-                            <pre
-                                ref="lineGutter"
-                                class="line-gutter"
-                                aria-hidden="true"
-                            ><span
-                                v-for="line in lineNumbers"
-                                :key="line"
-                            >{{ line }}</span></pre>
-                            <div class="editor-input-wrap">
-                                <div
-                                    class="indent-guide-viewport"
-                                    aria-hidden="true"
-                                >
-                                    <div
-                                        ref="indentGuideLayer"
-                                        class="indent-guide-layer"
-                                    >
-                                        <div
-                                            v-for="(
-                                                guides, row
-                                            ) in indentGuideRows"
-                                            :key="row"
-                                            class="indent-guide-row"
-                                        >
-                                            <span
-                                                v-for="level in guides"
-                                                :key="level"
-                                                class="indent-guide"
-                                                :style="
-                                                    getIndentGuideStyle(level)
-                                                "
-                                            />
-                                    </div>
-                                </div>
-                            </div>
-                            <textarea
-                                ref="editorTextarea"
-                                v-model="rawText"
-                                class="preset-editor"
-                                spellcheck="false"
-                                wrap="off"
-                                aria-label="ChatLuna preset YAML editor"
-                                placeholder="输入 ChatLuna preset YAML"
-                                @scroll="syncEditorScroll"
-                                @keydown="handleEditorKeydown"
-                            />
-                            </div>
-                        </div>
-                    </div>
+                    <PresetCodeEditor
+                        v-model="rawText"
+                        :file-label="editorFileLabel"
+                    />
                 </div>
             </el-card>
         </div>
@@ -328,7 +237,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Check,
-    CopyDocument,
     Delete as DeleteIcon,
     Document,
     Memo,
@@ -337,46 +245,17 @@ import {
 } from '@element-plus/icons-vue'
 import * as api from '../api'
 import { useCoreCompactMode } from '../use-compact-mode'
+import { formatDateTime, formatBytes } from '../format'
+import { reportError } from '../use-error-toast'
+import CorePageHeader from '../components/CorePageHeader.vue'
+import PresetCodeEditor from '../components/PresetCodeEditor.vue'
+import { createPresetTemplate, presetSourceOptions } from './preset-templates'
 import type {
     ChatLunaCorePresetDetail,
     ChatLunaCorePresetListItem,
     ChatLunaCorePresetSource,
     ChatLunaCorePresetValidationResult
 } from '../types'
-
-const createCorePresetTemplate = (name: string) => `keywords:
-  - ${name || 'new-preset'}
-prompts:
-  - role: system
-    content: |
-      在这里输入预设内容
-`
-
-const createCharacterPresetTemplate = (name: string) => `name: ${name || 'new-character'}
-nick_name:
-  - ${name || 'new-character'}
-input: |
-  在这里输入角色输入模板
-system: |
-  在这里输入角色系统设定
-`
-
-const createPresetTemplate = (
-    name: string,
-    source: ChatLunaCorePresetSource
-) => {
-    return source === 'character'
-        ? createCharacterPresetTemplate(name)
-        : createCorePresetTemplate(name)
-}
-
-const presetSourceOptions: {
-    label: string
-    value: ChatLunaCorePresetSource
-}[] = [
-    { label: '主插件预设', value: 'core' },
-    { label: 'Character 预设', value: 'character' }
-]
 
 const compactMode = useCoreCompactMode()
 const listLoading = ref(false)
@@ -395,23 +274,6 @@ const createFilename = ref('')
 const rawText = ref('')
 const originalRawText = ref('')
 const validationResult = ref<ChatLunaCorePresetValidationResult | null>(null)
-const editorTextarea = ref<HTMLTextAreaElement | null>(null)
-const lineGutter = ref<HTMLElement | null>(null)
-const indentGuideLayer = ref<HTMLElement | null>(null)
-const indentGuideSize = computed(() => {
-    const lines = rawText.value.split('\n')
-    let minIndent = 999
-
-    for (const line of lines) {
-        if (line.trim().length === 0) continue
-        const indentText = line.match(/^[ \t]*/)?.[0] ?? ''
-        if (indentText.length > 0 && indentText.length < minIndent) {
-            minIndent = indentText.length
-        }
-    }
-
-    return minIndent === 999 ? 2 : minIndent >= 4 ? 4 : 2
-})
 
 const normalizedKeyword = computed(() => keyword.value.trim().toLowerCase())
 
@@ -493,69 +355,6 @@ const editorFileLabel = computed(() => {
     return selectedPreset.value?.filename ?? 'preset.yml'
 })
 
-const copyEditor = async () => {
-    try {
-        await navigator.clipboard.writeText(rawText.value)
-        ElMessage.success('已复制到剪贴板')
-    } catch {
-        ElMessage.error('复制失败')
-    }
-}
-
-const lineNumbers = computed(() => {
-    return rawText.value.split('\n').map((_, index) => index + 1)
-})
-
-const lineGutterWidth = computed(() => {
-    return `${Math.max(3, String(lineNumbers.value.length).length + 1)}ch`
-})
-
-const indentGuideRows = computed(() => {
-    const lines = rawText.value.split('\n')
-    const indents = lines.map((line) => {
-        const isEmpty = line.trim().length === 0
-        if (isEmpty) return null
-
-        const indentText = line.match(/^[ \t]*/)?.[0] ?? ''
-        return Array.from(indentText).reduce((width, char) => {
-            return width + (char === '\t' ? indentGuideSize.value : 1)
-        }, 0)
-    })
-
-    return lines.map((line, index) => {
-        let indentWidth = indents[index]
-
-        if (indentWidth === null) {
-            let prevIndent = 0
-            for (let i = index - 1; i >= 0; i--) {
-                if (indents[i] !== null) {
-                    prevIndent = indents[i]!
-                    break
-                }
-            }
-
-            let nextIndent = 0
-            for (let i = index + 1; i < indents.length; i++) {
-                if (indents[i] !== null) {
-                    nextIndent = indents[i]!
-                    break
-                }
-            }
-
-            indentWidth = Math.min(prevIndent, nextIndent)
-        }
-
-        const guideCount = Math.floor(indentWidth / indentGuideSize.value)
-        return Array.from({ length: guideCount }, (_, idx) => idx)
-    })
-})
-
-const getIndentGuideStyle = (level: number) => {
-    return {
-        left: `${level * indentGuideSize.value}ch`
-    }
-}
-
 const applyPresetDetail = (detail: ChatLunaCorePresetDetail) => {
     selectedId.value = detail.preset.id
     selectedPreset.value = detail.preset
@@ -567,27 +366,16 @@ const applyPresetDetail = (detail: ChatLunaCorePresetDetail) => {
     validationResult.value = null
 }
 
+// Thin wrapper over the shared formatDateTime: the original formatTime returned
+// the raw `value` for an unparseable-but-present string (not '-'), so we
+// preserve that branch exactly while delegating the valid/empty cases.
 const formatTime = (value: string | null) => {
     if (!value) return '-'
 
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return value
-
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const hour = String(date.getHours()).padStart(2, '0')
-    const minute = String(date.getMinutes()).padStart(2, '0')
-
-    return `${year}-${month}-${day} ${hour}:${minute}`
+    return formatDateTime(value, value)
 }
 
-const formatSize = (value: number | null) => {
-    if (value == null) return '-'
-    if (value < 1024) return `${value} B`
-
-    return `${(value / 1024).toFixed(1)} KB`
-}
+const formatSize = (value: number | null) => formatBytes(value, '-', 'KB')
 
 const formatPresetCount = (preset: ChatLunaCorePresetListItem) => {
     return preset.source === 'character'
@@ -622,8 +410,7 @@ const fetchPresets = async () => {
         presets.value = result.presets
         listReason.value = result.reason ?? ''
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`加载 ChatLuna 预设失败：${message}`)
+        reportError(error, '加载 ChatLuna 预设失败')
     } finally {
         listLoading.value = false
     }
@@ -635,8 +422,7 @@ const loadPresetDetail = async (id: string) => {
     try {
         applyPresetDetail(await api.getChatLunaCorePreset({ id }))
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`加载 ChatLuna 预设内容失败：${message}`)
+        reportError(error, '加载 ChatLuna 预设内容失败')
     } finally {
         detailLoading.value = false
     }
@@ -720,39 +506,10 @@ const validatePreset = async () => {
             ElMessage.success('预设校验通过')
         }
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`校验 ChatLuna 预设失败：${message}`)
+        reportError(error, '校验 ChatLuna 预设失败')
     } finally {
         validationLoading.value = false
     }
-}
-
-const syncEditorScroll = () => {
-    if (!editorTextarea.value || !lineGutter.value) return
-
-    lineGutter.value.scrollTop = editorTextarea.value.scrollTop
-
-    if (indentGuideLayer.value) {
-        indentGuideLayer.value.style.transform = `translate(${-editorTextarea.value.scrollLeft}px, ${-editorTextarea.value.scrollTop}px)`
-    }
-}
-
-const handleEditorKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Tab') return
-
-    event.preventDefault()
-
-    const textarea = event.target as HTMLTextAreaElement
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const next = `${rawText.value.slice(0, start)}  ${rawText.value.slice(end)}`
-
-    rawText.value = next
-
-    requestAnimationFrame(() => {
-        textarea.selectionStart = start + 2
-        textarea.selectionEnd = start + 2
-    })
 }
 
 const savePreset = async () => {
@@ -774,8 +531,7 @@ const savePreset = async () => {
         await fetchPresets()
         ElMessage.success('ChatLuna 预设已保存')
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`保存 ChatLuna 预设失败：${message}`)
+        reportError(error, '保存 ChatLuna 预设失败')
     } finally {
         saving.value = false
     }
@@ -817,8 +573,7 @@ const deletePreset = async () => {
             await loadPresetDetail(presets.value[0].id)
         }
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`删除 ChatLuna 预设失败：${message}`)
+        reportError(error, '删除 ChatLuna 预设失败')
     } finally {
         deleting.value = false
     }
@@ -826,7 +581,6 @@ const deletePreset = async () => {
 
 watch(rawText, () => {
     validationResult.value = null
-    requestAnimationFrame(syncEditorScroll)
 })
 
 onMounted(async () => {
@@ -850,144 +604,6 @@ onMounted(async () => {
 
 .core-page.compact {
     width: min(1440px, 100%);
-}
-
-.page-header {
-    position: relative;
-    flex-shrink: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    padding: 22px 26px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 16px;
-    overflow: hidden;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 60%
-        ),
-        var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
-}
-
-.page-header::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
-}
-
-.page-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 20px
-        color-mix(in srgb, var(--k-color-primary), transparent 65%);
-}
-
-.page-heading {
-    min-width: 0;
-}
-
-.page-kicker {
-    display: inline-block;
-    margin-bottom: 4px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.page-header h1 {
-    margin: 2px 0 0;
-    color: var(--k-text-dark);
-    font-size: 26px;
-    font-weight: 700;
-    line-height: 1.15;
-}
-
-.page-subtitle {
-    margin: 4px 0 0;
-    color: var(--k-text-light);
-    font-size: 13px;
-}
-
-.page-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 12px;
-}
-
-.stat-pills {
-    display: flex;
-    gap: 8px;
-}
-
-.stat-pill {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 62px;
-    padding: 8px 12px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    background: var(--k-card-bg);
-    line-height: 1.1;
-}
-
-.stat-pill-value {
-    color: var(--k-text-dark);
-    font-size: 18px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.stat-pill-label {
-    margin-top: 3px;
-    color: var(--k-text-light);
-    font-size: 11px;
-}
-
-.stat-pill.is-core {
-    border-color: color-mix(
-        in srgb,
-        var(--k-color-primary),
-        transparent 55%
-    );
-}
-
-.stat-pill.is-core .stat-pill-value {
-    color: var(--k-color-primary);
-}
-
-.stat-pill.is-character {
-    border-color: color-mix(in srgb, #7c5cff, transparent 55%);
-}
-
-.stat-pill.is-character .stat-pill-value {
-    color: #7c5cff;
 }
 
 .preset-workspace {
@@ -1179,217 +795,6 @@ onMounted(async () => {
     font-weight: 600;
 }
 
-.code-window {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--k-card-bg);
-    box-shadow:
-        0 1px 2px color-mix(in srgb, var(--k-text-dark), transparent 92%),
-        0 8px 24px color-mix(in srgb, var(--k-text-dark), transparent 94%);
-}
-
-.code-window-bar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--k-color-divider);
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 55%);
-}
-
-.window-dots {
-    display: inline-flex;
-    gap: 6px;
-}
-
-.window-dots i {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    background: var(--k-color-divider);
-}
-
-.window-dots i:nth-child(1) {
-    background: #ff5f56;
-}
-
-.window-dots i:nth-child(2) {
-    background: #ffbd2e;
-}
-
-.window-dots i:nth-child(3) {
-    background: #27c93f;
-}
-
-.window-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--k-text-light);
-    font-size: 12px;
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    letter-spacing: 0.02em;
-}
-
-.copy-btn {
-    flex-shrink: 0;
-}
-
-.code-editor {
-    --editor-line-height: 22px;
-    --editor-padding-x: 14px;
-    --editor-padding-y: 12px;
-    --editor-scrollbar-track: color-mix(
-        in srgb,
-        var(--k-card-bg),
-        var(--k-page-bg) 34%
-    );
-    --editor-scrollbar-thumb: color-mix(
-        in srgb,
-        var(--k-color-divider),
-        var(--k-text-light) 28%
-    );
-    --editor-scrollbar-thumb-hover: color-mix(
-        in srgb,
-        var(--k-color-divider),
-        var(--k-text-dark) 30%
-    );
-    box-sizing: border-box;
-    height: clamp(560px, calc(100vh - 360px), 920px);
-    border: 0;
-    border-radius: 0;
-    display: grid;
-    grid-template-columns: var(--line-gutter-width) minmax(0, 1fr);
-    overflow: hidden;
-    background: var(--k-card-bg);
-}
-
-.line-gutter {
-    box-sizing: border-box;
-    height: 100%;
-    min-width: 0;
-    margin: 0;
-    padding: var(--editor-padding-y) 8px var(--editor-padding-y) 0;
-    border-right: 1px solid var(--k-color-divider);
-    overflow: hidden;
-    text-align: right;
-    color: var(--k-text-light);
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 42%);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-    font-size: 13px;
-    line-height: var(--editor-line-height);
-    user-select: none;
-}
-
-.line-gutter span {
-    display: block;
-    height: var(--editor-line-height);
-}
-
-.editor-input-wrap {
-    position: relative;
-    min-width: 0;
-    height: 100%;
-    min-height: 0;
-    background: var(--k-card-bg);
-}
-
-.indent-guide-viewport {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.indent-guide-layer {
-    box-sizing: border-box;
-    min-width: 100%;
-    padding: var(--editor-padding-y) var(--editor-padding-x);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-    font-size: 14px;
-    line-height: var(--editor-line-height);
-    will-change: transform;
-}
-
-.indent-guide-row {
-    position: relative;
-    height: var(--editor-line-height);
-}
-
-.indent-guide {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 0;
-    border-left: 1px solid
-        color-mix(in srgb, var(--k-text-light), transparent 40%);
-}
-
-.preset-editor {
-    box-sizing: border-box;
-    position: relative;
-    z-index: 2;
-    display: block;
-    width: 100%;
-    min-width: 0;
-    height: 100%;
-    min-height: 0;
-    margin: 0;
-    padding: var(--editor-padding-y) var(--editor-padding-x);
-    border: 0;
-    outline: none;
-    overflow: auto;
-    resize: none;
-    color: var(--k-text-dark);
-    caret-color: var(--k-text-dark);
-    background: transparent;
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-    font-size: 14px;
-    line-height: var(--editor-line-height);
-    scrollbar-color: var(--editor-scrollbar-thumb)
-        var(--editor-scrollbar-track);
-    scrollbar-width: thin;
-    tab-size: 2;
-    white-space: pre;
-}
-
-.preset-editor::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-.preset-editor::-webkit-scrollbar-track {
-    background: var(--editor-scrollbar-track);
-}
-
-.preset-editor::-webkit-scrollbar-thumb {
-    border: 2px solid var(--editor-scrollbar-track);
-    border-radius: 999px;
-    background: var(--editor-scrollbar-thumb);
-}
-
-.preset-editor::-webkit-scrollbar-thumb:hover {
-    background: var(--editor-scrollbar-thumb-hover);
-}
-
-.preset-editor::-webkit-scrollbar-corner {
-    background: var(--editor-scrollbar-track);
-}
-
 @media (max-width: 980px) {
     .preset-workspace {
         grid-template-columns: 1fr;
@@ -1398,32 +803,9 @@ onMounted(async () => {
     .preset-list-scroll {
         height: 320px;
     }
-
-    .code-editor,
-    .editor-input-wrap,
-    .preset-editor {
-        height: 420px;
-    }
 }
 
 @media (max-width: 768px) {
-    .page-header {
-        grid-template-columns: 1fr;
-    }
-
-    .page-header h1 {
-        font-size: 24px;
-    }
-
-    .page-actions {
-        align-items: flex-start;
-        justify-content: flex-start;
-    }
-
-    .stat-pills {
-        flex-wrap: wrap;
-    }
-
     .card-header,
     .editor-header {
         align-items: flex-start;

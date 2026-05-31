@@ -1,4 +1,5 @@
 import type { Context } from 'koishi'
+import { isRecord } from './shared'
 
 const loaderRecord = Symbol.for('koishi.loader.record')
 
@@ -24,12 +25,6 @@ export interface PluginConfigMatch {
 
 export const getLoader = (ctx: Context): LoaderLike | undefined => {
     return (ctx as Context & { loader?: LoaderLike }).loader
-}
-
-export const isRecord = (
-    value: unknown
-): value is Record<string, unknown> => {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 export const normalizePluginName = (name: string | undefined) => {
@@ -134,6 +129,31 @@ export const findPluginConfigMatches = (
             matches
         )
     }
+}
+
+/**
+ * Whether a plugin has any config entry (enabled or disabled) anywhere in the
+ * loader config tree. This is the short-circuiting boolean form of
+ * {@link findPluginConfigMatches}.
+ */
+export const hasPluginConfigEntry = (
+    config: Record<string, unknown>,
+    pluginName: string
+): boolean => {
+    const target = normalizePluginName(pluginName)
+    if (!target) return false
+
+    for (const [key, value] of Object.entries(config)) {
+        if (key.startsWith('$')) continue
+
+        const plugin = getPluginNameFromConfigKey(key)
+        if (plugin === target) return true
+
+        if (plugin !== 'group' || !isRecord(value)) continue
+        if (hasPluginConfigEntry(value, pluginName)) return true
+    }
+
+    return false
 }
 
 const allowedKeyChars = 'abcdefghijklmnopqrstuvwxyz0123456789'

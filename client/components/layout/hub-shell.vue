@@ -2,12 +2,7 @@
     <div class="hub-container" :class="{ 'graph-mode': !active }">
         <div class="main-content">
             <div v-if="active" class="module-view">
-                <button class="return-card" type="button" @click="showHome">
-                    <el-icon :size="18">
-                        <Back />
-                    </el-icon>
-                    <span>返回ChatLuna Hub 首页</span>
-                </button>
+                <hub-return-button @click="showHome" />
 
                 <core-page
                     v-if="activeModule?.id === 'chatluna' && activeModule.available"
@@ -76,19 +71,15 @@
 import { computed, ref, watch, type Component } from 'vue'
 import { router, store } from '@koishijs/client'
 import {
-    Back,
     ChatRound,
     CircleClose,
     Collection,
     Connection,
     Cpu,
-    DataAnalysis,
-    Guide,
-    Memo,
-    Operation,
     Brush
 } from '@element-plus/icons-vue'
 import HubRelationshipGraph from '../home/hub-relationship-graph.vue'
+import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
 import type { HubModuleId, HubModuleItem } from '../../types'
@@ -154,10 +145,6 @@ const icons: Record<string, Component> = {
     Collection,
     Connection,
     Cpu,
-    DataAnalysis,
-    Guide,
-    Memo,
-    Operation,
     Palette: Brush,
     MemesLunaEmoji: MemesLunaIcon
 }
@@ -284,41 +271,6 @@ const handleSelect = (id: HubModuleId) => {
     gap: 22px;
 }
 
-.return-card {
-    position: fixed;
-    top: 7px;
-    right: 14px;
-    width: fit-content;
-    min-height: calc(var(--header-height) - 14px);
-    padding: 0 14px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--k-text-normal);
-    background: var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
-    cursor: pointer;
-    z-index: 260;
-    transition:
-        color 0.2s ease,
-        border-color 0.2s ease,
-        background 0.2s ease;
-}
-
-.return-card:hover,
-.return-card:focus-visible {
-    color: var(--k-color-primary);
-    border-color: var(--k-color-primary);
-    background: var(--k-hover-bg);
-}
-
-.return-card:focus-visible {
-    outline: 2px solid var(--k-color-primary);
-    outline-offset: 2px;
-}
-
 .module-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -407,10 +359,6 @@ const handleSelect = (id: HubModuleId) => {
 }
 
 @media (max-width: 768px) {
-    .return-card {
-        right: 14px;
-    }
-
     .content-wrapper {
         padding: 16px 16px 112px;
     }

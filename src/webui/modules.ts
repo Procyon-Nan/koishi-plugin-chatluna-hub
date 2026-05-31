@@ -1,4 +1,5 @@
 import type { Context } from 'koishi'
+import { hasPluginConfigEntry, normalizePluginName } from './loader'
 
 export type HubModuleGroup = 'core' | 'ecosystem'
 export type HubModuleId =
@@ -126,50 +127,6 @@ export const isToggleableHubModule = (id: HubModuleId) => {
     const definition = getHubModuleDefinition(id)
 
     return definition?.group === 'ecosystem' && Boolean(definition.pluginName)
-}
-
-const normalizePluginName = (name: string | undefined) => {
-    return name
-        ?.replace(/^@koishijs\/plugin-/, '')
-        .replace(/^@[^/]+\/koishi-plugin-/, '')
-        .replace(/^koishi-plugin-/, '')
-        .replace(/^@[^/]+\//, '')
-        .toLowerCase()
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-const getActiveConfigKey = (key: string) => {
-    return key.startsWith('~') ? key.slice(1) : key
-}
-
-const getPluginNameFromConfigKey = (key: string) => {
-    const activeKey = getActiveConfigKey(key)
-    const [name] = activeKey.split(':', 1)
-
-    return normalizePluginName(name)
-}
-
-const hasPluginConfigEntry = (
-    config: Record<string, unknown>,
-    pluginName: string
-): boolean => {
-    const target = normalizePluginName(pluginName)
-    if (!target) return false
-
-    for (const [key, value] of Object.entries(config)) {
-        if (key.startsWith('$')) continue
-
-        const plugin = getPluginNameFromConfigKey(key)
-        if (plugin === target) return true
-
-        if (plugin !== 'group' || !isRecord(value)) continue
-        if (hasPluginConfigEntry(value, pluginName)) return true
-    }
-
-    return false
 }
 
 const isPluginConfigured = (ctx: Context, pluginName: string) => {

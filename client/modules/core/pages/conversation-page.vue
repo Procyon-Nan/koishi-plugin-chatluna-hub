@@ -1,47 +1,19 @@
 <template>
     <section class="core-page" :class="{ compact: compactMode }">
-        <header class="page-header">
-            <div class="page-icon">
-                <el-icon :size="26">
-                    <ChatRound />
-                </el-icon>
-            </div>
-            <div class="page-heading">
-                <span class="page-kicker">ChatLuna Core</span>
-                <h1>会话管理</h1>
-                <p class="page-subtitle">
-                    按路由归档，批量调整模型与预设
-                </p>
-            </div>
-            <div class="page-actions">
-                <div class="stat-pills">
-                    <span class="stat-pill">
-                        <span class="stat-pill-value">{{ routeTotal }}</span>
-                        <span class="stat-pill-label">会话</span>
-                    </span>
-                    <span class="stat-pill is-active">
-                        <span class="stat-pill-value">
-                            {{ routeCurrentTotal }}
-                        </span>
-                        <span class="stat-pill-label">活跃</span>
-                    </span>
-                    <span class="stat-pill is-route">
-                        <span class="stat-pill-value">
-                            {{ routeGroupCount }}
-                        </span>
-                        <span class="stat-pill-label">路由</span>
-                    </span>
-                </div>
-                <el-button
-                    size="small"
-                    :type="compactMode ? 'primary' : 'default'"
-                    plain
-                    @click="compactMode = !compactMode"
-                >
-                    {{ compactMode ? '紧凑模式' : '宽屏模式' }}
-                </el-button>
-            </div>
-        </header>
+        <CorePageHeader
+            kicker="ChatLuna Core"
+            title="会话管理"
+            subtitle="按路由归档，批量调整模型与预设"
+            :pills="[
+                { value: routeTotal, label: '会话' },
+                { value: routeCurrentTotal, label: '活跃', variant: 'success' },
+                { value: routeGroupCount, label: '路由', variant: 'character' }
+            ]"
+        >
+            <template #icon>
+                <el-icon :size="26"><ChatRound /></el-icon>
+            </template>
+        </CorePageHeader>
 
         <div class="conversation-workspace">
             <el-card shadow="never" class="route-card">
@@ -425,77 +397,33 @@
             </el-card>
         </div>
 
-        <el-dialog
-            v-model="batchDialog.visible"
-            :title="batchDialogTitle"
-            width="420px"
-        >
-            <el-select
-                v-if="batchDialog.field === 'model'"
-                v-model="batchDialog.value"
-                filterable
-                placeholder="选择模型"
-                class="batch-select"
-                :loading="optionsLoading"
-            >
-                <el-option
-                    v-for="model in options.models"
-                    :key="model.value"
-                    :label="model.label"
-                    :value="model.value"
-                />
-            </el-select>
-
-            <el-select
-                v-else
-                v-model="batchDialog.value"
-                filterable
-                placeholder="选择预设"
-                class="batch-select"
-                :loading="optionsLoading"
-            >
-                <el-option
-                    v-for="preset in options.presets"
-                    :key="preset.value"
-                    :label="preset.label"
-                    :value="preset.value"
-                />
-            </el-select>
-
-            <template #footer>
-                <el-button @click="batchDialog.visible = false">
-                    取消
-                </el-button>
-                <el-button
-                    type="primary"
-                    :disabled="!batchDialog.value"
-                    :loading="batchSaving"
-                    @click="applyBatchUsageAndSave"
-                >
-                    应用到选中对话
-                </el-button>
-            </template>
-        </el-dialog>
+        <BatchUsageDialog
+            v-model:visible="batchDialog.visible"
+            v-model:value="batchDialog.value"
+            :field="batchDialog.field"
+            :options="options"
+            :options-loading="optionsLoading"
+            :saving="batchSaving"
+            @apply="applyBatchUsageAndSave"
+        />
     </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-    ChatRound,
-    Connection,
-    FolderOpened,
-    Refresh,
-    Search,
-    User
-} from '@element-plus/icons-vue'
+import { ChatRound, FolderOpened, Refresh, Search } from '@element-plus/icons-vue'
 import * as api from '../api'
 import { useCoreCompactMode } from '../use-compact-mode'
+import { reportError } from '../use-error-toast'
+import { formatDateTime } from '../format'
+import CorePageHeader from '../components/CorePageHeader.vue'
+import BatchUsageDialog from '../components/BatchUsageDialog.vue'
+import { allRouteId } from './conversation-routes'
+import { useConversationRoutesData } from './use-conversation-routes-data'
 import type {
     ChatLunaConversationListItem,
     ChatLunaConversationOptions,
-    ChatLunaConversationRouteGroup,
     ChatLunaConversationSortKey,
     ChatLunaConversationSortOrder
 } from '../types'
@@ -509,40 +437,30 @@ interface ConversationTableRef {
     clearSelection: () => void
 }
 
-interface RouteSection {
-    key: string
-    label: string
-    icon: Component
-    routes: ChatLunaConversationRouteGroup[]
-    count: number
-}
-
 type BatchUsageField = 'model' | 'preset'
 type BatchCommand = 'model' | 'preset' | 'delete'
 
-const allRouteId = '__all__'
 const emptyOptions = (): ChatLunaConversationOptions => ({
     models: [],
     presets: []
 })
 
+/**
+ * Thin wrapper over the shared `formatDateTime`. The conversation table needs
+ * the page's original fallbacks: `''` for empty/nullish and `String(value)`
+ * for an unparseable value (shared `formatDateTime` would return its fallback
+ * in both cases). The valid-date path delegates to `formatDateTime`.
+ */
 const formatTime = (value: string | Date | null | undefined): string => {
     if (!value) return ''
 
     const date = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(date.getTime())) return String(value)
 
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const hour = String(date.getHours()).padStart(2, '0')
-    const minute = String(date.getMinutes()).padStart(2, '0')
-
-    return `${year}-${month}-${day} ${hour}:${minute}`
+    return formatDateTime(date, '')
 }
 
 const loading = ref(false)
-const routesLoading = ref(false)
 const compactMode = useCoreCompactMode()
 const optionsLoading = ref(false)
 const keyword = ref('')
@@ -556,7 +474,6 @@ const selectedRouteId = ref(allRouteId)
 const tableRef = ref<ConversationTableRef>()
 const options = ref<ChatLunaConversationOptions>(emptyOptions())
 const conversations = ref<ChatLunaConversationListItem[]>([])
-const routeGroups = ref<ChatLunaConversationRouteGroup[]>([])
 const selectedConversations = ref<ChatLunaConversationListItem[]>([])
 const drafts = reactive<Record<string, ConversationDraft>>({})
 const savingConversationIds = reactive(new Set<string>())
@@ -573,76 +490,16 @@ const batchDialog = reactive<{
     value: ''
 })
 
-const routeTotal = computed(() =>
-    routeGroups.value.reduce((sum, route) => sum + route.count, 0)
-)
+const {
+    routesLoading,
+    fetchRoutes,
+    routeTotal,
+    routeCurrentTotal,
+    routeGroupCount,
+    activeRouteTitle,
+    routeSections
+} = useConversationRoutesData(selectedRouteId)
 
-const routeCurrentTotal = computed(() =>
-    routeGroups.value.reduce((sum, route) => sum + route.currentCount, 0)
-)
-
-const routeGroupCount = computed(() => routeGroups.value.length)
-
-const activeRoute = computed(() =>
-    routeGroups.value.find((route) => route.id === selectedRouteId.value)
-)
-
-const activeRouteTitle = computed(() => {
-    if (selectedRouteId.value === allRouteId) {
-        return '全部会话'
-    }
-
-    return activeRoute.value?.label ?? '会话列表'
-})
-
-const routeSections = computed<RouteSection[]>(() => {
-    const direct = routeGroups.value.filter(
-        (route) => route.mode === 'personal' && route.isDirect
-    )
-    const guild = routeGroups.value.filter(
-        (route) =>
-            route.mode === 'shared' ||
-            (route.mode === 'personal' && !route.isDirect)
-    )
-    const custom = routeGroups.value.filter((route) => route.mode === 'custom')
-    const unknown = routeGroups.value.filter((route) => route.mode === 'unknown')
-    const sections: RouteSection[] = [
-        {
-            key: 'direct',
-            label: '私聊',
-            icon: User,
-            routes: direct,
-            count: direct.reduce((sum, route) => sum + route.count, 0)
-        },
-        {
-            key: 'guild',
-            label: '群聊',
-            icon: Connection,
-            routes: guild,
-            count: guild.reduce((sum, route) => sum + route.count, 0)
-        },
-        {
-            key: 'custom',
-            label: '自定义',
-            icon: FolderOpened,
-            routes: custom,
-            count: custom.reduce((sum, route) => sum + route.count, 0)
-        },
-        {
-            key: 'unknown',
-            label: '未知',
-            icon: FolderOpened,
-            routes: unknown,
-            count: unknown.reduce((sum, route) => sum + route.count, 0)
-        }
-    ]
-
-    return sections
-})
-
-const batchDialogTitle = computed(() =>
-    batchDialog.field === 'model' ? '批量切换模型' : '批量切换预设'
-)
 
 const getRowKey = (row: ChatLunaConversationListItem) => row.id
 
@@ -689,31 +546,9 @@ const fetchOptions = async () => {
     try {
         options.value = await api.listChatLunaConversationOptions()
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`加载 ChatLuna 选项失败：${message}`)
+        reportError(error, '加载 ChatLuna 选项失败')
     } finally {
         optionsLoading.value = false
-    }
-}
-
-const fetchRoutes = async () => {
-    routesLoading.value = true
-
-    try {
-        const result = await api.listChatLunaConversationRoutes()
-        routeGroups.value = result.routes
-
-        if (
-            selectedRouteId.value !== allRouteId &&
-            !result.routes.some((route) => route.id === selectedRouteId.value)
-        ) {
-            selectedRouteId.value = allRouteId
-        }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`加载 ChatLuna 路由分组失败：${message}`)
-    } finally {
-        routesLoading.value = false
     }
 }
 
@@ -740,8 +575,7 @@ const fetchConversations = async () => {
         page.value = result.page
         pageSize.value = result.pageSize
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`加载 ChatLuna 会话失败：${message}`)
+        reportError(error, '加载 ChatLuna 会话失败')
     } finally {
         loading.value = false
     }
@@ -843,8 +677,7 @@ const saveConversation = async (conversation: ChatLunaConversationListItem) => {
         updateConversationInList(updated)
         ElMessage.success('ChatLuna 会话已更新')
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`保存 ChatLuna 会话失败：${message}`)
+        reportError(error, '保存 ChatLuna 会话失败')
     } finally {
         savingConversationIds.delete(conversation.id)
     }
@@ -886,8 +719,7 @@ const removeConversation = async (
         await fetchRoutes()
         await fetchConversations()
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`删除 ChatLuna 会话失败：${message}`)
+        reportError(error, '删除 ChatLuna 会话失败')
     } finally {
         deletingConversationIds.delete(conversation.id)
     }
@@ -934,8 +766,7 @@ const applyBatchUsageAndSave = async () => {
 
         batchDialog.visible = false
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`批量更新 ChatLuna 会话失败：${message}`)
+        reportError(error, '批量更新 ChatLuna 会话失败')
     } finally {
         batchSaving.value = false
     }
@@ -986,8 +817,7 @@ const deleteSelectedConversations = async () => {
         await fetchRoutes()
         await fetchConversations()
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        ElMessage.error(`批量删除 ChatLuna 会话失败：${message}`)
+        reportError(error, '批量删除 ChatLuna 会话失败')
     } finally {
         batchDeleting.value = false
     }
@@ -1019,144 +849,6 @@ onMounted(() => {
 
 .core-page.compact {
     width: min(1440px, 100%);
-}
-
-.page-header {
-    position: relative;
-    flex-shrink: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    padding: 22px 26px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 16px;
-    overflow: hidden;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 60%
-        ),
-        var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
-}
-
-.page-header::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
-}
-
-.page-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 20px
-        color-mix(in srgb, var(--k-color-primary), transparent 65%);
-}
-
-.page-heading {
-    min-width: 0;
-}
-
-.page-kicker {
-    display: inline-block;
-    margin-bottom: 4px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.page-header h1 {
-    margin: 2px 0 0;
-    color: var(--k-text-dark);
-    font-size: 26px;
-    font-weight: 700;
-    line-height: 1.15;
-}
-
-.page-subtitle {
-    margin: 4px 0 0;
-    color: var(--k-text-light);
-    font-size: 13px;
-}
-
-.page-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 12px;
-}
-
-.stat-pills {
-    display: flex;
-    gap: 8px;
-}
-
-.stat-pill {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 62px;
-    padding: 8px 12px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    background: var(--k-card-bg);
-    line-height: 1.1;
-}
-
-.stat-pill-value {
-    color: var(--k-text-dark);
-    font-size: 18px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.stat-pill-label {
-    margin-top: 3px;
-    color: var(--k-text-light);
-    font-size: 11px;
-}
-
-.stat-pill.is-active {
-    border-color: color-mix(
-        in srgb,
-        var(--k-color-success, #67c23a),
-        transparent 55%
-    );
-}
-
-.stat-pill.is-active .stat-pill-value {
-    color: var(--k-color-success, #67c23a);
-}
-
-.stat-pill.is-route {
-    border-color: color-mix(in srgb, #7c5cff, transparent 55%);
-}
-
-.stat-pill.is-route .stat-pill-value {
-    color: #7c5cff;
 }
 
 .conversation-workspace {
@@ -1455,8 +1147,7 @@ onMounted(() => {
     background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 45%);
 }
 
-.usage-select,
-.batch-select {
+.usage-select {
     width: 100%;
 }
 
@@ -1634,25 +1325,8 @@ html.dark .conversation-table :deep(thead th.el-table__cell),
 }
 
 @media (max-width: 768px) {
-    .page-header {
-        grid-template-columns: 1fr;
-    }
-
-    .page-header h1 {
-        font-size: 24px;
-    }
-
-    .page-actions {
-        align-items: flex-start;
-    }
-
-    .page-actions,
     .header-actions {
         justify-content: flex-start;
-    }
-
-    .stat-pills {
-        flex-wrap: wrap;
     }
 
     .conversation-card-header,
