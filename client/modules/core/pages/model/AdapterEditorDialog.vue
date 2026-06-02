@@ -3,7 +3,7 @@
         v-model="visible"
         width="960px"
         class="adapter-dialog editor-dialog"
-        align-center
+        top="4vh"
         append-to-body
         :show-close="false"
     >
@@ -32,107 +32,160 @@
             </div>
         </template>
 
-        <div v-if="descriptor" class="dialog-body">
-            <el-form
-                v-if="descriptor.platformConfigurable"
-                label-position="top"
-                class="editor-form"
+        <div
+            v-if="descriptor"
+            class="dialog-body"
+            :class="{ 'is-single-column': visibleSections.length === 0 }"
+        >
+            <aside
+                v-if="visibleSections.length > 0"
+                class="section-rail"
+                aria-label="适配器配置分组"
             >
-                <el-form-item label="平台名称">
-                    <el-input
-                        v-model="platform"
-                        :placeholder="descriptor.platformDefault"
-                    />
-                    <span class="form-hint">
-                        多份配置请使用不同的平台名称以避免冲突。
+                <button
+                    v-for="section in visibleSections"
+                    :key="section.title"
+                    type="button"
+                    class="section-rail-item"
+                    :class="{ 'is-active': activeSectionTitle === section.title }"
+                    @click="activeSectionTitle = section.title"
+                >
+                    <span class="section-rail-dot" />
+                    <span class="section-rail-text">
+                        <span>{{ section.title }}</span>
+                        <small>{{ visibleFieldCount(section) }} 项配置</small>
                     </span>
-                </el-form-item>
-            </el-form>
+                </button>
+            </aside>
 
-            <div
-                v-if="descriptor.credentialKind !== 'opaque'"
-                class="cred-section"
-            >
-                <div class="cred-section-head">
-                    <span class="cred-section-title">
-                        请求凭据
-                        <span class="cred-section-count">{{
-                            credentials.length
-                        }}</span>
-                    </span>
-                    <span class="cred-section-hint">
-                        多条凭据组成负载均衡池，取模型时以选中凭据为准。
-                    </span>
-                </div>
+            <div class="dialog-main">
+                <el-form
+                    v-if="descriptor.platformConfigurable"
+                    label-position="top"
+                    class="editor-form editor-block"
+                >
+                    <el-form-item label="平台名称">
+                        <el-input
+                            v-model="platform"
+                            :placeholder="descriptor.platformDefault"
+                        />
+                        <span class="form-hint">
+                            多份配置请使用不同的平台名称以避免冲突。
+                        </span>
+                    </el-form-item>
+                </el-form>
 
-                <div class="cred-list">
-                    <div
-                        v-for="(entry, index) in credentials"
-                        :key="index"
-                        class="cred-row"
-                        :class="{ 'is-off': !entry.enabled }"
-                    >
-                        <span class="cred-index">{{ index + 1 }}</span>
-                        <div class="cred-fields">
-                            <el-input
-                                v-if="editorShowApiKey"
-                                v-model="entry.apiKey"
-                                class="cred-key"
-                                type="password"
-                                show-password
-                                :placeholder="apiKeyPlaceholder"
-                            />
-                            <el-input
-                                v-if="editorShowEndpoint"
-                                v-model="entry.apiEndpoint"
-                                class="cred-endpoint"
-                                :placeholder="
-                                    descriptor.endpointPlaceholder ||
-                                    'API 端点'
-                                "
-                            />
+                <div
+                    v-if="descriptor.credentialKind !== 'opaque'"
+                    class="cred-section editor-block"
+                >
+                    <div class="cred-section-head">
+                        <span class="cred-section-title">
+                            请求凭据
+                            <span class="cred-section-count">{{
+                                credentials.length
+                            }}</span>
+                        </span>
+                        <span class="cred-section-hint">
+                            多条凭据组成负载均衡池，取模型时以选中凭据为准。
+                        </span>
+                    </div>
+
+                    <div class="cred-list">
+                        <TransitionGroup
+                            name="list"
+                            tag="div"
+                            class="transition-stack"
+                        >
+                            <div
+                                v-for="(entry, index) in credentials"
+                                :key="index"
+                                class="cred-row"
+                                :class="{ 'is-off': !entry.enabled }"
+                            >
+                                <span class="cred-index">{{ index + 1 }}</span>
+                                <div class="cred-fields">
+                                    <el-input
+                                        v-if="editorShowApiKey"
+                                        v-model="entry.apiKey"
+                                        class="cred-key"
+                                        type="password"
+                                        show-password
+                                        :placeholder="apiKeyPlaceholder"
+                                    >
+                                        <template #prefix>
+                                            <el-icon class="field-icon">
+                                                <Key />
+                                            </el-icon>
+                                        </template>
+                                    </el-input>
+                                    <el-input
+                                        v-if="editorShowEndpoint"
+                                        v-model="entry.apiEndpoint"
+                                        class="cred-endpoint"
+                                        :placeholder="
+                                            descriptor.endpointPlaceholder ||
+                                            'API 端点'
+                                        "
+                                    >
+                                        <template #prefix>
+                                            <el-icon class="field-icon">
+                                                <Connection />
+                                            </el-icon>
+                                        </template>
+                                    </el-input>
+                                </div>
+                                <el-switch
+                                    v-model="entry.enabled"
+                                    class="cred-enabled"
+                                    inline-prompt
+                                    active-text="启用"
+                                    inactive-text="停用"
+                                />
+                                <el-button
+                                    class="cred-remove"
+                                    text
+                                    type="danger"
+                                    :icon="DeleteIcon"
+                                    @click="emit('remove-credential', index)"
+                                />
+                            </div>
+                        </TransitionGroup>
+
+                        <div v-if="credentials.length === 0" class="cred-empty">
+                            暂无凭据，点击下方按钮添加一条。
                         </div>
-                        <el-switch
-                            v-model="entry.enabled"
-                            class="cred-enabled"
-                            inline-prompt
-                            active-text="启用"
-                            inactive-text="停用"
-                        />
+
                         <el-button
-                            class="cred-remove"
-                            text
-                            type="danger"
-                            :icon="DeleteIcon"
-                            @click="emit('remove-credential', index)"
-                        />
+                            class="cred-add"
+                            :icon="Plus"
+                            plain
+                            @click="emit('add-credential')"
+                        >
+                            添加凭据
+                        </el-button>
                     </div>
-
-                    <div v-if="credentials.length === 0" class="cred-empty">
-                        暂无凭据，点击下方按钮添加一条。
-                    </div>
-
-                    <el-button
-                        class="cred-add"
-                        :icon="Plus"
-                        plain
-                        @click="emit('add-credential')"
-                    >
-                        添加凭据
-                    </el-button>
                 </div>
-            </div>
 
-            <section class="config-panel">
-                <el-tabs class="config-tabs">
-                    <el-tab-pane
-                        v-for="section in visibleSections"
-                        :key="section.title"
-                        :label="section.title"
-                    >
-                        <el-form label-position="top" class="config-form">
+                <section class="config-panel editor-block">
+                    <div class="config-panel-head" v-if="currentSection">
+                        <div>
+                            <span class="config-panel-kicker">配置分组</span>
+                            <h4>{{ currentSection.title }}</h4>
+                        </div>
+                        <span class="config-panel-count">
+                            {{ currentVisibleFieldCount }} 项配置
+                        </span>
+                    </div>
+
+                    <div class="config-fields-viewport">
+                        <el-form
+                            v-if="currentSection"
+                            label-position="top"
+                            class="config-form"
+                        >
                             <template
-                                v-for="field in section.fields"
+                                v-for="field in currentSection.fields"
                                 :key="field.key"
                             >
                                 <el-form-item
@@ -141,128 +194,133 @@
                                     :label="field.label"
                                     :required="field.required"
                                 >
-                                    <template #label>
-                                        <span class="field-label">
-                                            {{ field.label }}
-                                            <span
-                                                v-if="
-                                                    isComputedChatLimit(field)
-                                                "
-                                                class="computed-chip"
-                                            >
-                                                复杂表达式，保留原值
-                                            </span>
+                                <template #label>
+                                    <span class="field-label">
+                                        {{ field.label }}
+                                        <span
+                                            v-if="
+                                                isComputedChatLimit(field)
+                                            "
+                                            class="computed-chip"
+                                        >
+                                            复杂表达式，保留原值
                                         </span>
-                                    </template>
+                                    </span>
+                                </template>
 
-                                    <el-switch
-                                        v-if="field.kind === 'boolean'"
-                                        :model-value="
-                                            Boolean(extraConfig[field.key])
-                                        "
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    />
+                                <el-switch
+                                    v-if="field.kind === 'boolean'"
+                                    :model-value="
+                                        Boolean(extraConfig[field.key])
+                                    "
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                />
 
-                                    <el-input-number
-                                        v-else-if="
-                                            field.kind === 'number' &&
-                                            !isComputedChatLimit(field)
-                                        "
-                                        :model-value="
-                                            numberValue(
-                                                extraConfig[field.key],
-                                                field.default
-                                            )
-                                        "
-                                        :min="field.min"
-                                        :max="field.max"
-                                        :step="field.step ?? 1"
-                                        controls-position="right"
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    />
-
-                                    <el-input
-                                        v-else-if="field.kind === 'text'"
-                                        :model-value="
-                                            stringValue(
-                                                extraConfig[field.key],
-                                                field.default
-                                            )
-                                        "
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    />
-
-                                    <el-input
-                                        v-else-if="field.kind === 'textarea'"
-                                        :model-value="
-                                            stringValue(
-                                                extraConfig[field.key],
-                                                field.default
-                                            )
-                                        "
-                                        type="textarea"
-                                        :autosize="{ minRows: 4, maxRows: 10 }"
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    />
-
-                                    <el-select
-                                        v-else-if="field.kind === 'select'"
-                                        :model-value="
-                                            extraConfig[field.key] ??
+                                <el-input-number
+                                    v-else-if="
+                                        field.kind === 'number' &&
+                                        !isComputedChatLimit(field)
+                                    "
+                                    :model-value="
+                                        numberValue(
+                                            extraConfig[field.key],
                                             field.default
-                                        "
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    >
-                                        <el-option
-                                            v-for="option in field.options ??
-                                            []"
-                                            :key="String(option.value)"
-                                            :label="option.label"
-                                            :value="option.value"
-                                        />
-                                    </el-select>
+                                        )
+                                    "
+                                    :min="field.min"
+                                    :max="field.max"
+                                    :step="field.step ?? 1"
+                                    controls-position="right"
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                />
 
-                                    <el-select
-                                        v-else-if="
-                                            field.kind === 'multi-select'
-                                        "
-                                        :model-value="
-                                            arrayValue(
-                                                extraConfig[field.key],
-                                                field.default
-                                            )
-                                        "
-                                        multiple
-                                        collapse-tags
-                                        collapse-tags-tooltip
-                                        @update:model-value="
-                                            setConfigValue(field.key, $event)
-                                        "
-                                    >
-                                        <el-option
-                                            v-for="option in field.options ??
-                                            []"
-                                            :key="String(option.value)"
-                                            :label="option.label"
-                                            :value="option.value"
-                                        />
-                                    </el-select>
+                                <el-input
+                                    v-else-if="field.kind === 'text'"
+                                    :model-value="
+                                        stringValue(
+                                            extraConfig[field.key],
+                                            field.default
+                                        )
+                                    "
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                />
 
-                                    <div
-                                        v-else-if="
-                                            field.kind === 'string-list'
-                                        "
-                                        class="list-editor"
+                                <el-input
+                                    v-else-if="field.kind === 'textarea'"
+                                    :model-value="
+                                        stringValue(
+                                            extraConfig[field.key],
+                                            field.default
+                                        )
+                                    "
+                                    type="textarea"
+                                    :autosize="{ minRows: 4, maxRows: 10 }"
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                />
+
+                                <el-select
+                                    v-else-if="field.kind === 'select'"
+                                    :model-value="
+                                        extraConfig[field.key] ??
+                                        field.default
+                                    "
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                >
+                                    <el-option
+                                        v-for="option in field.options ??
+                                        []"
+                                        :key="String(option.value)"
+                                        :label="option.label"
+                                        :value="option.value"
+                                    />
+                                </el-select>
+
+                                <el-select
+                                    v-else-if="
+                                        field.kind === 'multi-select'
+                                    "
+                                    :model-value="
+                                        arrayValue(
+                                            extraConfig[field.key],
+                                            field.default
+                                        )
+                                    "
+                                    multiple
+                                    collapse-tags
+                                    collapse-tags-tooltip
+                                    @update:model-value="
+                                        setConfigValue(field.key, $event)
+                                    "
+                                >
+                                    <el-option
+                                        v-for="option in field.options ??
+                                        []"
+                                        :key="String(option.value)"
+                                        :label="option.label"
+                                        :value="option.value"
+                                    />
+                                </el-select>
+
+                                <div
+                                    v-else-if="
+                                        field.kind === 'string-list'
+                                    "
+                                    class="list-editor"
+                                >
+                                    <TransitionGroup
+                                        name="list"
+                                        tag="div"
+                                        class="transition-stack"
                                     >
                                         <div
                                             v-for="(_, index) in arrayValue(
@@ -300,37 +358,43 @@
                                                 "
                                             />
                                         </div>
-                                        <el-button
-                                            class="inline-add"
-                                            plain
-                                            :icon="Plus"
-                                            @click="addStringListRow(field)"
-                                        >
-                                            添加
-                                        </el-button>
-                                    </div>
-
-                                    <div
-                                        v-else-if="
-                                            field.kind === 'tuple-table' ||
-                                            field.kind === 'object-table'
-                                        "
-                                        class="table-editor"
+                                    </TransitionGroup>
+                                    <el-button
+                                        class="inline-add"
+                                        plain
+                                        :icon="Plus"
+                                        @click="addStringListRow(field)"
                                     >
-                                        <div
-                                            class="table-head"
-                                            :style="
-                                                tableGridStyle(field)
-                                            "
+                                        添加
+                                    </el-button>
+                                </div>
+
+                                <div
+                                    v-else-if="
+                                        field.kind === 'tuple-table' ||
+                                        field.kind === 'object-table'
+                                    "
+                                    class="table-editor"
+                                >
+                                    <div
+                                        class="table-head"
+                                        :style="
+                                            tableGridStyle(field)
+                                        "
+                                    >
+                                        <span
+                                            v-for="column in field.columns"
+                                            :key="column.key"
                                         >
-                                            <span
-                                                v-for="column in field.columns"
-                                                :key="column.key"
-                                            >
-                                                {{ column.label }}
-                                            </span>
-                                            <span />
-                                        </div>
+                                            {{ column.label }}
+                                        </span>
+                                        <span />
+                                    </div>
+                                    <TransitionGroup
+                                        name="list"
+                                        tag="div"
+                                        class="transition-stack"
+                                    >
                                         <div
                                             v-for="(_, index) in arrayValue(
                                                 extraConfig[field.key],
@@ -410,19 +474,25 @@
                                                 "
                                             />
                                         </div>
-                                        <el-button
-                                            class="inline-add"
-                                            plain
-                                            :icon="Plus"
-                                            @click="addTableRow(field)"
-                                        >
-                                            添加
-                                        </el-button>
-                                    </div>
+                                    </TransitionGroup>
+                                    <el-button
+                                        class="inline-add"
+                                        plain
+                                        :icon="Plus"
+                                        @click="addTableRow(field)"
+                                    >
+                                        添加
+                                    </el-button>
+                                </div>
 
-                                    <div
-                                        v-else-if="field.kind === 'dict-table'"
-                                        class="dict-editor"
+                                <div
+                                    v-else-if="field.kind === 'dict-table'"
+                                    class="dict-editor"
+                                >
+                                    <TransitionGroup
+                                        name="list"
+                                        tag="div"
+                                        class="transition-stack"
                                     >
                                         <div
                                             v-for="(_, rowIndex) in arrayValue(
@@ -433,7 +503,9 @@
                                             class="dict-group"
                                         >
                                             <div class="dict-group-head">
-                                                <span>配置 {{ rowIndex + 1 }}</span>
+                                                <span class="dict-group-badge">
+                                                    配置 {{ rowIndex + 1 }}
+                                                </span>
                                                 <el-button
                                                     text
                                                     type="danger"
@@ -446,63 +518,69 @@
                                                     "
                                                 />
                                             </div>
-                                            <div
-                                                v-for="(_, entryIndex) in dictEntries(
-                                                    field,
-                                                    rowIndex
-                                                )"
-                                                :key="entryIndex"
-                                                class="dict-row"
+                                            <TransitionGroup
+                                                name="list"
+                                                class="dict-rows-container"
+                                                tag="div"
                                             >
-                                                <el-input
-                                                    :model-value="
-                                                        dictEntries(
-                                                            field,
-                                                            rowIndex
-                                                        )[entryIndex][0]
-                                                    "
-                                                    placeholder="模型别名"
-                                                    @update:model-value="
-                                                        updateDictEntryKey(
-                                                            field,
-                                                            rowIndex,
-                                                            entryIndex,
-                                                            $event
-                                                        )
-                                                    "
-                                                />
-                                                <el-input
-                                                    :model-value="
-                                                        dictEntries(
-                                                            field,
-                                                            rowIndex
-                                                        )[entryIndex][1]
-                                                    "
-                                                    type="password"
-                                                    show-password
-                                                    placeholder="API Password"
-                                                    @update:model-value="
-                                                        updateDictEntryValue(
-                                                            field,
-                                                            rowIndex,
-                                                            entryIndex,
-                                                            $event
-                                                        )
-                                                    "
-                                                />
-                                                <el-button
-                                                    text
-                                                    type="danger"
-                                                    :icon="DeleteIcon"
-                                                    @click="
-                                                        removeDictEntry(
-                                                            field,
-                                                            rowIndex,
-                                                            entryIndex
-                                                        )
-                                                    "
-                                                />
-                                            </div>
+                                                <div
+                                                    v-for="(_, entryIndex) in dictEntries(
+                                                        field,
+                                                        rowIndex
+                                                    )"
+                                                    :key="entryIndex"
+                                                    class="dict-row"
+                                                >
+                                                    <el-input
+                                                        :model-value="
+                                                            dictEntries(
+                                                                field,
+                                                                rowIndex
+                                                            )[entryIndex][0]
+                                                        "
+                                                        placeholder="模型别名"
+                                                        @update:model-value="
+                                                            updateDictEntryKey(
+                                                                field,
+                                                                rowIndex,
+                                                                entryIndex,
+                                                                $event
+                                                            )
+                                                        "
+                                                    />
+                                                    <el-input
+                                                        :model-value="
+                                                            dictEntries(
+                                                                field,
+                                                                rowIndex
+                                                            )[entryIndex][1]
+                                                        "
+                                                        type="password"
+                                                        show-password
+                                                        placeholder="API Password"
+                                                        @update:model-value="
+                                                            updateDictEntryValue(
+                                                                field,
+                                                                rowIndex,
+                                                                entryIndex,
+                                                                $event
+                                                            )
+                                                        "
+                                                    />
+                                                    <el-button
+                                                        text
+                                                        type="danger"
+                                                        :icon="DeleteIcon"
+                                                        @click="
+                                                            removeDictEntry(
+                                                                field,
+                                                                rowIndex,
+                                                                entryIndex
+                                                            )
+                                                        "
+                                                    />
+                                                </div>
+                                            </TransitionGroup>
                                             <el-button
                                                 class="inline-add"
                                                 plain
@@ -517,28 +595,29 @@
                                                 添加键值
                                             </el-button>
                                         </div>
-                                        <el-button
-                                            class="inline-add"
-                                            plain
-                                            :icon="Plus"
-                                            @click="addDictGroup(field)"
-                                        >
-                                            添加配置组
-                                        </el-button>
-                                    </div>
-
-                                    <span
-                                        v-if="field.description"
-                                        class="form-hint"
+                                    </TransitionGroup>
+                                    <el-button
+                                        class="inline-add"
+                                        plain
+                                        :icon="Plus"
+                                        @click="addDictGroup(field)"
                                     >
-                                        {{ field.description }}
-                                    </span>
-                                </el-form-item>
+                                        添加配置组
+                                    </el-button>
+                                </div>
+
+                                <span
+                                    v-if="field.description"
+                                    class="form-hint"
+                                >
+                                    {{ field.description }}
+                                </span>
+                            </el-form-item>
                             </template>
                         </el-form>
-                    </el-tab-pane>
-                </el-tabs>
-            </section>
+                    </div>
+                </section>
+            </div>
         </div>
 
         <template #footer>
@@ -555,7 +634,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
     ElButton,
     ElDialog,
@@ -566,19 +645,20 @@ import {
     ElInputNumber,
     ElOption,
     ElSelect,
-    ElSwitch,
-    ElTabPane,
-    ElTabs
+    ElSwitch
 } from 'element-plus'
 import {
     Close,
     Delete as DeleteIcon,
     Plus,
-    Setting
+    Setting,
+    Key,
+    Connection
 } from '@element-plus/icons-vue'
 import type {
     ChatLunaAdapterConfigColumn,
     ChatLunaAdapterConfigField,
+    ChatLunaAdapterConfigSection,
     ChatLunaAdapterCredentialEntry
 } from '../../types'
 import type { EditorDescriptor } from './use-adapters'
@@ -606,6 +686,41 @@ const visibleSections = computed(
             section.fields.some(isFieldVisible)
         ) ?? []
 )
+
+const activeSectionTitle = ref('')
+
+watch(
+    visibleSections,
+    (newSections) => {
+        if (newSections && newSections.length > 0) {
+            if (
+                !activeSectionTitle.value ||
+                !newSections.some(
+                    (section) => section.title === activeSectionTitle.value
+                )
+            ) {
+                activeSectionTitle.value = newSections[0].title
+            }
+        }
+    },
+    { immediate: true }
+)
+
+const currentSection = computed(() => {
+    return (
+        visibleSections.value.find(
+            (section) => section.title === activeSectionTitle.value
+        ) || visibleSections.value[0]
+    )
+})
+
+const currentVisibleFieldCount = computed(() => {
+    return currentSection.value ? visibleFieldCount(currentSection.value) : 0
+})
+
+function visibleFieldCount(section: ChatLunaAdapterConfigSection) {
+    return section.fields.filter(isFieldVisible).length
+}
 
 const editorShowApiKey = computed(() => {
     return props.descriptor?.credentialKind !== 'endpoint-enabled'
@@ -640,7 +755,7 @@ const setConfigValue = (key: string, value: unknown) => {
     props.extraConfig[key] = value
 }
 
-const isFieldVisible = (field: ChatLunaAdapterConfigField) => {
+function isFieldVisible(field: ChatLunaAdapterConfigField) {
     if (field.key === 'proxyAddress') {
         return props.extraConfig.proxyMode === 'on'
     }
@@ -873,15 +988,45 @@ const removeDictEntry = (
 </script>
 
 <style scoped>
+:deep(.el-dialog.editor-dialog) {
+    --adapter-dialog-bg: color-mix(
+        in srgb,
+        var(--k-card-bg),
+        var(--k-page-bg) 46%
+    );
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 8vh);
+    margin: 4vh auto !important;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--adapter-dialog-bg);
+}
+
 .adapter-dialog :deep(.el-dialog__header) {
+    flex-shrink: 0;
     margin-right: 0;
-    padding: 0;
+    padding: 14px 14px 0;
+    border-radius: 16px 16px 0 0;
+    background: var(--adapter-dialog-bg);
+    overflow: hidden;
 }
 
 .adapter-dialog :deep(.el-dialog__body) {
-    padding-top: 18px;
-    max-height: min(72vh, 760px);
-    overflow: auto;
+    flex: 1;
+    min-height: 0;
+    padding: 18px 20px;
+    overflow: hidden;
+    background: var(--adapter-dialog-bg);
+}
+
+.adapter-dialog :deep(.el-dialog__footer) {
+    flex-shrink: 0;
+    padding: 14px 22px 18px;
+    border-top: 1px solid var(--k-color-divider);
+    border-radius: 0 0 16px 16px;
+    background: var(--adapter-dialog-bg);
 }
 
 .dialog-hero {
@@ -890,7 +1035,8 @@ const removeDictEntry = (
     align-items: flex-start;
     gap: 14px;
     padding: 20px 22px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 14px;
+    overflow: hidden;
     background:
         radial-gradient(
             120% 160% at 0% 0%,
@@ -906,7 +1052,7 @@ const removeDictEntry = (
     position: absolute;
     inset: 0 0 auto 0;
     height: 3px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 14px 14px 0 0;
     background: linear-gradient(
         90deg,
         var(--k-color-primary),
@@ -981,108 +1127,293 @@ const removeDictEntry = (
 }
 
 .dialog-body {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
     gap: 16px;
+    height: min(68vh, 680px);
+    max-height: 100%;
+    min-height: min(460px, calc(100vh - 220px));
+    padding: 0;
+    overflow: hidden;
 }
 
-.editor-form,
-.config-panel {
-    padding: 14px 16px 4px;
+.dialog-body.is-single-column {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.section-rail {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
     border: 1px solid var(--k-color-divider);
     border-radius: 12px;
-    background: var(--k-color-fill);
+    background: var(--k-card-bg);
+    overflow: auto;
+}
+
+.section-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--k-text-light);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 0.18s ease,
+        background 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+.section-rail-item:hover {
+    color: var(--k-text-dark);
+    background: var(--adapter-dialog-bg);
+}
+
+.section-rail-item.is-active {
+    color: var(--k-text-dark);
+    border-color: color-mix(in srgb, var(--k-color-primary), transparent 58%);
+    background: var(--adapter-dialog-bg);
+    box-shadow: 0 8px 18px
+        color-mix(in srgb, var(--k-color-primary), transparent 90%);
+}
+
+.section-rail-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--k-text-light);
+    opacity: 0.55;
+}
+
+.section-rail-item.is-active .section-rail-dot {
+    background: var(--k-color-primary);
+    opacity: 1;
+    box-shadow: 0 0 8px var(--k-color-primary);
+}
+
+.section-rail-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.section-rail-text small {
+    color: var(--k-text-light);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.dialog-main {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.dialog-main::-webkit-scrollbar,
+.section-rail::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.dialog-main::-webkit-scrollbar-track,
+.section-rail::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--k-color-fill), transparent 35%);
+    border-radius: 999px;
+}
+
+.dialog-main::-webkit-scrollbar-thumb,
+.section-rail::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--k-text-light), transparent 62%);
+}
+
+.editor-block {
+    padding: 14px 16px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: var(--k-card-bg);
+    box-shadow: 0 4px 14px
+        color-mix(in srgb, var(--k-color-divider), transparent 88%);
+}
+
+.editor-form {
+    background: var(--k-card-bg);
+}
+
+.config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 16px;
+}
+
+.config-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--k-color-divider);
+}
+
+.config-panel-kicker {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--k-text-light);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.config-panel-head h4 {
+    margin: 0;
+    color: var(--k-text-dark);
+    font-size: 16px;
+    line-height: 1.35;
+}
+
+.config-panel-count {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: 999px;
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.config-fields-viewport {
+    min-width: 0;
 }
 
 .cred-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .cred-section-head {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
 .cred-section-title {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: 14px;
-    font-weight: 650;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--k-text-dark);
 }
 
 .cred-section-count {
-    min-width: 20px;
+    min-width: 22px;
+    height: 18px;
+    line-height: 18px;
     padding: 0 6px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--k-color-primary), transparent 86%);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
     color: var(--k-color-primary);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     text-align: center;
 }
 
 .cred-section-hint {
     color: var(--k-text-light);
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.6;
 }
 
 .cred-list,
 .list-editor,
 .table-editor,
-.dict-editor,
+.dict-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transition-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .dict-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .cred-row {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 12px;
+    padding: 14px 16px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--k-card-bg);
+    box-shadow: 0 2px 8px
+        color-mix(in srgb, var(--k-color-divider), transparent 85%);
     transition:
-        border-color 0.15s ease,
-        opacity 0.15s ease;
+        border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cred-row:hover:not(.is-off) {
+    border-color: color-mix(in srgb, var(--k-color-primary), transparent 50%);
+    box-shadow: 0 4px 12px
+        color-mix(in srgb, var(--k-color-primary), transparent 90%);
 }
 
 .cred-row.is-off {
-    opacity: 0.6;
+    opacity: 0.5;
+    background: var(--k-color-fill);
 }
 
 .cred-index {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    border-radius: 7px;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
     display: grid;
     place-items: center;
     background: var(--k-color-fill);
     color: var(--k-text-light);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
 .cred-fields {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex: 1;
     min-width: 0;
 }
 
 .cred-key {
-    flex: 1.4;
+    flex: 1.3;
     min-width: 0;
 }
 
@@ -1091,31 +1422,46 @@ const removeDictEntry = (
     min-width: 0;
 }
 
+.field-icon {
+    color: var(--k-text-light);
+    opacity: 0.7;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.el-input:focus-within .field-icon {
+    color: var(--k-color-primary);
+    opacity: 1;
+}
+
 .cred-enabled,
 .cred-remove {
     flex-shrink: 0;
 }
 
 .cred-empty {
-    padding: 12px;
+    padding: 24px;
     border: 1px dashed var(--k-color-divider);
-    border-radius: 10px;
+    border-radius: 12px;
     text-align: center;
     color: var(--k-text-light);
     font-size: 13px;
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-fill) 30%);
 }
 
 .cred-add,
 .inline-add {
     align-self: flex-start;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
 }
 
-.config-panel {
-    padding-bottom: 14px;
-}
-
-.config-tabs :deep(.el-tabs__header) {
-    margin-bottom: 14px;
+.cred-add:hover,
+.inline-add:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px
+        color-mix(in srgb, var(--k-color-primary), transparent 85%);
 }
 
 .config-form {
@@ -1132,6 +1478,12 @@ const removeDictEntry = (
 .config-item :deep(.el-select),
 .config-item :deep(.el-input) {
     width: 100%;
+}
+
+.config-item:has(.list-editor),
+.config-item:has(.table-editor),
+.config-item:has(.dict-editor) {
+    grid-column: 1 / -1;
 }
 
 .field-label {
@@ -1173,37 +1525,184 @@ const removeDictEntry = (
 
 .table-head {
     color: var(--k-text-light);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--k-color-divider);
 }
 
-.table-row,
-.dict-group {
-    padding: 10px;
+.table-row {
+    position: relative;
+    padding: 14px 16px;
     border: 1px solid var(--k-color-divider);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--k-card-bg);
+    box-shadow: 0 2px 6px
+        color-mix(in srgb, var(--k-color-divider), transparent 90%);
+    transition: all 0.22s ease;
+    overflow: hidden;
+}
+
+.table-row::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: var(--k-color-primary);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.table-row:hover::before {
+    opacity: 1;
+}
+
+.table-row:hover {
+    border-color: color-mix(in srgb, var(--k-color-primary), transparent 60%);
+    box-shadow: 0 4px 12px
+        color-mix(in srgb, var(--k-color-primary), transparent 92%);
+}
+
+.dict-group {
+    position: relative;
+    padding: 18px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 14px;
+    background: var(--k-card-bg);
+    box-shadow: 0 3px 8px
+        color-mix(in srgb, var(--k-color-divider), transparent 88%);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: hidden;
+}
+
+.dict-group::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--k-color-primary);
+    opacity: 0.5;
+}
+
+.dict-group:hover::before {
+    opacity: 1;
 }
 
 .dict-group-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--k-color-divider);
+}
+
+.dict-group-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: var(--k-color-fill);
     color: var(--k-text-dark);
-    font-size: 13px;
-    font-weight: 650;
+    font-size: 12px;
+    font-weight: 750;
+}
+
+.dict-group-badge::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--k-color-primary);
+    box-shadow: 0 0 5px var(--k-color-primary);
+}
+
+.dict-rows-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .dict-row {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr) auto;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
+    padding: 6px 0 6px 14px;
+}
+
+.dict-row::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -4px;
+    bottom: 50%;
+    width: 2px;
+    border-left: 2px dashed
+        color-mix(in srgb, var(--k-color-divider), transparent 50%);
+    border-bottom: 2px dashed
+        color-mix(in srgb, var(--k-color-divider), transparent 50%);
+    border-bottom-left-radius: 6px;
+}
+
+/* Vue list transition animations */
+.list-enter-active,
+.list-leave-active {
+    transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.list-enter-from,
+.list-leave-to {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+}
+.list-move {
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.list-leave-active {
+    position: absolute;
+    width: 100%;
+    pointer-events: none;
+    z-index: 0;
 }
 
 @media (max-width: 760px) {
-    .adapter-dialog :deep(.el-dialog) {
+    :deep(.el-dialog.editor-dialog) {
         width: calc(100vw - 24px) !important;
+        max-width: calc(100vw - 24px);
+        max-height: calc(100vh - 24px);
+        margin: 12px auto !important;
+    }
+
+    .adapter-dialog :deep(.el-dialog__body) {
+        padding: 14px;
+    }
+
+    .dialog-body {
+        grid-template-columns: 1fr;
+        height: calc(100vh - 220px);
+        min-height: 360px;
+    }
+
+    .section-rail {
+        min-height: auto;
+        flex-direction: row;
+        overflow-x: auto;
+    }
+
+    .section-rail-item {
+        min-width: 150px;
     }
 
     .config-form {
