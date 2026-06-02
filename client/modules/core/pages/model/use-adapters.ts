@@ -4,8 +4,11 @@ import * as api from '../../api'
 import { formatDateTime } from '../../format'
 import { reportError } from '../../use-error-toast'
 import type {
+    ChatLunaAdapterConfigColumn,
+    ChatLunaAdapterConfigField,
     ChatLunaAdapterCredentialEntry,
     ChatLunaAdapterCredentialKind,
+    ChatLunaAdapterConfigSection,
     ChatLunaAdapterInstance,
     ChatLunaAdapterListResult,
     ChatLunaAdapterStatus,
@@ -22,6 +25,8 @@ export interface EditorDescriptor {
     platformConfigurable: boolean
     endpointPlaceholder?: string
     platformDefault: string
+    configSections: ChatLunaAdapterConfigSection[]
+    defaultExtraConfig: Record<string, unknown>
 }
 
 const emptyAdapterData = (): ChatLunaAdapterListResult => ({
@@ -51,6 +56,162 @@ const createCredentialEntry = (): ChatLunaAdapterCredentialEntry => ({
     enabled: true
 })
 
+const cloneConfigValue = <T>(value: T): T => {
+    if (Array.isArray(value)) {
+        return value.map((item) => cloneConfigValue(item)) as T
+    }
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [
+                key,
+                cloneConfigValue(item)
+            ])
+        ) as T
+    }
+    return value
+}
+
+const resetRecord = (
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+) => {
+    for (const key of Object.keys(target)) {
+        delete target[key]
+    }
+
+    Object.assign(target, cloneConfigValue(source))
+}
+
+const isEmptyValue = (value: unknown) => {
+    return (
+        value == null ||
+        (typeof value === 'string' && value.trim().length === 0)
+    )
+}
+
+const validateNumber = (
+    label: string,
+    value: unknown,
+    min?: number,
+    max?: number
+) => {
+    const numberValue =
+        typeof value === 'number'
+            ? value
+            : typeof value === 'string' && value.trim()
+              ? Number(value)
+              : NaN
+
+    if (!Number.isFinite(numberValue)) return `${label} 必须是数字。`
+    if (typeof min === 'number' && numberValue < min) {
+        return `${label} 不能小于 ${min}。`
+    }
+    if (typeof max === 'number' && numberValue > max) {
+        return `${label} 不能大于 ${max}。`
+    }
+}
+
+const validateOption = (
+    label: string,
+    value: unknown,
+    options: ChatLunaAdapterConfigField['options']
+) => {
+    if (!options?.length) return
+    if (!options.some((option) => option.value === value)) {
+        return `${label} 包含不支持的选项。`
+    }
+}
+
+const validateColumn = (
+    column: ChatLunaAdapterConfigColumn,
+    value: unknown
+) => {
+    if (column.required && isEmptyValue(value)) {
+        return `${column.label} 不能为空。`
+    }
+
+    if (column.kind === 'number') {
+        return validateNumber(column.label, value, column.min, column.max)
+    }
+
+    if (column.kind === 'select') {
+        return validateOption(column.label, value, column.options)
+    }
+
+    if (column.kind === 'multi-select') {
+        const values = Array.isArray(value) ? value : []
+        const invalid = values.some((item) =>
+            column.options?.length
+                ? !column.options.some((option) => option.value === item)
+                : false
+        )
+        if (invalid) return `${column.label} 包含不支持的选项。`
+    }
+}
+
+const validateField = (
+    field: ChatLunaAdapterConfigField,
+    config: Record<string, unknown>
+) => {
+    if (field.key === 'proxyAddress' && config.proxyMode !== 'on') return
+
+    const value = config[field.key]
+    if (field.key === 'chatTimeLimit' && typeof value === 'object') return
+
+    if (field.required && isEmptyValue(value)) {
+        return `${field.label} 不能为空。`
+    }
+
+    if (field.kind === 'number') {
+        return validateNumber(field.label, value, field.min, field.max)
+    }
+
+    if (field.kind === 'select') {
+        return validateOption(field.label, value, field.options)
+    }
+
+    if (field.kind === 'multi-select') {
+        const values = Array.isArray(value) ? value : []
+        const invalid = values.some((item) =>
+            field.options?.length
+                ? !field.options.some((option) => option.value === item)
+                : false
+        )
+        if (invalid) return `${field.label} 包含不支持的选项。`
+    }
+
+    if (field.kind === 'tuple-table' || field.kind === 'object-table') {
+        const rows = Array.isArray(value) ? value : []
+        const columns = field.columns ?? []
+
+        for (const row of rows) {
+            for (let index = 0; index < columns.length; index++) {
+                const column = columns[index]
+                const cell =
+                    field.kind === 'tuple-table' && Array.isArray(row)
+                        ? row[index]
+                        : row && typeof row === 'object' && !Array.isArray(row)
+                          ? (row as Record<string, unknown>)[column.key]
+                          : undefined
+                const error = validateColumn(column, cell ?? column.default)
+                if (error) return error
+            }
+        }
+    }
+}
+
+const validateExtraConfig = (
+    descriptor: EditorDescriptor,
+    config: Record<string, unknown>
+) => {
+    for (const section of descriptor.configSections) {
+        for (const field of section.fields) {
+            const error = validateField(field, config)
+            if (error) return error
+        }
+    }
+}
+
 /**
  * Adapter feature: the "模型适配器" card plus its add-type picker and
  * configuration editor dialogs. Coordinates with the model catalogue through
@@ -70,6 +231,7 @@ export function useAdapters(refreshModels: () => Promise<void>) {
     const editorInstanceKey = ref<string | undefined>(undefined)
     const editorPlatform = ref('')
     const editorCredentials = reactive<ChatLunaAdapterCredentialEntry[]>([])
+    const editorExtraConfig = reactive<Record<string, unknown>>({})
     const savingAdapter = ref(false)
 
     const instances = computed(() => adapterData.value.instances)
@@ -161,15 +323,18 @@ export function useAdapters(refreshModels: () => Promise<void>) {
             credentialKind: type.credentialKind,
             platformConfigurable: type.platformConfigurable,
             endpointPlaceholder: type.endpointPlaceholder,
-            platformDefault: type.platformDefault
+            platformDefault: type.platformDefault,
+            configSections: type.configSections,
+            defaultExtraConfig: type.defaultExtraConfig
         }
         editorInstanceKey.value = undefined
         editorPlatform.value = ''
         editorCredentials.splice(
             0,
             editorCredentials.length,
-            createCredentialEntry()
+            ...(type.credentialKind === 'opaque' ? [] : [createCredentialEntry()])
         )
+        resetRecord(editorExtraConfig, type.defaultExtraConfig)
 
         pickerVisible.value = false
         editorVisible.value = true
@@ -183,7 +348,9 @@ export function useAdapters(refreshModels: () => Promise<void>) {
             credentialKind: instance.credentialKind,
             platformConfigurable: instance.platformConfigurable,
             endpointPlaceholder: instance.endpointPlaceholder,
-            platformDefault: instance.platform
+            platformDefault: instance.platform,
+            configSections: instance.configSections,
+            defaultExtraConfig: instance.defaultExtraConfig
         }
         editorInstanceKey.value = instance.instanceKey
         editorPlatform.value = instance.platformConfigurable
@@ -195,10 +362,17 @@ export function useAdapters(refreshModels: () => Promise<void>) {
             ...instance.credentials.map((entry) => ({ ...entry }))
         )
 
-        if (editorCredentials.length === 0) {
+        if (
+            instance.credentialKind !== 'opaque' &&
+            editorCredentials.length === 0
+        ) {
             editorCredentials.push(createCredentialEntry())
         }
 
+        resetRecord(editorExtraConfig, {
+            ...instance.defaultExtraConfig,
+            ...instance.extraConfig
+        })
         editorVisible.value = true
     }
 
@@ -229,13 +403,23 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         savingAdapter.value = true
 
         try {
+            const validationError = validateExtraConfig(
+                descriptor,
+                editorExtraConfig
+            )
+            if (validationError) {
+                ElMessage.error(validationError)
+                return
+            }
+
             const result = await api.saveChatLunaAdapter({
                 adapterId: descriptor.adapterId,
                 instanceKey: editorInstanceKey.value,
                 platform: descriptor.platformConfigurable
                     ? editorPlatform.value
                     : undefined,
-                credentials: editorCredentials.map((entry) => ({ ...entry }))
+                credentials: editorCredentials.map((entry) => ({ ...entry })),
+                extraConfig: cloneConfigValue(editorExtraConfig)
             })
 
             if (!result.ok) {
@@ -329,6 +513,7 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         editorInstanceKey,
         editorPlatform,
         editorCredentials,
+        editorExtraConfig,
         savingAdapter,
         instances,
         types,

@@ -10,12 +10,11 @@ import {
     getChatLuna,
     type RawPlatformModelInfo
 } from '../core/chatluna-service'
-import { adapterDescriptors } from './descriptors'
+import { adapterDescriptors, buildDefaultExtraConfig } from './descriptors'
 import { readCredentials, resolvePlatform } from './credentials'
 import { findAdapterMatches } from './matches'
 import type { PluginConfigMatch } from '../loader'
 import type {
-    ChatLunaAdapterCredentialKind,
     ChatLunaAdapterDescriptor,
     ChatLunaAdapterInstance,
     ChatLunaAdapterListResult,
@@ -50,12 +49,8 @@ const countModelsByPlatform = (ctx: Context): Map<string, number> => {
 
 const resolveStatus = (
     disabled: boolean,
-    credentialKind: ChatLunaAdapterCredentialKind,
     modelCount: number
 ): ChatLunaAdapterStatus => {
-    if (credentialKind === 'opaque') {
-        return modelCount > 0 ? 'running' : 'unsupported'
-    }
     if (disabled) return 'configured'
 
     return modelCount > 0 ? 'running' : 'configured'
@@ -86,16 +81,14 @@ const buildInstance = (
         credentialKind: descriptor.credentialKind,
         platformConfigurable: descriptor.platformConfigurable,
         endpointPlaceholder: descriptor.endpointPlaceholder,
+        configSections: descriptor.configSections,
+        defaultExtraConfig: buildDefaultExtraConfig(descriptor),
         disabled: match.disabled,
         platform,
         credentials,
         extraConfig,
         modelCount,
-        status: resolveStatus(
-            match.disabled,
-            descriptor.credentialKind,
-            modelCount
-        )
+        status: resolveStatus(match.disabled, modelCount)
     }
 }
 
@@ -118,8 +111,7 @@ const buildType = (
     // platform 硬编码的 adapter 已存在实例时不可再建（会触发 chatluna
     // PLUGIN_ALREADY_REGISTERED）；platform 可配置的可重复新建。
     const blockedByExisting = !descriptor.platformConfigurable && matchCount > 0
-    const canCreate =
-        writable && descriptor.credentialKind !== 'opaque' && !blockedByExisting
+    const canCreate = writable && !blockedByExisting
 
     return {
         id: descriptor.id,
@@ -129,14 +121,13 @@ const buildType = (
         platformConfigurable: descriptor.platformConfigurable,
         endpointPlaceholder: descriptor.endpointPlaceholder,
         platformDefault: descriptor.platformDefault,
+        configSections: descriptor.configSections,
+        defaultExtraConfig: buildDefaultExtraConfig(descriptor),
         instanceCount: matchCount,
         canCreate,
-        createReason:
-            descriptor.credentialKind === 'opaque'
-                ? '配置结构特殊，请在 Koishi 插件配置页编辑。'
-                : blockedByExisting
-                  ? '该平台固定且已配置，如需多份请使用 OpenAI Like 等平台名可自定义的适配器。'
-                  : undefined
+        createReason: blockedByExisting
+            ? '该平台固定且已配置，如需多份请使用 OpenAI Like 等平台名可自定义的适配器。'
+            : undefined
     }
 }
 

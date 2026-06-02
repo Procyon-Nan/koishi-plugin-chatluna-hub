@@ -1,7 +1,7 @@
 <template>
     <el-dialog
         v-model="visible"
-        width="680px"
+        width="960px"
         class="adapter-dialog editor-dialog"
         align-center
         append-to-body
@@ -49,10 +49,13 @@
                 </el-form-item>
             </el-form>
 
-            <div class="cred-section">
+            <div
+                v-if="descriptor.credentialKind !== 'opaque'"
+                class="cred-section"
+            >
                 <div class="cred-section-head">
                     <span class="cred-section-title">
-                        凭据
+                        请求凭据
                         <span class="cred-section-count">{{
                             credentials.length
                         }}</span>
@@ -77,7 +80,7 @@
                                 class="cred-key"
                                 type="password"
                                 show-password
-                                placeholder="API Key"
+                                :placeholder="apiKeyPlaceholder"
                             />
                             <el-input
                                 v-if="editorShowEndpoint"
@@ -119,6 +122,423 @@
                     </el-button>
                 </div>
             </div>
+
+            <section class="config-panel">
+                <el-tabs class="config-tabs">
+                    <el-tab-pane
+                        v-for="section in visibleSections"
+                        :key="section.title"
+                        :label="section.title"
+                    >
+                        <el-form label-position="top" class="config-form">
+                            <template
+                                v-for="field in section.fields"
+                                :key="field.key"
+                            >
+                                <el-form-item
+                                    v-if="isFieldVisible(field)"
+                                    class="config-item"
+                                    :label="field.label"
+                                    :required="field.required"
+                                >
+                                    <template #label>
+                                        <span class="field-label">
+                                            {{ field.label }}
+                                            <span
+                                                v-if="
+                                                    isComputedChatLimit(field)
+                                                "
+                                                class="computed-chip"
+                                            >
+                                                复杂表达式，保留原值
+                                            </span>
+                                        </span>
+                                    </template>
+
+                                    <el-switch
+                                        v-if="field.kind === 'boolean'"
+                                        :model-value="
+                                            Boolean(extraConfig[field.key])
+                                        "
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    />
+
+                                    <el-input-number
+                                        v-else-if="
+                                            field.kind === 'number' &&
+                                            !isComputedChatLimit(field)
+                                        "
+                                        :model-value="
+                                            numberValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )
+                                        "
+                                        :min="field.min"
+                                        :max="field.max"
+                                        :step="field.step ?? 1"
+                                        controls-position="right"
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    />
+
+                                    <el-input
+                                        v-else-if="field.kind === 'text'"
+                                        :model-value="
+                                            stringValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )
+                                        "
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    />
+
+                                    <el-input
+                                        v-else-if="field.kind === 'textarea'"
+                                        :model-value="
+                                            stringValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )
+                                        "
+                                        type="textarea"
+                                        :autosize="{ minRows: 4, maxRows: 10 }"
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    />
+
+                                    <el-select
+                                        v-else-if="field.kind === 'select'"
+                                        :model-value="
+                                            extraConfig[field.key] ??
+                                            field.default
+                                        "
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    >
+                                        <el-option
+                                            v-for="option in field.options ??
+                                            []"
+                                            :key="String(option.value)"
+                                            :label="option.label"
+                                            :value="option.value"
+                                        />
+                                    </el-select>
+
+                                    <el-select
+                                        v-else-if="
+                                            field.kind === 'multi-select'
+                                        "
+                                        :model-value="
+                                            arrayValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )
+                                        "
+                                        multiple
+                                        collapse-tags
+                                        collapse-tags-tooltip
+                                        @update:model-value="
+                                            setConfigValue(field.key, $event)
+                                        "
+                                    >
+                                        <el-option
+                                            v-for="option in field.options ??
+                                            []"
+                                            :key="String(option.value)"
+                                            :label="option.label"
+                                            :value="option.value"
+                                        />
+                                    </el-select>
+
+                                    <div
+                                        v-else-if="
+                                            field.kind === 'string-list'
+                                        "
+                                        class="list-editor"
+                                    >
+                                        <div
+                                            v-for="(_, index) in arrayValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )"
+                                            :key="index"
+                                            class="list-row"
+                                        >
+                                            <el-input
+                                                :model-value="
+                                                    String(
+                                                        arrayValue(
+                                                            extraConfig[
+                                                                field.key
+                                                            ],
+                                                            field.default
+                                                        )[index] ?? ''
+                                                    )
+                                                "
+                                                @update:model-value="
+                                                    updateStringList(
+                                                        field,
+                                                        index,
+                                                        $event
+                                                    )
+                                                "
+                                            />
+                                            <el-button
+                                                text
+                                                type="danger"
+                                                :icon="DeleteIcon"
+                                                @click="
+                                                    removeArrayRow(field, index)
+                                                "
+                                            />
+                                        </div>
+                                        <el-button
+                                            class="inline-add"
+                                            plain
+                                            :icon="Plus"
+                                            @click="addStringListRow(field)"
+                                        >
+                                            添加
+                                        </el-button>
+                                    </div>
+
+                                    <div
+                                        v-else-if="
+                                            field.kind === 'tuple-table' ||
+                                            field.kind === 'object-table'
+                                        "
+                                        class="table-editor"
+                                    >
+                                        <div
+                                            class="table-head"
+                                            :style="
+                                                tableGridStyle(field)
+                                            "
+                                        >
+                                            <span
+                                                v-for="column in field.columns"
+                                                :key="column.key"
+                                            >
+                                                {{ column.label }}
+                                            </span>
+                                            <span />
+                                        </div>
+                                        <div
+                                            v-for="(_, index) in arrayValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )"
+                                            :key="index"
+                                            class="table-row"
+                                            :style="tableGridStyle(field)"
+                                        >
+                                            <template
+                                                v-for="column in field.columns"
+                                                :key="column.key"
+                                            >
+                                                <component
+                                                    :is="
+                                                        column.kind ===
+                                                        'boolean'
+                                                            ? ElSwitch
+                                                            : column.kind ===
+                                                                'number'
+                                                              ? ElInputNumber
+                                                              : column.kind ===
+                                                                  'select' ||
+                                                                  column.kind ===
+                                                                      'multi-select'
+                                                                ? ElSelect
+                                                                : ElInput
+                                                    "
+                                                    v-bind="
+                                                        columnComponentProps(
+                                                            field,
+                                                            column,
+                                                            index
+                                                        )
+                                                    "
+                                                    @update:model-value="
+                                                        updateTableCell(
+                                                            field,
+                                                            column,
+                                                            index,
+                                                            $event
+                                                        )
+                                                    "
+                                                >
+                                                    <template
+                                                        v-if="
+                                                            column.kind ===
+                                                                'select' ||
+                                                            column.kind ===
+                                                                'multi-select'
+                                                        "
+                                                    >
+                                                        <el-option
+                                                            v-for="option in column.options ??
+                                                            []"
+                                                            :key="
+                                                                String(
+                                                                    option.value
+                                                                )
+                                                            "
+                                                            :label="
+                                                                option.label
+                                                            "
+                                                            :value="
+                                                                option.value
+                                                            "
+                                                        />
+                                                    </template>
+                                                </component>
+                                            </template>
+                                            <el-button
+                                                text
+                                                type="danger"
+                                                :icon="DeleteIcon"
+                                                @click="
+                                                    removeArrayRow(field, index)
+                                                "
+                                            />
+                                        </div>
+                                        <el-button
+                                            class="inline-add"
+                                            plain
+                                            :icon="Plus"
+                                            @click="addTableRow(field)"
+                                        >
+                                            添加
+                                        </el-button>
+                                    </div>
+
+                                    <div
+                                        v-else-if="field.kind === 'dict-table'"
+                                        class="dict-editor"
+                                    >
+                                        <div
+                                            v-for="(_, rowIndex) in arrayValue(
+                                                extraConfig[field.key],
+                                                field.default
+                                            )"
+                                            :key="rowIndex"
+                                            class="dict-group"
+                                        >
+                                            <div class="dict-group-head">
+                                                <span>配置 {{ rowIndex + 1 }}</span>
+                                                <el-button
+                                                    text
+                                                    type="danger"
+                                                    :icon="DeleteIcon"
+                                                    @click="
+                                                        removeArrayRow(
+                                                            field,
+                                                            rowIndex
+                                                        )
+                                                    "
+                                                />
+                                            </div>
+                                            <div
+                                                v-for="(_, entryIndex) in dictEntries(
+                                                    field,
+                                                    rowIndex
+                                                )"
+                                                :key="entryIndex"
+                                                class="dict-row"
+                                            >
+                                                <el-input
+                                                    :model-value="
+                                                        dictEntries(
+                                                            field,
+                                                            rowIndex
+                                                        )[entryIndex][0]
+                                                    "
+                                                    placeholder="模型别名"
+                                                    @update:model-value="
+                                                        updateDictEntryKey(
+                                                            field,
+                                                            rowIndex,
+                                                            entryIndex,
+                                                            $event
+                                                        )
+                                                    "
+                                                />
+                                                <el-input
+                                                    :model-value="
+                                                        dictEntries(
+                                                            field,
+                                                            rowIndex
+                                                        )[entryIndex][1]
+                                                    "
+                                                    type="password"
+                                                    show-password
+                                                    placeholder="API Password"
+                                                    @update:model-value="
+                                                        updateDictEntryValue(
+                                                            field,
+                                                            rowIndex,
+                                                            entryIndex,
+                                                            $event
+                                                        )
+                                                    "
+                                                />
+                                                <el-button
+                                                    text
+                                                    type="danger"
+                                                    :icon="DeleteIcon"
+                                                    @click="
+                                                        removeDictEntry(
+                                                            field,
+                                                            rowIndex,
+                                                            entryIndex
+                                                        )
+                                                    "
+                                                />
+                                            </div>
+                                            <el-button
+                                                class="inline-add"
+                                                plain
+                                                :icon="Plus"
+                                                @click="
+                                                    addDictEntry(
+                                                        field,
+                                                        rowIndex
+                                                    )
+                                                "
+                                            >
+                                                添加键值
+                                            </el-button>
+                                        </div>
+                                        <el-button
+                                            class="inline-add"
+                                            plain
+                                            :icon="Plus"
+                                            @click="addDictGroup(field)"
+                                        >
+                                            添加配置组
+                                        </el-button>
+                                    </div>
+
+                                    <span
+                                        v-if="field.description"
+                                        class="form-hint"
+                                    >
+                                        {{ field.description }}
+                                    </span>
+                                </el-form-item>
+                            </template>
+                        </el-form>
+                    </el-tab-pane>
+                </el-tabs>
+            </section>
         </div>
 
         <template #footer>
@@ -143,16 +563,31 @@ import {
     ElFormItem,
     ElIcon,
     ElInput,
-    ElSwitch
+    ElInputNumber,
+    ElOption,
+    ElSelect,
+    ElSwitch,
+    ElTabPane,
+    ElTabs
 } from 'element-plus'
-import { Close, Delete as DeleteIcon, Plus, Setting } from '@element-plus/icons-vue'
-import type { ChatLunaAdapterCredentialEntry } from '../../types'
+import {
+    Close,
+    Delete as DeleteIcon,
+    Plus,
+    Setting
+} from '@element-plus/icons-vue'
+import type {
+    ChatLunaAdapterConfigColumn,
+    ChatLunaAdapterConfigField,
+    ChatLunaAdapterCredentialEntry
+} from '../../types'
 import type { EditorDescriptor } from './use-adapters'
 
 const props = defineProps<{
     descriptor: EditorDescriptor | null
     instanceKey: string | undefined
     credentials: ChatLunaAdapterCredentialEntry[]
+    extraConfig: Record<string, unknown>
     saving: boolean
 }>()
 
@@ -165,6 +600,13 @@ const emit = defineEmits<{
 const visible = defineModel<boolean>('visible', { required: true })
 const platform = defineModel<string>('platform', { required: true })
 
+const visibleSections = computed(
+    () =>
+        props.descriptor?.configSections.filter((section) =>
+            section.fields.some(isFieldVisible)
+        ) ?? []
+)
+
 const editorShowApiKey = computed(() => {
     return props.descriptor?.credentialKind !== 'endpoint-enabled'
 })
@@ -172,6 +614,262 @@ const editorShowApiKey = computed(() => {
 const editorShowEndpoint = computed(() => {
     return props.descriptor?.credentialKind !== 'api-enabled'
 })
+
+const apiKeyPlaceholder = computed(() => {
+    if (!props.descriptor) return 'API Key'
+    if (props.descriptor.adapterId === 'ollama') return 'API 端点'
+    return `${props.descriptor.title} API Key`
+})
+
+const cloneConfigValue = <T>(value: T): T => {
+    if (Array.isArray(value)) {
+        return value.map((item) => cloneConfigValue(item)) as T
+    }
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [
+                key,
+                cloneConfigValue(item)
+            ])
+        ) as T
+    }
+    return value
+}
+
+const setConfigValue = (key: string, value: unknown) => {
+    props.extraConfig[key] = value
+}
+
+const isFieldVisible = (field: ChatLunaAdapterConfigField) => {
+    if (field.key === 'proxyAddress') {
+        return props.extraConfig.proxyMode === 'on'
+    }
+    return true
+}
+
+const isComputedChatLimit = (field: ChatLunaAdapterConfigField) => {
+    return (
+        field.key === 'chatTimeLimit' &&
+        props.extraConfig[field.key] != null &&
+        typeof props.extraConfig[field.key] === 'object'
+    )
+}
+
+const numberValue = (value: unknown, fallback: unknown) => {
+    if (typeof value === 'number') return value
+    if (typeof value === 'string' && value.trim()) return Number(value)
+    return typeof fallback === 'number' ? fallback : undefined
+}
+
+const stringValue = (value: unknown, fallback: unknown) => {
+    if (typeof value === 'string') return value
+    return typeof fallback === 'string' ? fallback : ''
+}
+
+const arrayValue = (value: unknown, fallback: unknown): unknown[] => {
+    if (Array.isArray(value)) return value
+    if (Array.isArray(fallback)) return cloneConfigValue(fallback)
+    return []
+}
+
+const replaceArrayValue = (
+    field: ChatLunaAdapterConfigField,
+    rows: unknown[]
+) => {
+    setConfigValue(field.key, rows)
+}
+
+const updateStringList = (
+    field: ChatLunaAdapterConfigField,
+    index: number,
+    value: string
+) => {
+    const rows = arrayValue(props.extraConfig[field.key], field.default).slice()
+    rows[index] = value
+    replaceArrayValue(field, rows)
+}
+
+const addStringListRow = (field: ChatLunaAdapterConfigField) => {
+    replaceArrayValue(field, [
+        ...arrayValue(props.extraConfig[field.key], field.default),
+        ''
+    ])
+}
+
+const removeArrayRow = (field: ChatLunaAdapterConfigField, index: number) => {
+    const rows = arrayValue(props.extraConfig[field.key], field.default).slice()
+    rows.splice(index, 1)
+    replaceArrayValue(field, rows)
+}
+
+const createTableRow = (field: ChatLunaAdapterConfigField) => {
+    const columns = field.columns ?? []
+    if (field.kind === 'tuple-table') {
+        return columns.map((column) => cloneConfigValue(column.default ?? ''))
+    }
+
+    return Object.fromEntries(
+        columns.map((column) => [
+            column.key,
+            cloneConfigValue(column.default ?? '')
+        ])
+    )
+}
+
+const addTableRow = (field: ChatLunaAdapterConfigField) => {
+    replaceArrayValue(field, [
+        ...arrayValue(props.extraConfig[field.key], field.default),
+        createTableRow(field)
+    ])
+}
+
+const tableGridStyle = (field: ChatLunaAdapterConfigField) => ({
+    '--table-columns': String(field.columns?.length ?? 1)
+})
+
+const getTableCellValue = (
+    field: ChatLunaAdapterConfigField,
+    column: ChatLunaAdapterConfigColumn,
+    index: number
+) => {
+    const row = arrayValue(props.extraConfig[field.key], field.default)[index]
+    if (field.kind === 'tuple-table' && Array.isArray(row)) {
+        const columnIndex = Number(column.key)
+        return row[columnIndex] ?? column.default
+    }
+    if (row && typeof row === 'object' && !Array.isArray(row)) {
+        return (row as Record<string, unknown>)[column.key] ?? column.default
+    }
+    return column.default
+}
+
+const updateTableCell = (
+    field: ChatLunaAdapterConfigField,
+    column: ChatLunaAdapterConfigColumn,
+    index: number,
+    value: unknown
+) => {
+    const rows = arrayValue(props.extraConfig[field.key], field.default).slice()
+    const row = rows[index]
+
+    if (field.kind === 'tuple-table') {
+        const nextRow = Array.isArray(row) ? row.slice() : []
+        nextRow[Number(column.key)] = value
+        rows[index] = nextRow
+    } else {
+        rows[index] = {
+            ...(row && typeof row === 'object' && !Array.isArray(row)
+                ? row
+                : {}),
+            [column.key]: value
+        }
+    }
+
+    replaceArrayValue(field, rows)
+}
+
+const columnComponentProps = (
+    field: ChatLunaAdapterConfigField,
+    column: ChatLunaAdapterConfigColumn,
+    index: number
+) => {
+    const value = getTableCellValue(field, column, index)
+
+    if (column.kind === 'boolean') {
+        return { modelValue: Boolean(value) }
+    }
+
+    if (column.kind === 'number') {
+        return {
+            modelValue: numberValue(value, column.default),
+            min: column.min,
+            max: column.max,
+            step: column.step ?? 1,
+            controlsPosition: 'right'
+        }
+    }
+
+    if (column.kind === 'select') {
+        return { modelValue: value ?? column.default }
+    }
+
+    if (column.kind === 'multi-select') {
+        return {
+            modelValue: arrayValue(value, column.default),
+            multiple: true,
+            collapseTags: true,
+            collapseTagsTooltip: true
+        }
+    }
+
+    return {
+        modelValue: stringValue(value, column.default),
+        type: column.kind === 'password' ? 'password' : undefined,
+        showPassword: column.kind === 'password'
+    }
+}
+
+const dictEntries = (field: ChatLunaAdapterConfigField, rowIndex: number) => {
+    const row = arrayValue(props.extraConfig[field.key], field.default)[rowIndex]
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return []
+    return Object.entries(row as Record<string, string>)
+}
+
+const replaceDictEntries = (
+    field: ChatLunaAdapterConfigField,
+    rowIndex: number,
+    entries: [string, string][]
+) => {
+    const rows = arrayValue(props.extraConfig[field.key], field.default).slice()
+    rows[rowIndex] = Object.fromEntries(entries)
+    replaceArrayValue(field, rows)
+}
+
+const addDictGroup = (field: ChatLunaAdapterConfigField) => {
+    replaceArrayValue(field, [
+        ...arrayValue(props.extraConfig[field.key], field.default),
+        {}
+    ])
+}
+
+const addDictEntry = (field: ChatLunaAdapterConfigField, rowIndex: number) => {
+    replaceDictEntries(field, rowIndex, [
+        ...dictEntries(field, rowIndex),
+        ['', '']
+    ])
+}
+
+const updateDictEntryKey = (
+    field: ChatLunaAdapterConfigField,
+    rowIndex: number,
+    entryIndex: number,
+    value: string
+) => {
+    const entries = dictEntries(field, rowIndex)
+    entries[entryIndex] = [value, entries[entryIndex]?.[1] ?? '']
+    replaceDictEntries(field, rowIndex, entries)
+}
+
+const updateDictEntryValue = (
+    field: ChatLunaAdapterConfigField,
+    rowIndex: number,
+    entryIndex: number,
+    value: string
+) => {
+    const entries = dictEntries(field, rowIndex)
+    entries[entryIndex] = [entries[entryIndex]?.[0] ?? '', value]
+    replaceDictEntries(field, rowIndex, entries)
+}
+
+const removeDictEntry = (
+    field: ChatLunaAdapterConfigField,
+    rowIndex: number,
+    entryIndex: number
+) => {
+    const entries = dictEntries(field, rowIndex)
+    entries.splice(entryIndex, 1)
+    replaceDictEntries(field, rowIndex, entries)
+}
 </script>
 
 <style scoped>
@@ -182,6 +880,8 @@ const editorShowEndpoint = computed(() => {
 
 .adapter-dialog :deep(.el-dialog__body) {
     padding-top: 18px;
+    max-height: min(72vh, 760px);
+    overflow: auto;
 }
 
 .dialog-hero {
@@ -286,7 +986,8 @@ const editorShowEndpoint = computed(() => {
     gap: 16px;
 }
 
-.editor-form {
+.editor-form,
+.config-panel {
     padding: 14px 16px 4px;
     border: 1px solid var(--k-color-divider);
     border-radius: 12px;
@@ -331,7 +1032,11 @@ const editorShowEndpoint = computed(() => {
     line-height: 1.5;
 }
 
-.cred-list {
+.cred-list,
+.list-editor,
+.table-editor,
+.dict-editor,
+.dict-group {
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -386,10 +1091,7 @@ const editorShowEndpoint = computed(() => {
     min-width: 0;
 }
 
-.cred-enabled {
-    flex-shrink: 0;
-}
-
+.cred-enabled,
 .cred-remove {
     flex-shrink: 0;
 }
@@ -403,8 +1105,48 @@ const editorShowEndpoint = computed(() => {
     font-size: 13px;
 }
 
-.cred-add {
+.cred-add,
+.inline-add {
     align-self: flex-start;
+}
+
+.config-panel {
+    padding-bottom: 14px;
+}
+
+.config-tabs :deep(.el-tabs__header) {
+    margin-bottom: 14px;
+}
+
+.config-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 16px;
+}
+
+.config-item :deep(.el-form-item__content) {
+    align-items: flex-start;
+}
+
+.config-item :deep(.el-input-number),
+.config-item :deep(.el-select),
+.config-item :deep(.el-input) {
+    width: 100%;
+}
+
+.field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.computed-chip {
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: var(--k-color-warning);
+    background: color-mix(in srgb, var(--k-color-warning), transparent 86%);
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .form-hint {
@@ -412,5 +1154,69 @@ const editorShowEndpoint = computed(() => {
     margin-top: 4px;
     color: var(--k-text-light);
     font-size: 12px;
+    line-height: 1.5;
+}
+
+.list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+.table-head,
+.table-row {
+    display: grid;
+    grid-template-columns: repeat(var(--table-columns, 4), minmax(0, 1fr)) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.table-head {
+    color: var(--k-text-light);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.table-row,
+.dict-group {
+    padding: 10px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 10px;
+    background: var(--k-card-bg);
+}
+
+.dict-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--k-text-dark);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.dict-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+@media (max-width: 760px) {
+    .adapter-dialog :deep(.el-dialog) {
+        width: calc(100vw - 24px) !important;
+    }
+
+    .config-form {
+        grid-template-columns: 1fr;
+    }
+
+    .cred-row,
+    .cred-fields,
+    .table-row,
+    .dict-row {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 </style>

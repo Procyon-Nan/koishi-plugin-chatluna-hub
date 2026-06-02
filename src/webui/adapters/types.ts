@@ -8,13 +8,72 @@
  * - api-endpoint-enabled: apiKeys = [apiKey, apiEndpoint, enabled][]（多数海外平台）
  * - api-enabled:          apiKeys = [apiKey, enabled][]（国内单凭据平台，无 endpoint）
  * - endpoint-enabled:     apiEndpoints = [apiEndpoint, enabled][]（ollama，无 apiKey）
- * - opaque:               结构特殊，本页仅只读展示，引导至原生配置（dify、spark）
+ * - opaque:               没有统一凭据池，凭据由 extra config 专属字段表达
  */
 export type ChatLunaAdapterCredentialKind =
     | 'api-endpoint-enabled'
     | 'api-enabled'
     | 'endpoint-enabled'
     | 'opaque'
+
+export type ChatLunaAdapterConfigFieldKind =
+    | 'boolean'
+    | 'number'
+    | 'text'
+    | 'textarea'
+    | 'select'
+    | 'multi-select'
+    | 'string-list'
+    | 'tuple-table'
+    | 'object-table'
+    | 'dict-table'
+
+export type ChatLunaAdapterConfigColumnKind =
+    | 'boolean'
+    | 'number'
+    | 'text'
+    | 'textarea'
+    | 'select'
+    | 'multi-select'
+    | 'password'
+
+export type ChatLunaAdapterConfigOptionValue = string | number | boolean
+
+export interface ChatLunaAdapterConfigOption {
+    label: string
+    value: ChatLunaAdapterConfigOptionValue
+}
+
+export interface ChatLunaAdapterConfigColumn {
+    key: string
+    label: string
+    kind: ChatLunaAdapterConfigColumnKind
+    default?: unknown
+    required?: boolean
+    min?: number
+    max?: number
+    step?: number
+    options?: ChatLunaAdapterConfigOption[]
+}
+
+export interface ChatLunaAdapterConfigField {
+    key: string
+    label: string
+    kind: ChatLunaAdapterConfigFieldKind
+    default?: unknown
+    description?: string
+    required?: boolean
+    min?: number
+    max?: number
+    step?: number
+    options?: ChatLunaAdapterConfigOption[]
+    columns?: ChatLunaAdapterConfigColumn[]
+}
+
+export interface ChatLunaAdapterConfigSection {
+    title: string
+    fields: ChatLunaAdapterConfigField[]
+}
 
 export interface ChatLunaAdapterDescriptor {
     id: string
@@ -25,6 +84,7 @@ export interface ChatLunaAdapterDescriptor {
     credentialKind: ChatLunaAdapterCredentialKind
     credentialField: string
     endpointPlaceholder?: string
+    configSections: ChatLunaAdapterConfigSection[]
 }
 
 export interface ChatLunaAdapterCredentialEntry {
@@ -48,6 +108,8 @@ export interface ChatLunaAdapterInstance {
     credentialKind: ChatLunaAdapterCredentialKind
     platformConfigurable: boolean
     endpointPlaceholder?: string
+    configSections: ChatLunaAdapterConfigSection[]
+    defaultExtraConfig: Record<string, unknown>
     disabled: boolean
     platform: string
     credentials: ChatLunaAdapterCredentialEntry[]
@@ -64,6 +126,8 @@ export interface ChatLunaAdapterType {
     platformConfigurable: boolean
     endpointPlaceholder?: string
     platformDefault: string
+    configSections: ChatLunaAdapterConfigSection[]
+    defaultExtraConfig: Record<string, unknown>
     instanceCount: number
     canCreate: boolean
     createReason?: string
@@ -85,6 +149,7 @@ export interface ChatLunaAdapterSaveInput {
     instanceKey?: string
     platform?: string
     credentials: ChatLunaAdapterCredentialEntry[]
+    extraConfig?: Record<string, unknown>
 }
 
 export interface ChatLunaAdapterToggleInput {

@@ -349,6 +349,7 @@
             :descriptor="editorDescriptor"
             :instance-key="editorInstanceKey"
             :credentials="editorCredentials"
+            :extra-config="editorExtraConfig"
             :saving="savingAdapter"
             @save="saveEditor"
             @add-credential="addCredential"
@@ -413,6 +414,7 @@ const {
     editorInstanceKey,
     editorPlatform,
     editorCredentials,
+    editorExtraConfig,
     savingAdapter,
     instances,
     types,
