@@ -7,11 +7,6 @@
  */
 import fs from 'fs/promises'
 import path from 'path'
-import { CallbackManager } from '@langchain/core/callbacks/manager'
-import {
-    BaseCallbackHandler,
-    type CallbackHandlerMethods
-} from '@langchain/core/callbacks/base'
 import {
     coerceReason,
     coerceString,
@@ -45,6 +40,33 @@ const maxCoreLogEntries = 100
 const coreLogStoreVersion = 1
 const coreLogSaveDebounceMs = 1500
 
+type LangChainCallbackMethod = (...args: unknown[]) => unknown
+
+interface LangChainCallbackHandlerMethods {
+    handleChatModelStart?: LangChainCallbackMethod
+    handleLLMStart?: LangChainCallbackMethod
+    handleLLMEnd?: LangChainCallbackMethod
+    handleLLMError?: LangChainCallbackMethod
+    handleChainError?: LangChainCallbackMethod
+}
+
+interface LangChainCallbackHandler extends LangChainCallbackHandlerMethods {
+    name: string
+    ignoreLLM: boolean
+    ignoreChain: boolean
+    ignoreAgent: boolean
+    ignoreRetriever: boolean
+    ignoreCustomEvent: boolean
+    raiseError: boolean
+    awaitHandlers: boolean
+    copy: () => LangChainCallbackHandler
+}
+
+interface LangChainCallbackManagerLike {
+    copy?: () => unknown
+    addHandler?: (handler: LangChainCallbackHandler, inherit?: boolean) => void
+}
+
 export interface ChatLunaCoreLogStoreOptions {
     filePath?: string
     logger?: { warn: (...args: unknown[]) => void }
@@ -54,6 +76,38 @@ interface PersistedCoreLogFile {
     version: number
     sequence: number
     entries: ChatLunaCoreLogDetail[]
+}
+
+const isCallbackManagerLike = (
+    value: unknown
+): value is LangChainCallbackManagerLike => {
+    return (
+        value != null &&
+        typeof value === 'object' &&
+        (typeof (value as LangChainCallbackManagerLike).copy === 'function' ||
+            typeof (value as LangChainCallbackManagerLike).addHandler ===
+                'function')
+    )
+}
+
+const createCallbackHandler = (
+    methods: LangChainCallbackHandlerMethods,
+    name = `chatluna-hub-core-log-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`
+): LangChainCallbackHandler => {
+    return {
+        name,
+        ignoreLLM: false,
+        ignoreChain: false,
+        ignoreAgent: false,
+        ignoreRetriever: false,
+        ignoreCustomEvent: false,
+        raiseError: false,
+        awaitHandlers: false,
+        ...methods,
+        copy: () => createCallbackHandler(methods, name)
+    }
 }
 
 export class ChatLunaCoreLogStore {
@@ -194,26 +248,34 @@ export class ChatLunaCoreLogStore {
      * to observe handleChatModelStart / handleLLMEnd.
      */
     instrumentCallbacks(manager: unknown, input: unknown): unknown {
+        const handlers = this.buildHandlers(input).map((handler) =>
+            createCallbackHandler(handler)
+        )
+
         // When no other callbacks provider is registered, chatluna's
         // resolveCallbacks returns input.callbacks (usually undefined), so
-        // there is no manager to attach to. Create our own and return it —
-        // chatluna passes it to chain.invoke as the inheritable callbacks, so
-        // getChild() propagates our handlers to the LLM run. We only mutate a
-        // manager we created; an incoming one is copied first to avoid
-        // polluting a caller-owned instance.
-        const target =
-            manager instanceof CallbackManager
-                ? manager.copy()
-                : new CallbackManager()
+        // there is no manager to attach to. Return handlers and let ChatLuna's
+        // own LangChain copy build the matching CallbackManager instance. This
+        // avoids binding Hub to a second @langchain/core version.
+        if (!isCallbackManagerLike(manager)) {
+            return handlers
+        }
 
-        for (const handler of this.buildHandlers(input)) {
-            target.addHandler(BaseCallbackHandler.fromMethods(handler), true)
+        const copied = manager.copy?.()
+        const target = isCallbackManagerLike(copied) ? copied : manager
+
+        if (!target.addHandler) {
+            return manager
+        }
+
+        for (const handler of handlers) {
+            target.addHandler(handler, true)
         }
 
         return target
     }
 
-    private buildHandlers(input: unknown): CallbackHandlerMethods[] {
+    private buildHandlers(input: unknown): LangChainCallbackHandlerMethods[] {
         const entry = this.createEntry(
             input as ChatLunaCallbackProviderInputLike
         )
