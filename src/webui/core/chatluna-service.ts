@@ -99,8 +99,20 @@ interface ChatLunaCharacterPresetServiceLike {
     loadAllPreset?: () => Promise<void>
 }
 
+interface ChatLunaCharacterPresetConfigLike {
+    preset?: unknown
+}
+
+interface ChatLunaCharacterConfigLike {
+    globalPrivateConfig?: ChatLunaCharacterPresetConfigLike
+    globalGroupConfig?: ChatLunaCharacterPresetConfigLike
+    privateConfigs?: Record<string, ChatLunaCharacterPresetConfigLike>
+    configs?: Record<string, ChatLunaCharacterPresetConfigLike>
+}
+
 export interface ChatLunaCharacterLikeService {
     preset?: ChatLunaCharacterPresetServiceLike
+    _config?: ChatLunaCharacterConfigLike
 }
 
 /** A raw model entry as returned by `platform.listAllModels(type).value`. */

@@ -421,7 +421,7 @@ export class ChatLunaHubService extends Service {
     async validateCorePreset(
         input: ChatLunaCorePresetValidateInput
     ): Promise<ChatLunaCorePresetValidationResult> {
-        return validateChatLunaCorePreset(input)
+        return validateChatLunaCorePreset(this.ctx, input)
     }
 
     async createCorePreset(

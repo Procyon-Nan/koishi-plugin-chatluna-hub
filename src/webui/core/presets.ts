@@ -57,6 +57,7 @@ export interface ChatLunaCorePresetGetInput {
 }
 
 export interface ChatLunaCorePresetValidateInput {
+    id?: string
     source?: ChatLunaCorePresetSource
     rawText: string
 }
@@ -108,6 +109,12 @@ const getCharacterPresetService = (ctx: Context) => {
     return character?.preset
 }
 
+const getCharacterService = (ctx: Context) => {
+    return ctx.get('chatluna_character') as
+        | ChatLunaCharacterLikeService
+        | undefined
+}
+
 const getFallbackPresetDir = (
     ctx: Context,
     source: ChatLunaCorePresetSource
@@ -142,6 +149,33 @@ const reloadPresetSource = async (
     }
 
     await getPresetService(ctx).loadAllPreset!()
+}
+
+const reloadPresetSourceAfterWrite = async (
+    ctx: Context,
+    source: ChatLunaCorePresetSource,
+    rollback: () => Promise<void>
+) => {
+    try {
+        await reloadPresetSource(ctx, source)
+    } catch (error) {
+        try {
+            await rollback()
+        } catch {
+            throw error
+        }
+
+        try {
+            await reloadPresetSource(ctx, source)
+        } catch {
+            // The file has already been restored; a later refresh can surface
+            // any remaining runtime reload problem.
+        }
+
+        throw new Error(
+            `预设文件变更已回滚，运行时刷新失败：${coerceReason(error)}`
+        )
+    }
 }
 
 const getPresetFileStat = async (filePath: string) => {
@@ -301,6 +335,117 @@ const ensureUniquePresetKeywords = async (
     )
 }
 
+const addCharacterPresetReference = (
+    references: string[],
+    label: string,
+    preset: unknown,
+    targetName: string
+) => {
+    if (preset === targetName) {
+        references.push(label)
+    }
+}
+
+const collectCharacterPresetReferences = (
+    ctx: Context,
+    targetName: string
+): string[] => {
+    const config = getCharacterService(ctx)?._config
+    if (!config || !targetName) return []
+
+    const references: string[] = []
+    addCharacterPresetReference(
+        references,
+        '全局私聊配置',
+        config.globalPrivateConfig?.preset,
+        targetName
+    )
+    addCharacterPresetReference(
+        references,
+        '全局群聊配置',
+        config.globalGroupConfig?.preset,
+        targetName
+    )
+
+    for (const [id, item] of Object.entries(config.privateConfigs ?? {})) {
+        addCharacterPresetReference(
+            references,
+            `私聊配置 ${id}`,
+            item?.preset,
+            targetName
+        )
+    }
+
+    for (const [id, item] of Object.entries(config.configs ?? {})) {
+        addCharacterPresetReference(
+            references,
+            `群聊配置 ${id}`,
+            item?.preset,
+            targetName
+        )
+    }
+
+    return references
+}
+
+const ensureCharacterPresetNotReferenced = (
+    ctx: Context,
+    presetName: string | undefined,
+    message: (references: string[]) => string
+) => {
+    if (!presetName) return
+
+    const references = collectCharacterPresetReferences(ctx, presetName)
+    if (!references.length) return
+
+    throw new Error(message(references))
+}
+
+const ensureCharacterPresetNameCanChange = async (
+    ctx: Context,
+    previousRawText: string,
+    nextSummary: ChatLunaCorePresetSummary
+) => {
+    const previousSummary = await summarizePresetRawText(
+        previousRawText,
+        'character'
+    )
+    const previousName = previousSummary.keywords[0]
+    const nextName = nextSummary.keywords[0]
+
+    if (!previousName || !nextName || previousName === nextName) return
+
+    ensureCharacterPresetNotReferenced(ctx, previousName, (references) => {
+        const usage = references.join('、')
+
+        return [
+            `Character 预设 "${previousName}" 正在被 ${usage} 使用，`,
+            `不能直接改名为 "${nextName}"。`,
+            '请先在 Character 插件配置中切换到另一个预设，或新建一个预设文件。'
+        ].join('')
+    })
+}
+
+const ensureCharacterPresetCanDelete = async (
+    ctx: Context,
+    previousRawText: string
+) => {
+    const previousSummary = await summarizePresetRawText(
+        previousRawText,
+        'character'
+    )
+    const previousName = previousSummary.keywords[0]
+
+    ensureCharacterPresetNotReferenced(
+        ctx,
+        previousName,
+        (references) =>
+            `Character 预设 "${previousName}" 正在被 ${references.join(
+                '、'
+            )} 使用，不能删除。请先在 Character 插件配置中切换到另一个预设。`
+    )
+}
+
 export const listChatLunaCorePresets = async (
     ctx: Context
 ): Promise<ChatLunaCorePresetListResult> => {
@@ -310,6 +455,11 @@ export const listChatLunaCorePresets = async (
     const collect = async (source: ChatLunaCorePresetSource, label: string) => {
         try {
             await reloadPresetSource(ctx, source)
+        } catch (error) {
+            reasons.push(`${label} 运行时刷新失败：${coerceReason(error)}`)
+        }
+
+        try {
             presets.push(
                 ...(await listPresetDirectoryItems(
                     source,
@@ -317,7 +467,7 @@ export const listChatLunaCorePresets = async (
                 ))
             )
         } catch (error) {
-            reasons.push(`${label}：${coerceReason(error)}`)
+            reasons.push(`${label} 文件读取失败：${coerceReason(error)}`)
         }
     }
 
@@ -378,13 +528,28 @@ export const getChatLunaCorePreset = async (
 }
 
 export const validateChatLunaCorePreset = async (
+    ctx: Context,
     input: ChatLunaCorePresetValidateInput
 ): Promise<ChatLunaCorePresetValidationResult> => {
     try {
-        const summary = await parsePresetRawText(
-            input.rawText,
-            normalizePresetSource(input.source)
-        )
+        const presetId = input.id ? parsePresetId(input.id) : null
+        const source = presetId?.source ?? normalizePresetSource(input.source)
+        const summary = await parsePresetRawText(input.rawText, source)
+
+        if (presetId?.source === 'character') {
+            const presetDir = resolvePresetSourceDir(ctx, presetId.source)
+            const { filePath } = resolvePresetFile(
+                presetDir,
+                presetId.filename,
+                presetId.source
+            )
+            const previousRawText = await fs.readFile(filePath, 'utf-8')
+            await ensureCharacterPresetNameCanChange(
+                ctx,
+                previousRawText,
+                summary
+            )
+        }
 
         return { valid: true, ...summary }
     } catch (error) {
@@ -420,10 +585,14 @@ export const createChatLunaCorePreset = async (
     }
 
     const summary = await parsePresetRawText(input.rawText, source)
-    await reloadPresetSource(ctx, source)
+    if (source !== 'character') {
+        await reloadPresetSource(ctx, source)
+    }
     await ensureUniquePresetKeywords(ctx, source, summary.keywords)
     await fs.writeFile(filePath, input.rawText, 'utf-8')
-    await reloadPresetSource(ctx, source)
+    await reloadPresetSourceAfterWrite(ctx, source, async () => {
+        await fs.unlink(filePath).catch(() => {})
+    })
 
     return readPresetDetail(ctx, source, filename)
 }
@@ -442,11 +611,18 @@ export const updateChatLunaCorePreset = async (
 
     await fs.access(filePath)
 
+    const previousRawText = await fs.readFile(filePath, 'utf-8')
     const summary = await parsePresetRawText(input.rawText, source)
-    await reloadPresetSource(ctx, source)
+    if (source === 'character') {
+        await ensureCharacterPresetNameCanChange(ctx, previousRawText, summary)
+    } else {
+        await reloadPresetSource(ctx, source)
+    }
     await ensureUniquePresetKeywords(ctx, source, summary.keywords, filename)
     await fs.writeFile(filePath, input.rawText, 'utf-8')
-    await reloadPresetSource(ctx, source)
+    await reloadPresetSourceAfterWrite(ctx, source, async () => {
+        await fs.writeFile(filePath, previousRawText, 'utf-8')
+    })
 
     return readPresetDetail(ctx, source, filename)
 }
@@ -459,13 +635,16 @@ export const deleteChatLunaCorePreset = async (
     const presetDir = resolvePresetSourceDir(ctx, source)
     const { filePath } = resolvePresetFile(presetDir, filename, source)
 
+    const previousRawText = await fs.readFile(filePath, 'utf-8')
+    if (source === 'character') {
+        await ensureCharacterPresetCanDelete(ctx, previousRawText)
+    }
+
     await fs.unlink(filePath)
 
-    try {
-        await reloadPresetSource(ctx, source)
-    } catch {
-        // The file is already gone; a later list refresh surfaces reload issues.
-    }
+    await reloadPresetSourceAfterWrite(ctx, source, async () => {
+        await fs.writeFile(filePath, previousRawText, 'utf-8')
+    })
 
     return { success: true }
 }

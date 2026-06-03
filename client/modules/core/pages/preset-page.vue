@@ -254,6 +254,7 @@ import type {
     ChatLunaCorePresetDetail,
     ChatLunaCorePresetListItem,
     ChatLunaCorePresetSource,
+    ChatLunaCorePresetValidateInput,
     ChatLunaCorePresetValidationResult
 } from '../types'
 
@@ -495,12 +496,22 @@ const validatePreset = async () => {
     validationLoading.value = true
 
     try {
-        validationResult.value = await api.validateChatLunaCorePreset({
-            source: createMode.value
-                ? createSource.value
-                : selectedPreset.value?.source,
+        const input: ChatLunaCorePresetValidateInput = {
             rawText: rawText.value
-        })
+        }
+        const source = createMode.value
+            ? createSource.value
+            : selectedPreset.value?.source
+
+        if (source) {
+            input.source = source
+        }
+
+        if (!createMode.value && selectedPreset.value?.id) {
+            input.id = selectedPreset.value.id
+        }
+
+        validationResult.value = await api.validateChatLunaCorePreset(input)
 
         if (validationResult.value.valid) {
             ElMessage.success('预设校验通过')
