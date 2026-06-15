@@ -7,8 +7,16 @@
             mobile-variant="row"
             :pills="[
                 { value: total, label: '记录' },
-                { value: successCount, label: '成功', variant: 'success' },
-                { value: errorCount, label: '错误', variant: 'error' }
+                {
+                    value: logStatusCounts.success,
+                    label: '成功',
+                    variant: 'success'
+                },
+                {
+                    value: logStatusCounts.error,
+                    label: '错误',
+                    variant: 'error'
+                }
             ]"
         >
             <template #icon>
@@ -283,7 +291,8 @@ import * as api from '../api'
 import type {
     ChatLunaCoreLogDetail,
     ChatLunaCoreLogListItem,
-    ChatLunaCoreLogStatus
+    ChatLunaCoreLogStatus,
+    ChatLunaCoreLogStatusCounts
 } from '../types'
 import { useCoreCompactMode } from '../use-compact-mode'
 import { highlightLogBody } from '../use-highlight'
@@ -308,6 +317,11 @@ const statusFilter = ref<ChatLunaCoreLogStatus | 'all'>('all')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const logStatusCounts = ref<ChatLunaCoreLogStatusCounts>({
+    pending: 0,
+    success: 0,
+    error: 0
+})
 const logList = ref<ChatLunaCoreLogListItem[]>([])
 const detail = ref<ChatLunaCoreLogDetail | null>(null)
 const selectedId = ref('')
@@ -338,14 +352,6 @@ const responseBodyHtml = computed(() =>
 
 const errorBodyHtml = computed(() =>
     highlightLogBody(selectedRun.value?.error, 'plaintext')
-)
-
-const successCount = computed(
-    () => logList.value.filter((item) => item.status === 'success').length
-)
-
-const errorCount = computed(
-    () => logList.value.filter((item) => item.status === 'error').length
 )
 
 const detailTitle = computed(() => {
@@ -429,6 +435,7 @@ const fetchLogs = async () => {
 
         logList.value = result.items
         total.value = result.total
+        logStatusCounts.value = result.statusCounts
 
         if (
             selectedId.value &&

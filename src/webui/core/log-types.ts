@@ -71,11 +71,14 @@ export interface ChatLunaCoreLogListQuery {
     pageSize?: number
 }
 
+export type ChatLunaCoreLogStatusCounts = Record<ChatLunaCoreLogStatus, number>
+
 export interface ChatLunaCoreLogListResult {
     items: ChatLunaCoreLogListItem[]
     page: number
     pageSize: number
     total: number
+    statusCounts: ChatLunaCoreLogStatusCounts
     updatedAt: string
 }
 

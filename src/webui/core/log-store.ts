@@ -27,6 +27,7 @@ import {
     type ChatLunaCoreLogRun,
     type ChatLunaCoreLogRunType,
     type ChatLunaCoreLogStatus,
+    type ChatLunaCoreLogStatusCounts,
     cloneCoreLogDetail,
     extractLogText,
     extractRunUsageMetadata,
@@ -332,6 +333,16 @@ export class ChatLunaCoreLogStore {
             )
         }
 
+        const statusCounts: ChatLunaCoreLogStatusCounts = {
+            pending: 0,
+            success: 0,
+            error: 0
+        }
+
+        for (const item of items) {
+            statusCounts[item.status] += 1
+        }
+
         items.sort(
             (left, right) =>
                 toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt)
@@ -339,6 +350,7 @@ export class ChatLunaCoreLogStore {
 
         return {
             ...paginate(items, page, pageSize),
+            statusCounts,
             updatedAt: new Date().toISOString()
         }
     }
