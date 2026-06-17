@@ -486,9 +486,10 @@ onMounted(() => {
 }
 
 .card-title {
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 650;
     color: var(--k-text-dark);
+    line-height: 1.4;
 }
 
 .card-tip {

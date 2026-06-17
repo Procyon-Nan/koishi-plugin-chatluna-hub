@@ -21,9 +21,6 @@
                     <div class="route-card-header">
                         <div class="route-card-heading">
                             <span class="route-card-title">路由 / 会话组</span>
-                            <span class="route-card-subtitle">
-                                按私聊、群聊路由归档
-                            </span>
                         </div>
                         <span class="route-total-badge">
                             {{ routeTotal }} 个会话
@@ -108,11 +105,8 @@
             <el-card shadow="never" class="conversation-card">
                 <template #header>
                     <div class="conversation-card-header">
-                        <div>
-                            <div class="card-title">{{ activeRouteTitle }}</div>
-                            <div class="card-tip">
-                                修改后需保存才会写入 ChatLuna 会话字段
-                            </div>
+                        <div class="conversation-heading-wrap">
+                            <span class="card-title">{{ activeRouteTitle }}</span>
                         </div>
                         <div class="header-actions">
                             <span
@@ -936,30 +930,31 @@ onMounted(() => {
     white-space: nowrap;
 }
 
-.route-card-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
+.conversation-heading-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
 }
 
 .route-card-heading {
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: baseline;
+    gap: 10px;
 }
 
 .route-card-title {
     color: var(--k-text-dark);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 650;
+    line-height: 1.4;
 }
 
 .route-card-subtitle {
     color: var(--k-text-light);
-    font-size: 12px;
-    line-height: 1.3;
+    font-size: 13px;
+    margin: 0;
 }
 
 .route-total-badge {
