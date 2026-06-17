@@ -465,6 +465,11 @@ onMounted(() => {
     border-radius: 12px;
 }
 
+.adapter-card :deep(.el-card__header),
+.model-card :deep(.el-card__header) {
+    padding: 16px 16px 12px;
+}
+
 .card-header {
     display: flex;
     align-items: center;

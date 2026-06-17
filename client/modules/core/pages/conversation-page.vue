@@ -22,7 +22,7 @@
                         <div class="route-card-heading">
                             <span class="route-card-title">路由 / 会话组</span>
                             <span class="route-card-subtitle">
-                                按私聊、群聊和自定义路由归档
+                                按私聊、群聊路由归档
                             </span>
                         </div>
                         <span class="route-total-badge">
@@ -868,7 +868,8 @@ onMounted(() => {
     border-radius: 12px;
 }
 
-.route-card :deep(.el-card__header) {
+.route-card :deep(.el-card__header),
+.conversation-card :deep(.el-card__header) {
     padding: 16px 16px 12px;
 }
 
@@ -893,6 +894,17 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.route-card-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    height: 36px;
+    box-sizing: border-box;
 }
 
 .card-title {
@@ -933,8 +945,9 @@ onMounted(() => {
 
 .route-card-heading {
     min-width: 0;
-    display: grid;
-    gap: 3px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .route-card-title {

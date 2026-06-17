@@ -574,6 +574,11 @@ onBeforeUnmount(() => {
     border-radius: 12px;
 }
 
+.log-list-card :deep(.el-card__header),
+.log-detail-card :deep(.el-card__header) {
+    padding: 16px 16px 12px;
+}
+
 /* Cards fill the workspace height (which fills the page) and let their inner
    content scroll, so a wide request body never stretches the detail card. */
 .log-list-card,

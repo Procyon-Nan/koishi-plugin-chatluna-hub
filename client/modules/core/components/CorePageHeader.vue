@@ -78,27 +78,11 @@ const compactMode = useCoreCompactMode()
     border: 1px solid var(--k-color-divider);
     border-radius: 16px;
     overflow: hidden;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 60%
-        ),
-        var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
+    background: var(--k-card-bg);
 }
 
 .page-header::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
+    display: none;
 }
 
 .page-icon {
@@ -108,13 +92,7 @@ const compactMode = useCoreCompactMode()
     display: grid;
     place-items: center;
     color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 20px
-        color-mix(in srgb, var(--k-color-primary), transparent 65%);
+    background: var(--k-color-primary);
 }
 
 .page-heading {

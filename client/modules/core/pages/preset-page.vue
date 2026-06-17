@@ -630,6 +630,11 @@ onMounted(async () => {
     border-radius: 12px;
 }
 
+.preset-list-card :deep(.el-card__header),
+.preset-editor-card :deep(.el-card__header) {
+    padding: 16px 16px 12px;
+}
+
 .card-header,
 .editor-header {
     display: flex;
