@@ -4,6 +4,7 @@ import { isRecord } from './shared'
 const loaderRecord = Symbol.for('koishi.loader.record')
 
 export interface LoaderLike {
+    baseDir?: string
     config?: {
         plugins?: Record<string, unknown>
     }

@@ -41,6 +41,7 @@ const statusLabels: Record<ChatLunaAdapterStatus, string> = {
     running: '运行中',
     configured: '已配置',
     available: '未配置',
+    unavailable: '不可用',
     unsupported: '需原生配置'
 }
 
@@ -308,13 +309,19 @@ export function useAdapters(refreshModels: () => Promise<void>) {
 
     const statusLabel = (status: ChatLunaAdapterStatus) => statusLabels[status]
 
-    const openCreatePicker = () => {
+    const openCreatePicker = async () => {
         pickerKeyword.value = ''
+        const refreshed = await fetchAdapters()
+        if (!refreshed) return
+
         pickerVisible.value = true
     }
 
     const chooseType = (type: ChatLunaAdapterType) => {
-        if (!type.canCreate) return
+        if (!type.canCreate) {
+            if (type.createReason) ElMessage.warning(type.createReason)
+            return
+        }
 
         editorDescriptor.value = {
             adapterId: type.id,
@@ -341,6 +348,11 @@ export function useAdapters(refreshModels: () => Promise<void>) {
     }
 
     const openEditor = (instance: ChatLunaAdapterInstance) => {
+        if (!instance.installed) {
+            ElMessage.warning(instance.unavailableReason)
+            return
+        }
+
         editorDescriptor.value = {
             adapterId: instance.adapterId,
             title: instance.title,
@@ -384,13 +396,15 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         editorCredentials.splice(index, 1)
     }
 
-    const fetchAdapters = async () => {
+    const fetchAdapters = async (): Promise<boolean> => {
         adapterLoading.value = true
 
         try {
             adapterData.value = await api.listChatLunaAdapters()
+            return true
         } catch (error) {
             reportError(error, '加载适配器失败')
+            return false
         } finally {
             adapterLoading.value = false
         }
@@ -438,6 +452,11 @@ export function useAdapters(refreshModels: () => Promise<void>) {
     }
 
     const handleToggle = async (instance: ChatLunaAdapterInstance) => {
+        if (!instance.installed) {
+            ElMessage.warning(instance.unavailableReason)
+            return
+        }
+
         busyKey.value = instance.instanceKey
 
         try {

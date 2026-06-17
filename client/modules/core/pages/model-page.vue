@@ -99,6 +99,7 @@
                     v-for="instance in filteredInstances"
                     :key="instance.instanceKey"
                     class="adapter-tile"
+                    :class="{ 'is-unavailable': !instance.installed }"
                     :data-status="instance.status"
                 >
                     <header class="adapter-tile-head">
@@ -133,11 +134,15 @@
                         </span>
                     </div>
 
+                    <p v-if="!instance.installed" class="adapter-note">
+                        {{ instance.unavailableReason }}
+                    </p>
+
                     <footer class="adapter-tile-foot">
                         <el-switch
                             :model-value="!instance.disabled"
                             :loading="busyKey === instance.instanceKey"
-                            :disabled="!adapterWritable"
+                            :disabled="!adapterWritable || !instance.installed"
                             @change="handleToggle(instance)"
                         />
                         <span class="foot-spacer" />
@@ -634,6 +639,20 @@ onMounted(() => {
     background: #7c5cff;
 }
 
+.adapter-tile[data-status='unavailable']::before {
+    background: var(--k-text-light);
+}
+
+.adapter-tile.is-unavailable {
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-fill) 42%);
+}
+
+.adapter-tile.is-unavailable .adapter-name,
+.adapter-tile.is-unavailable .adapter-platform,
+.adapter-tile.is-unavailable .adapter-meta {
+    color: var(--k-text-light);
+}
+
 .adapter-tile:hover {
     border-color: color-mix(in srgb, var(--k-color-primary), transparent 45%);
     box-shadow: var(--k-card-shadow);
@@ -704,6 +723,11 @@ onMounted(() => {
 .status-chip.is-unsupported {
     color: #7c5cff;
     background: color-mix(in srgb, #7c5cff, transparent 88%);
+}
+
+.status-chip.is-unavailable {
+    color: var(--k-text-light);
+    background: color-mix(in srgb, var(--k-text-light), transparent 86%);
 }
 
 .adapter-meta {

@@ -49,8 +49,11 @@
                 :key="type.id"
                 type="button"
                 class="type-tile"
-                :class="{ 'is-disabled': !type.canCreate }"
-                :disabled="!type.canCreate"
+                :class="{
+                    'is-disabled': !type.canCreate,
+                    'is-missing': !type.installed
+                }"
+                :aria-disabled="!type.canCreate"
                 :title="type.createReason"
                 @click="emit('choose', type)"
             >
@@ -62,7 +65,13 @@
                     }}</span>
                 </span>
                 <span
-                    v-if="type.instanceCount > 0"
+                    v-if="!type.installed"
+                    class="type-badge is-blocked"
+                >
+                    未安装
+                </span>
+                <span
+                    v-else-if="type.instanceCount > 0"
                     class="type-badge is-count"
                 >
                     已配置 {{ type.instanceCount }}
@@ -273,6 +282,11 @@ const typeInitial = (type: ChatLunaAdapterType) => {
 .type-tile.is-disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+.type-tile.is-missing .type-avatar {
+    color: var(--k-text-light);
+    background: var(--k-color-fill);
 }
 
 .type-avatar {

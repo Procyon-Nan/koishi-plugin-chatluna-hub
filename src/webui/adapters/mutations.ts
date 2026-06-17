@@ -19,6 +19,10 @@ import {
     listAdapterConfigFields
 } from './descriptors'
 import { sanitizeCredentials, serializeCredentialRow } from './credentials'
+import {
+    adapterNotInstalledReason,
+    resolveAdapterInstallState
+} from './installed'
 import { findInstanceMatch } from './matches'
 import type {
     ChatLunaAdapterConfigColumn,
@@ -380,6 +384,10 @@ export const saveChatLunaAdapter = async (
         return { ok: false, reason: '未知的 adapter。' }
     }
 
+    if (!resolveAdapterInstallState(ctx, descriptor).installed) {
+        return { ok: false, reason: adapterNotInstalledReason }
+    }
+
     const located = input.instanceKey
         ? findInstanceMatch(ctx, input.instanceKey)
         : null
@@ -446,6 +454,13 @@ export const toggleChatLunaAdapter = async (
     }
 
     const { match } = located
+
+    if (
+        input.enabled &&
+        !resolveAdapterInstallState(ctx, located.descriptor).installed
+    ) {
+        return { ok: false, reason: adapterNotInstalledReason }
+    }
 
     // 请求状态与当前状态一致时（enabled === !disabled）无需变更。
     if (input.enabled !== match.disabled) {

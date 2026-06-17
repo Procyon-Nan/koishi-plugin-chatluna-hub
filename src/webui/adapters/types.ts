@@ -79,6 +79,7 @@ export interface ChatLunaAdapterDescriptor {
     id: string
     title: string
     pluginName: string
+    packageName?: string
     platformDefault: string
     platformConfigurable: boolean
     credentialKind: ChatLunaAdapterCredentialKind
@@ -97,7 +98,13 @@ export type ChatLunaAdapterStatus =
     | 'running'
     | 'configured'
     | 'available'
+    | 'unavailable'
     | 'unsupported'
+
+export type ChatLunaAdapterCreateBlockReason =
+    | 'not-installed'
+    | 'not-writable'
+    | 'fixed-platform-exists'
 
 export interface ChatLunaAdapterInstance {
     /** 以条目的 activeKey（去除 ~ 前缀）作为稳定唯一标识。 */
@@ -105,6 +112,9 @@ export interface ChatLunaAdapterInstance {
     adapterId: string
     title: string
     pluginName: string
+    packageName: string
+    installed: boolean
+    unavailableReason: string
     credentialKind: ChatLunaAdapterCredentialKind
     platformConfigurable: boolean
     endpointPlaceholder?: string
@@ -122,6 +132,8 @@ export interface ChatLunaAdapterType {
     id: string
     title: string
     pluginName: string
+    packageName: string
+    installed: boolean
     credentialKind: ChatLunaAdapterCredentialKind
     platformConfigurable: boolean
     endpointPlaceholder?: string
@@ -130,6 +142,7 @@ export interface ChatLunaAdapterType {
     defaultExtraConfig: Record<string, unknown>
     instanceCount: number
     canCreate: boolean
+    createBlockReason?: ChatLunaAdapterCreateBlockReason
     createReason?: string
 }
 

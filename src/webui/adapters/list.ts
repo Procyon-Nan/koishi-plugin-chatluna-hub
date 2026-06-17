@@ -13,8 +13,13 @@ import {
 import { adapterDescriptors, buildDefaultExtraConfig } from './descriptors'
 import { readCredentials, resolvePlatform } from './credentials'
 import { findAdapterMatches } from './matches'
+import {
+    adapterNotInstalledReason,
+    resolveAdapterInstallState
+} from './installed'
 import type { PluginConfigMatch } from '../loader'
 import type {
+    ChatLunaAdapterCreateBlockReason,
     ChatLunaAdapterDescriptor,
     ChatLunaAdapterInstance,
     ChatLunaAdapterListResult,
@@ -49,8 +54,10 @@ const countModelsByPlatform = (ctx: Context): Map<string, number> => {
 
 const resolveStatus = (
     disabled: boolean,
-    modelCount: number
+    modelCount: number,
+    installed: boolean
 ): ChatLunaAdapterStatus => {
+    if (!installed) return 'unavailable'
     if (disabled) return 'configured'
 
     return modelCount > 0 ? 'running' : 'configured'
@@ -59,7 +66,9 @@ const resolveStatus = (
 const buildInstance = (
     descriptor: ChatLunaAdapterDescriptor,
     match: PluginConfigMatch,
-    modelCounts: Map<string, number>
+    modelCounts: Map<string, number>,
+    installed: boolean,
+    packageName: string
 ): ChatLunaAdapterInstance => {
     const config = isRecord(match.config) ? match.config : {}
     const platform = resolvePlatform(descriptor, config)
@@ -78,6 +87,9 @@ const buildInstance = (
         adapterId: descriptor.id,
         title: descriptor.title,
         pluginName: descriptor.pluginName,
+        packageName,
+        installed,
+        unavailableReason: installed ? '' : adapterNotInstalledReason,
         credentialKind: descriptor.credentialKind,
         platformConfigurable: descriptor.platformConfigurable,
         endpointPlaceholder: descriptor.endpointPlaceholder,
@@ -88,7 +100,7 @@ const buildInstance = (
         credentials,
         extraConfig,
         modelCount,
-        status: resolveStatus(match.disabled, modelCount)
+        status: resolveStatus(match.disabled, modelCount, installed)
     }
 }
 
@@ -106,17 +118,36 @@ const isLoaderWritable = (ctx: Context): boolean => {
 const buildType = (
     descriptor: ChatLunaAdapterDescriptor,
     matchCount: number,
-    writable: boolean
+    writable: boolean,
+    installed: boolean,
+    packageName: string
 ): ChatLunaAdapterType => {
     // platform 硬编码的 adapter 已存在实例时不可再建（会触发 chatluna
     // PLUGIN_ALREADY_REGISTERED）；platform 可配置的可重复新建。
     const blockedByExisting = !descriptor.platformConfigurable && matchCount > 0
-    const canCreate = writable && !blockedByExisting
+    let createBlockReason: ChatLunaAdapterCreateBlockReason | undefined
+    let createReason: string | undefined
+
+    if (!installed) {
+        createBlockReason = 'not-installed'
+        createReason = adapterNotInstalledReason
+    } else if (!writable) {
+        createBlockReason = 'not-writable'
+        createReason = 'Koishi 配置不可写，无法添加 adapter。'
+    } else if (blockedByExisting) {
+        createBlockReason = 'fixed-platform-exists'
+        createReason =
+            '该平台固定且已配置，如需多份请使用 OpenAI Like 等平台名可自定义的适配器。'
+    }
+
+    const canCreate = !createBlockReason
 
     return {
         id: descriptor.id,
         title: descriptor.title,
         pluginName: descriptor.pluginName,
+        packageName,
+        installed,
         credentialKind: descriptor.credentialKind,
         platformConfigurable: descriptor.platformConfigurable,
         endpointPlaceholder: descriptor.endpointPlaceholder,
@@ -125,9 +156,8 @@ const buildType = (
         defaultExtraConfig: buildDefaultExtraConfig(descriptor),
         instanceCount: matchCount,
         canCreate,
-        createReason: blockedByExisting
-            ? '该平台固定且已配置，如需多份请使用 OpenAI Like 等平台名可自定义的适配器。'
-            : undefined
+        createBlockReason,
+        createReason
     }
 }
 
@@ -143,9 +173,19 @@ export const listChatLunaAdapters = (
 
     for (const descriptor of adapterDescriptors) {
         const matches = findAdapterMatches(ctx, descriptor)
+        const { packageName, installed } = resolveAdapterInstallState(
+            ctx,
+            descriptor
+        )
 
         for (const match of matches) {
-            const instance = buildInstance(descriptor, match, modelCounts)
+            const instance = buildInstance(
+                descriptor,
+                match,
+                modelCounts,
+                installed,
+                packageName
+            )
             instances.push(instance)
             // platform → 适配器标题（实例优先，覆盖默认映射）。
             platformMap[instance.platform] = descriptor.title
@@ -154,7 +194,15 @@ export const listChatLunaAdapters = (
         // 默认平台名也纳入映射，便于未建实例时模型列表仍可识别。
         platformMap[descriptor.platformDefault] ??= descriptor.title
 
-        types.push(buildType(descriptor, matches.length, writable))
+        types.push(
+            buildType(
+                descriptor,
+                matches.length,
+                writable,
+                installed,
+                packageName
+            )
+        )
     }
 
     return {
