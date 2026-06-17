@@ -9,6 +9,7 @@ export interface LoaderLike {
     }
     entry?: Context
     writable?: boolean
+    resolve?: (name: string) => unknown | Promise<unknown>
     reload?: (parent: Context, key: string, source: unknown) => Promise<unknown>
     unload?: (parent: Context, key: string) => void
     writeConfig?: () => Promise<void>
@@ -17,6 +18,7 @@ export interface LoaderLike {
 export interface PluginConfigMatch {
     key: string
     activeKey: string
+    path: string
     disabled: boolean
     config: unknown
     parentConfig: Record<string, unknown>
@@ -45,6 +47,13 @@ export const getPluginNameFromConfigKey = (key: string) => {
     const [name] = activeKey.split(':', 1)
 
     return normalizePluginName(name)
+}
+
+export const getConfigPathFromKey = (key: string) => {
+    const activeKey = getActiveConfigKey(key)
+    const separator = activeKey.indexOf(':')
+
+    return separator < 0 ? '' : activeKey.slice(separator + 1)
 }
 
 export const getForkContext = (parent: Context | undefined, key: string) => {
@@ -114,6 +123,7 @@ export const findPluginConfigMatches = (
             matches.push({
                 key,
                 activeKey,
+                path: getConfigPathFromKey(activeKey),
                 disabled,
                 config: value,
                 parentConfig: config,
@@ -129,31 +139,6 @@ export const findPluginConfigMatches = (
             matches
         )
     }
-}
-
-/**
- * Whether a plugin has any config entry (enabled or disabled) anywhere in the
- * loader config tree. This is the short-circuiting boolean form of
- * {@link findPluginConfigMatches}.
- */
-export const hasPluginConfigEntry = (
-    config: Record<string, unknown>,
-    pluginName: string
-): boolean => {
-    const target = normalizePluginName(pluginName)
-    if (!target) return false
-
-    for (const [key, value] of Object.entries(config)) {
-        if (key.startsWith('$')) continue
-
-        const plugin = getPluginNameFromConfigKey(key)
-        if (plugin === target) return true
-
-        if (plugin !== 'group' || !isRecord(value)) continue
-        if (hasPluginConfigEntry(value, pluginName)) return true
-    }
-
-    return false
 }
 
 const allowedKeyChars = 'abcdefghijklmnopqrstuvwxyz0123456789'

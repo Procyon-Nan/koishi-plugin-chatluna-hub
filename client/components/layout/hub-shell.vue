@@ -76,69 +76,111 @@ import {
     Collection,
     Connection,
     Cpu,
-    Brush
+    Brush,
+    UserFilled
 } from '@element-plus/icons-vue'
 import HubRelationshipGraph from '../home/hub-relationship-graph.vue'
 import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
+import { canOpenHubModule } from '../../module-access'
 import type { HubModuleId, HubModuleItem } from '../../types'
+
+const fallbackReason = 'Waiting for Hub module data.'
+
+const createFallbackModule = (
+    definition: Omit<
+        HubModuleItem,
+        | 'available'
+        | 'configPath'
+        | 'configStatus'
+        | 'configured'
+        | 'installed'
+        | 'reason'
+    >
+): HubModuleItem => {
+    const isCoreModule = definition.group === 'core'
+
+    return {
+        ...definition,
+        installed: isCoreModule,
+        configured: isCoreModule,
+        available: isCoreModule,
+        configStatus: isCoreModule ? 'none' : 'missing-package',
+        reason: isCoreModule ? undefined : fallbackReason
+    }
+}
 
 const fallbackModules: HubModuleItem[] = [
     {
         id: 'chatluna',
         group: 'core',
+        entryType: 'hub',
+        ring: 'core',
         title: 'ChatLuna',
         icon: 'ChatRound',
         order: 0,
-        configured: true,
-        available: true
+        toggleable: false
     },
     {
         id: 'agent',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'Agent',
         icon: 'Connection',
         order: 10,
-        configured: true,
-        available: false,
-        reason: 'Waiting for Hub module data.',
-        activityId: 'chatluna-agent'
+        toggleable: true,
+        activityId: 'chatluna-agent',
+        routePath: '/chatluna-agent'
     },
     {
         id: 'livingMemory',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'Living Memory',
         icon: 'Collection',
         order: 20,
-        configured: true,
-        available: false,
-        reason: 'Waiting for Hub module data.',
-        activityId: 'chatluna-livingmemory'
+        toggleable: true,
+        activityId: 'chatluna-livingmemory',
+        routePath: '/chatluna-livingmemory'
     },
     {
         id: 'mediaLuna',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'media-luna',
         icon: 'Palette',
         order: 30,
-        configured: true,
-        available: false,
-        reason: 'Waiting for Hub module data.',
-        activityId: 'media-luna'
+        toggleable: true,
+        activityId: 'media-luna',
+        routePath: '/media-luna'
     },
     {
         id: 'memesLuna',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'memesluna',
         icon: 'MemesLunaEmoji',
         order: 40,
-        configured: true,
-        available: false,
-        reason: 'Waiting for Hub module data.',
-        activityId: 'memesluna'
+        toggleable: true,
+        activityId: 'memesluna',
+        routePath: '/memesluna/'
+    },
+    {
+        id: 'character',
+        group: 'ecosystem',
+        entryType: 'config',
+        ring: 'config',
+        title: 'Character',
+        icon: 'UserFilled',
+        order: 110,
+        toggleable: true
     }
-]
+].map(createFallbackModule)
 
 const icons: Record<string, Component> = {
     ChatRound,
@@ -146,16 +188,11 @@ const icons: Record<string, Component> = {
     Connection,
     Cpu,
     Palette: Brush,
+    UserFilled,
     MemesLunaEmoji: MemesLunaIcon
 }
 
 const hubHomePath = '/chatluna'
-const externalModulePaths: Partial<Record<HubModuleId, string>> = {
-    agent: '/chatluna-agent',
-    livingMemory: '/chatluna-livingmemory',
-    mediaLuna: '/media-luna',
-    memesLuna: '/memesluna/'
-}
 const active = ref<HubModuleId | null>(null)
 const data = computed(() => store.chatluna_hub_webui)
 const modules = computed<HubModuleItem[]>(() => {
@@ -208,12 +245,13 @@ watch(
 
 const handleSelect = (id: HubModuleId) => {
     const target = modules.value.find((item) => item.id === id)
-    if (!target?.available) return
-    const externalPath = externalModulePaths[target.id]
-    if (externalPath) {
-        void router.push(externalPath)
+    if (!target || !canOpenHubModule(target)) return
+
+    if (target.routePath) {
+        void router.push(target.routePath)
         return
     }
+
     active.value = id
 }
 </script>
