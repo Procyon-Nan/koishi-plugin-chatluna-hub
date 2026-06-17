@@ -137,7 +137,7 @@
             >
                 <template #header>
                     <div class="detail-header">
-                        <div>
+                        <div class="detail-heading-wrap">
                             <span class="detail-title">{{ detailTitle }}</span>
                             <span class="detail-meta">{{ detailMeta }}</span>
                         </div>
@@ -603,6 +603,8 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    height: 36px;
+    box-sizing: border-box;
 }
 
 .card-actions,
@@ -768,15 +770,26 @@ onBeforeUnmount(() => {
 }
 
 .detail-header {
-    align-items: flex-start;
+    align-items: center;
+}
+
+.detail-heading-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
 }
 
 .detail-title {
-    display: block;
-    margin-bottom: 4px;
+    display: inline-block;
     color: var(--k-text-dark);
     font-size: 17px;
     font-weight: 650;
+    line-height: 1.4;
+}
+
+.detail-meta {
+    margin: 0;
 }
 
 .detail-empty,

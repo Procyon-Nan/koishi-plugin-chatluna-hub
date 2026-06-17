@@ -107,7 +107,7 @@
             <el-card shadow="never" class="preset-editor-card">
                 <template #header>
                     <div class="editor-header">
-                        <div>
+                        <div class="editor-heading-wrap">
                             <span class="editor-title">{{ editorTitle }}</span>
                             <span class="editor-meta">{{ editorMeta }}</span>
                         </div>
@@ -641,11 +641,14 @@ onMounted(async () => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    height: 36px;
+    box-sizing: border-box;
 }
 
 .card-header > span {
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 650;
+    color: var(--k-text-dark);
 }
 
 .list-toolbar {
@@ -757,15 +760,26 @@ onMounted(async () => {
 }
 
 .editor-header {
-    align-items: flex-start;
+    align-items: center;
+}
+
+.editor-heading-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
 }
 
 .editor-title {
-    display: block;
-    margin-bottom: 4px;
+    display: inline-block;
     color: var(--k-text-dark);
     font-size: 17px;
     font-weight: 650;
+    line-height: 1.4;
+}
+
+.editor-meta {
+    margin: 0;
 }
 
 .editor-actions {
