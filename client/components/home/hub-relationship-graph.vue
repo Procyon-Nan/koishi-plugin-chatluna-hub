@@ -98,10 +98,7 @@
                 <button
                     v-if="coreNode"
                     class="graph-node core"
-                    :class="{
-                        dragging: draggingId === coreNode.id,
-                        focused: focusedNodeId === coreNode.id
-                    }"
+                    :class="{ dragging: draggingId === coreNode.id }"
                     :style="nodeStyle(coreNode)"
                     :title="coreNode.title"
                     type="button"
@@ -153,7 +150,6 @@
                         disabled: isHubModuleDisabled(node),
                         configurable: node.entryType === 'config',
                         dragging: draggingId === node.id,
-                        focused: focusedNodeId === node.id,
                         pending: isNodePending(node.id),
                         'out-of-range': isNodeOutOfRange(node)
                     }"
@@ -497,12 +493,10 @@ const activeModuleDetail = computed<ModuleDetail | null>(() => {
     const id = activeDetailModuleId.value
     return id ? moduleDetails[id] : null
 })
-/**
- * Distance between satellite nodes and the core node in screen pixels
- * 子节点距离主节点的距离 (单位: 屏幕像素px)
- */
-const orbitRadiusPx = 200
-const configOrbitRadiusPx = 500
+// 第一层有 WebUI 插件节点到 ChatLuna 主节点中心的默认距离，单位为屏幕像素。
+const orbitRadiusPx = 190
+// 第二层无 WebUI 插件节点到 ChatLuna 主节点中心的默认距离，单位为屏幕像素。
+const configOrbitRadiusPx = 360
 
 /**
  * Rotation speed in radians per frame (at 60fps)
@@ -535,8 +529,6 @@ interface GraphEdge {
     y1: number
     x2: number
     y2: number
-    midX: number
-    midY: number
 }
 
 interface DragState {
@@ -546,7 +538,6 @@ interface DragState {
     startClientY: number
     startPoint: Point
     startPosition: Point
-    startPositions: Partial<Record<HubModuleId, Point>>
     moved: boolean
 }
 
@@ -556,26 +547,31 @@ interface SatelliteNodeMetrics {
     size: number
     radius: number
     orbitRadiusPx: number
-    orbitYScale: number
 }
 
 const coreNodeMetrics = {
+    // ChatLuna 主节点直径，单位为屏幕像素。
     size: 148,
+    // ChatLuna 主节点半径，用于连线端点和节点碰撞计算，通常保持为 size / 2。
     radius: 74
 }
 
 const webuiNodeMetrics: SatelliteNodeMetrics = {
-    size: 126,
-    radius: 63,
-    orbitRadiusPx,
-    orbitYScale: 1
+    // 第一层有 WebUI 插件节点直径，单位为屏幕像素。
+    size: 110,
+    // 第一层有 WebUI 插件节点半径，通常保持为 size / 2。
+    radius: 55,
+    // 第一层有 WebUI 插件节点到主节点中心的默认距离。
+    orbitRadiusPx
 }
 
 const configNodeMetrics: SatelliteNodeMetrics = {
-    size: 102,
-    radius: 51,
-    orbitRadiusPx: configOrbitRadiusPx,
-    orbitYScale: 0.74
+    // 第二层无 WebUI 插件节点直径，单位为屏幕像素。
+    size: 100,
+    // 第二层无 WebUI 插件节点半径，通常保持为 size / 2。
+    radius: 50,
+    // 第二层无 WebUI 插件节点到主节点中心的默认距离。
+    orbitRadiusPx: configOrbitRadiusPx
 }
 
 const props = defineProps<{
@@ -607,7 +603,7 @@ const icons = {
     MemesLunaEmoji: MemesLunaIcon
 } satisfies Record<HubModuleIconName, Component>
 
-const positionStorageKey = 'chatluna-hub:relationship-node-positions:v1'
+const positionStorageKey = 'chatluna-hub:relationship-node-positions:v2'
 const rangeStorageKey = 'chatluna-hub:relationship-effective-range:v1'
 const stageRef = ref<HTMLElement | null>(null)
 const draggingId = ref<HubModuleId | null>(null)
@@ -759,7 +755,7 @@ const getDefaultSatellitePosition = (item: HubModuleItem): Point => {
     const metrics = getSatelliteNodeMetrics(item)
 
     const dxPx = Math.cos(angle) * metrics.orbitRadiusPx
-    const dyPx = Math.sin(angle) * metrics.orbitRadiusPx * metrics.orbitYScale
+    const dyPx = Math.sin(angle) * metrics.orbitRadiusPx
 
     return {
         x: core.x + dxPx * (1000 / stageSize.width),
@@ -836,9 +832,7 @@ const createEdge = (from: GraphNode, to: GraphNode) => {
         x1,
         y1,
         x2,
-        y2,
-        midX: (x1 + x2) / 2,
-        midY: (y1 + y2) / 2
+        y2
     }
 }
 
@@ -1005,7 +999,7 @@ const handleResetGraphDefaults = () => {
     effectiveRangePreviewVisible.value = false
     effectiveRangeRadiusInput.value = 0
     detailFontSizePx.value = 18
-    graphZoom.value = 0.9
+    graphZoom.value = 1
     lastActiveNodeId.value = null
     clearRecord(nodePositions)
     clearRecord(carriedVisuals)
@@ -1036,7 +1030,6 @@ const handleNodePointerDown = (event: PointerEvent, node: GraphNode) => {
         startClientY: event.clientY,
         startPoint: point,
         startPosition: getBasePosition(node),
-        startPositions: collectBasePositions(),
         moved: false
     }
     draggingId.value = node.id
@@ -1108,16 +1101,6 @@ const detachDragListeners = () => {
     window.removeEventListener('pointermove', handleDragMove)
     window.removeEventListener('pointerup', handleDragEnd)
     window.removeEventListener('pointercancel', handleDragEnd)
-}
-
-const collectBasePositions = () => {
-    const data: Partial<Record<HubModuleId, Point>> = {}
-
-    for (const item of sortedModules.value) {
-        data[item.id] = getBasePositionForItem(item)
-    }
-
-    return data
 }
 
 const getBasePosition = (node: GraphNode): Point => {
@@ -1690,13 +1673,9 @@ onBeforeUnmount(() => {
     min-height: 560px;
     overflow: hidden;
     color: var(--k-text-dark);
-    /* Soft corner glows for depth, kept very faint so the dot grid reads cleanly */
-    background:
-        radial-gradient(ellipse 56% 52% at 14% 10%, color-mix(in srgb, var(--k-color-primary), transparent 91%), transparent 60%),
-        radial-gradient(ellipse 52% 50% at 88% 90%, color-mix(in srgb, mediumpurple, transparent 92%), transparent 58%);
+    background: transparent;
 }
 
-/* Structured dot-matrix texture sitting above the corner glows */
 .relationship-home::before {
     content: "";
     position: absolute;
@@ -1709,7 +1688,6 @@ onBeforeUnmount(() => {
     );
     background-size: 24px 24px;
     background-position: -12px -12px;
-    /* Fade the grid toward the edges so it frames the network instead of boxing it in */
     -webkit-mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
     mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
     opacity: 0.5;
@@ -1730,38 +1708,15 @@ onBeforeUnmount(() => {
     right: 28px;
     width: 500px;
     height: 800px; /* Fixed height so size is not affected by text content */
-    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 64%);
+    border: 1px solid var(--k-color-divider);
     border-radius: 16px;
-    background:
-        radial-gradient(ellipse 120% 40% at 50% 0%, color-mix(in srgb, var(--k-color-primary), transparent 92%), transparent 70%),
-        color-mix(in srgb, var(--k-card-bg), transparent 8%);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    box-shadow:
-        var(--k-card-shadow),
-        0 18px 50px color-mix(in srgb, var(--k-text-dark), transparent 90%);
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
     display: flex;
     flex-direction: column;
     z-index: 5;
     transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
-}
-
-/* Luminous top edge accent on the detail panel */
-.hub-module-detail-panel::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 12%;
-    right: 12%;
-    height: 1px;
-    background: linear-gradient(
-        90deg,
-        transparent,
-        color-mix(in srgb, var(--k-color-primary), transparent 30%),
-        transparent
-    );
-    pointer-events: none;
 }
 
 .detail-panel-scroll {
@@ -1800,14 +1755,12 @@ onBeforeUnmount(() => {
 .detail-icon {
     width: 54px;
     height: 54px;
-    border: 1px solid color-mix(in srgb, var(--detail-tone), var(--k-color-divider) 30%);
+    border: 1px solid var(--k-color-divider);
     border-radius: 12px;
     display: grid;
     place-items: center;
     color: var(--detail-tone);
-    background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--k-card-bg), var(--detail-tone) 12%), transparent 60%),
-                color-mix(in srgb, var(--k-card-bg), var(--detail-tone) 6%);
-    box-shadow: 0 8px 18px color-mix(in srgb, var(--detail-tone), transparent 84%);
+    background: var(--k-hover-bg);
 }
 
 .detail-icon .chatluna-mark.mini,
@@ -2110,15 +2063,6 @@ onBeforeUnmount(() => {
     line-height: 1.15;
     font-weight: 800;
     letter-spacing: 0.2px;
-    background: linear-gradient(
-        100deg,
-        var(--k-text-dark) 12%,
-        color-mix(in srgb, var(--k-color-primary), var(--k-text-dark) 30%) 52%,
-        color-mix(in srgb, mediumpurple, var(--k-text-dark) 20%) 90%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
     color: var(--k-text-dark);
 }
 
@@ -2137,7 +2081,7 @@ onBeforeUnmount(() => {
     width: 22px;
     height: 2px;
     border-radius: 2px;
-    background: linear-gradient(90deg, var(--k-color-primary), transparent);
+    background: var(--k-color-divider);
 }
 
 .ecosystem-meter {
@@ -2145,19 +2089,13 @@ onBeforeUnmount(() => {
     right: 28px;
     min-width: 150px;
     padding: 12px 14px;
-    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 60%);
+    border: 1px solid var(--k-color-divider);
     border-radius: 12px;
     display: grid;
     gap: 4px;
     color: var(--k-text-dark);
-    background:
-        radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--k-color-primary), transparent 88%), transparent 60%),
-        color-mix(in srgb, var(--k-card-bg), transparent 12%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow:
-        var(--k-card-shadow),
-        0 0 22px color-mix(in srgb, var(--k-color-primary), transparent 90%);
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
 }
 
 .ecosystem-meter span,
@@ -2171,10 +2109,7 @@ onBeforeUnmount(() => {
     font-size: 24px;
     line-height: 1.1;
     font-weight: 800;
-    background: linear-gradient(120deg, var(--k-color-primary), color-mix(in srgb, mediumpurple, var(--k-color-primary) 40%));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--k-color-primary);
 }
 
 .range-control {
@@ -2183,14 +2118,10 @@ onBeforeUnmount(() => {
     box-sizing: border-box;
     width: min(260px, calc(100% - 36px));
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 60%);
+    border: 1px solid var(--k-color-divider);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--k-card-bg), transparent 12%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow:
-        var(--k-card-shadow),
-        0 0 22px color-mix(in srgb, var(--k-color-primary), transparent 92%);
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
 }
 
 .range-control-row {
@@ -2337,14 +2268,6 @@ onBeforeUnmount(() => {
 
 /* Removed .edge-joint styles since joint circles are deleted */
 
-/* Registered so hover scale can interpolate independently of the per-frame
-   position transform, keeping orbital motion off the layout/transition path. */
-@property --node-scale {
-    syntax: "<number>";
-    inherits: false;
-    initial-value: 1;
-}
-
 .graph-node {
     position: absolute;
     left: 0;
@@ -2363,15 +2286,12 @@ onBeforeUnmount(() => {
     touch-action: none;
     user-select: none;
     /* Compositor-only positioning: translate by absolute px every frame, then
-       centre the node and apply hover scale. No layout, no paint. */
+       center the node without triggering layout. */
     transform:
         translate(var(--node-px, 0px), var(--node-py, 0px))
-        translate(-50%, calc(var(--node-size) / -2))
-        scale(var(--node-scale, 1));
+        translate(-50%, calc(var(--node-size) / -2));
     will-change: transform;
-    transition:
-        opacity 0.2s ease,
-        --node-scale 0.22s ease;
+    transition: opacity 0.2s ease;
 }
 
 .graph-node:focus-visible {
