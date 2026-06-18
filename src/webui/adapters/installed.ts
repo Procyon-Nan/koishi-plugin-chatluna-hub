@@ -1,7 +1,5 @@
-import { createRequire } from 'module'
-import { resolve } from 'path'
 import type { Context } from 'koishi'
-import { getLoader } from '../loader'
+import { canResolveAnyPackage } from '../package-resolver'
 import type { ChatLunaAdapterDescriptor } from './types'
 
 export const adapterNotInstalledReason =
@@ -24,33 +22,6 @@ const getAdapterPackageName = (
     return `koishi-plugin-${descriptor.pluginName}`
 }
 
-const getResolverRoots = (ctx: Context): string[] => {
-    const loader = getLoader(ctx)
-    const roots = [loader?.baseDir, ctx.baseDir, process.cwd()].filter(
-        (item): item is string => typeof item === 'string' && item.length > 0
-    )
-
-    return Array.from(new Set(roots))
-}
-
-const tryResolve = (resolver: NodeJS.Require, specifier: string): boolean => {
-    try {
-        resolver.resolve(specifier)
-        return true
-    } catch {
-        return false
-    }
-}
-
-const canResolvePackage = (root: string, packageName: string): boolean => {
-    const requireFromRoot = createRequire(resolve(root, 'package.json'))
-
-    return (
-        tryResolve(requireFromRoot, `${packageName}/package.json`) ||
-        tryResolve(requireFromRoot, packageName)
-    )
-}
-
 export const resolveAdapterInstallState = (
     ctx: Context,
     descriptor: ChatLunaAdapterDescriptor
@@ -59,8 +30,6 @@ export const resolveAdapterInstallState = (
 
     return {
         packageName,
-        installed: getResolverRoots(ctx).some((root) =>
-            canResolvePackage(root, packageName)
-        )
+        installed: canResolveAnyPackage(ctx, [packageName])
     }
 }

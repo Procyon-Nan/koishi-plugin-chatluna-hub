@@ -5,6 +5,7 @@ import {
     normalizePluginName,
     type PluginConfigMatch
 } from './loader'
+import { canResolveAnyPackage } from './package-resolver'
 
 export type HubModuleGroup = 'core' | 'ecosystem'
 export type HubModuleId =
@@ -361,20 +362,8 @@ const resolveCandidatePluginNames = (pluginName: string) => {
     )
 }
 
-const isPluginInstalled = async (ctx: Context, pluginName: string) => {
-    const loader = getLoader(ctx)
-    if (!loader?.resolve) return true
-
-    for (const candidate of resolveCandidatePluginNames(pluginName)) {
-        try {
-            const resolved = await loader.resolve(candidate)
-            if (resolved) return true
-        } catch {
-            // Try the next Koishi package-name variant.
-        }
-    }
-
-    return false
+const isPluginInstalled = (ctx: Context, pluginName: string) => {
+    return canResolveAnyPackage(ctx, resolveCandidatePluginNames(pluginName))
 }
 
 const getConfigStatus = (
@@ -425,9 +414,7 @@ export const resolveHubModuleState = async (
     const pluginName = definition.pluginName
     const matches = pluginName ? getPluginConfigMatches(ctx, pluginName) : []
     const matchCount = matches.length
-    const installed = pluginName
-        ? await isPluginInstalled(ctx, pluginName)
-        : true
+    const installed = pluginName ? isPluginInstalled(ctx, pluginName) : true
     const configured = pluginName ? matchCount > 0 : true
     const available = pluginName ? isPluginRunning(ctx, pluginName) : true
     const configStatus = getConfigStatus(pluginName, installed, matchCount)
