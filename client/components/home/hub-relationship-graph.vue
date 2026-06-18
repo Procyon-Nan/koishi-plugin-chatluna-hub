@@ -997,7 +997,7 @@ const handleResetGraphDefaults = () => {
     effectiveRangePreviewVisible.value = false
     effectiveRangeRadiusInput.value = 0
     detailFontSizePx.value = 18
-    graphZoom.value = 1
+    graphZoom.value = 0.9
     lastActiveNodeId.value = null
     clearRecord(nodePositions)
     clearRecord(carriedVisuals)

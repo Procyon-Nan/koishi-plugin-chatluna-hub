@@ -80,15 +80,16 @@ export const moduleDetails: Partial<Record<HubModuleId, ModuleDetail>> = {
         tip: '文档链接：https://www.npmjs.com/package/koishi-plugin-memesluna/v/0.2.10'
     },
     character: {
-        title: 'ChatLuna Character',
-        subtitle: '角色预设扩展配置',
+        title: 'ChatLuna character',
+        subtitle: '基于人设的拟人化角色扮演系统',
         description:
-            '提供 Character 预设相关的配置入口。该插件没有独立 WebUI，节点用于跳转到 Koishi 插件配置页面',
+            '基于 Prompt 工程，让大语言模型在群聊或私聊内以更生动的方式进行对话',
         features: [
-            '维护 Character 插件配置项',
-            '配合 ChatLuna Core 预设管理使用',
-            '通过 Koishi 插件配置页启用或调整插件行为'
+            '通过白名单管理应用此插件的私聊与群聊',
+            '配备空闲、固定间隔和计划任务触发等主动回复机制',
+            '从适配器API自动获取到历史信息进入上下文',
+            '支持agent能力足够的模型通过工具调用进行回复'
         ],
-        tip: '此节点进入插件配置页，不进入独立 WebUI'
+        tip: '文档连接：https://chatluna.chat/ecosystem/other/character.html'
     }
 }
