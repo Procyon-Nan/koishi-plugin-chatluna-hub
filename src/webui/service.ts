@@ -7,14 +7,10 @@ import {
     type HubConsoleData,
     type HubModuleId,
     type HubModuleToggleResult,
-    isToggleableHubModule
+    isToggleableHubModule,
+    resolveHubModuleState
 } from './modules'
-import {
-    findPluginConfigMatches,
-    getLoader,
-    type PluginConfigMatch,
-    renameConfigKey
-} from './loader'
+import { getLoader, renameConfigKey } from './loader'
 import {
     type ChatLunaAdapterDeleteInput,
     type ChatLunaAdapterListResult,
@@ -108,7 +104,7 @@ export class ChatLunaHubService extends Service {
 
     async getConsoleData(): Promise<HubConsoleData> {
         return {
-            modules: createHubModules(this.ctx),
+            modules: await createHubModules(this.ctx),
             config: {
                 hideDependencyGraphEntry:
                     this.config.hideDependencyGraphEntry ?? false
@@ -133,6 +129,37 @@ export class ChatLunaHubService extends Service {
                 enabled,
                 'This Hub module cannot be enabled or disabled.'
             )
+        }
+
+        const pluginName = definition.pluginName!
+        const moduleState = await resolveHubModuleState(this.ctx, definition)
+
+        if (!moduleState.installed) {
+            return this.toggleFailure(
+                moduleId,
+                enabled,
+                `${pluginName} is not installed.`
+            )
+        }
+
+        if (moduleState.configStatus === 'not-configured') {
+            return {
+                ok: false,
+                moduleId,
+                enabled,
+                status: 'not-configured',
+                reason: `${pluginName} is not configured.`
+            }
+        }
+
+        if (moduleState.configStatus === 'multiple') {
+            return {
+                ok: false,
+                moduleId,
+                enabled,
+                status: 'ambiguous',
+                reason: `${pluginName} has multiple config entries.`
+            }
         }
 
         const loader = getLoader(this.ctx)
@@ -160,41 +187,13 @@ export class ChatLunaHubService extends Service {
             )
         }
 
-        const matches: PluginConfigMatch[] = []
-        findPluginConfigMatches(
-            plugins,
-            definition.pluginName!,
-            loader.entry,
-            matches
-        )
-
-        if (!matches.length) {
-            return {
-                ok: false,
-                moduleId,
-                enabled,
-                status: 'not-configured',
-                reason: `${definition.pluginName} is not configured.`
-            }
-        }
-
-        if (matches.length > 1) {
-            return {
-                ok: false,
-                moduleId,
-                enabled,
-                status: 'ambiguous',
-                reason: `${definition.pluginName} has multiple config entries.`
-            }
-        }
-
-        const match = matches[0]
+        const match = moduleState.matches[0]
 
         if (!match.parentContext) {
             return this.toggleFailure(
                 moduleId,
                 enabled,
-                `Cannot resolve parent context for ${definition.pluginName}.`
+                `Cannot resolve parent context for ${pluginName}.`
             )
         }
 

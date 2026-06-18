@@ -7,15 +7,33 @@ export type HubModuleId =
     | 'livingMemory'
     | 'mediaLuna'
     | 'memesLuna'
+    | 'character'
+
+export type HubModuleEntryType = 'hub' | 'webui' | 'config'
+export type HubModuleRing = 'core' | 'webui' | 'config'
+export type HubModuleConfigStatus =
+    | 'none'
+    | 'missing-package'
+    | 'not-configured'
+    | 'single'
+    | 'multiple'
 
 export interface HubModuleItem {
     id: HubModuleId
     group: HubModuleGroup
+    entryType: HubModuleEntryType
+    ring: HubModuleRing
     title: string
     icon: string
     order: number
+    installed: boolean
     configured: boolean
     available: boolean
+    toggleable: boolean
+    configStatus: HubModuleConfigStatus
+    pluginName?: string
+    configPath?: string
+    routePath?: string
     reason?: string
     activityId?: string
 }

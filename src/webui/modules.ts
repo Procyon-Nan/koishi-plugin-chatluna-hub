@@ -1,5 +1,10 @@
 import type { Context } from 'koishi'
-import { hasPluginConfigEntry, normalizePluginName } from './loader'
+import {
+    findPluginConfigMatches,
+    getLoader,
+    normalizePluginName,
+    type PluginConfigMatch
+} from './loader'
 
 export type HubModuleGroup = 'core' | 'ecosystem'
 export type HubModuleId =
@@ -8,15 +13,33 @@ export type HubModuleId =
     | 'livingMemory'
     | 'mediaLuna'
     | 'memesLuna'
+    | 'character'
+
+export type HubModuleEntryType = 'hub' | 'webui' | 'config'
+export type HubModuleRing = 'core' | 'webui' | 'config'
+export type HubModuleConfigStatus =
+    | 'none'
+    | 'missing-package'
+    | 'not-configured'
+    | 'single'
+    | 'multiple'
 
 export interface HubModuleItem {
     id: HubModuleId
     group: HubModuleGroup
+    entryType: HubModuleEntryType
+    ring: HubModuleRing
     title: string
     icon: string
     order: number
+    installed: boolean
     configured: boolean
     available: boolean
+    toggleable: boolean
+    configStatus: HubModuleConfigStatus
+    pluginName?: string
+    configPath?: string
+    routePath?: string
     reason?: string
     activityId?: string
 }
@@ -47,9 +70,23 @@ export interface HubConsoleConfig {
 
 export interface HubModuleDefinition extends Omit<
     HubModuleItem,
-    'available' | 'configured' | 'reason'
-> {
-    pluginName?: string
+    | 'available'
+    | 'configPath'
+    | 'configStatus'
+    | 'configured'
+    | 'installed'
+    | 'reason'
+> {}
+
+export interface HubModuleRuntimeState {
+    installed: boolean
+    configured: boolean
+    available: boolean
+    configStatus: HubModuleConfigStatus
+    matches: PluginConfigMatch[]
+    configPath?: string
+    routePath?: string
+    reason?: string
 }
 
 interface RuntimeScope {
@@ -64,9 +101,6 @@ interface RuntimeScope {
 interface RuntimeContext {
     loader?: {
         keyFor?: (plugin: unknown) => string | undefined
-        config?: {
-            plugins?: Record<string, unknown>
-        }
     }
     registry?: {
         values?: () => Iterable<RuntimeScope>
@@ -77,45 +111,75 @@ export const moduleDefinitions: HubModuleDefinition[] = [
     {
         id: 'chatluna',
         group: 'core',
+        entryType: 'hub',
+        ring: 'core',
         title: 'ChatLuna',
         icon: 'ChatRound',
-        order: 0
+        order: 0,
+        toggleable: false
     },
     {
         id: 'agent',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'Agent',
         icon: 'Connection',
         order: 10,
         pluginName: 'chatluna-agent',
-        activityId: 'chatluna-agent'
+        activityId: 'chatluna-agent',
+        routePath: '/chatluna-agent',
+        toggleable: true
     },
     {
         id: 'livingMemory',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'Living Memory',
         icon: 'Collection',
         order: 20,
         pluginName: 'chatluna-livingmemory',
-        activityId: 'chatluna-livingmemory'
+        activityId: 'chatluna-livingmemory',
+        routePath: '/chatluna-livingmemory',
+        toggleable: true
     },
     {
         id: 'mediaLuna',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'media-luna',
         icon: 'Palette',
         order: 30,
         pluginName: 'media-luna',
-        activityId: 'media-luna'
+        activityId: 'media-luna',
+        routePath: '/media-luna',
+        toggleable: true
     },
     {
         id: 'memesLuna',
         group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
         title: 'memesluna',
         icon: 'MemesLunaEmoji',
         order: 40,
         pluginName: 'memesluna',
-        activityId: 'memesluna'
+        activityId: 'memesluna',
+        routePath: '/memesluna/',
+        toggleable: true
+    },
+    {
+        id: 'character',
+        group: 'ecosystem',
+        entryType: 'config',
+        ring: 'config',
+        title: 'Character',
+        icon: 'UserFilled',
+        order: 110,
+        pluginName: 'chatluna-character',
+        toggleable: true
     }
 ]
 
@@ -126,14 +190,21 @@ export const getHubModuleDefinition = (id: HubModuleId) => {
 export const isToggleableHubModule = (id: HubModuleId) => {
     const definition = getHubModuleDefinition(id)
 
-    return definition?.group === 'ecosystem' && Boolean(definition.pluginName)
+    return definition?.toggleable === true && Boolean(definition.pluginName)
 }
 
-const isPluginConfigured = (ctx: Context, pluginName: string) => {
-    const runtimeCtx = ctx as Context & RuntimeContext
-    const plugins = runtimeCtx.loader?.config?.plugins
+const getPluginConfigMatches = (
+    ctx: Context,
+    pluginName: string
+): PluginConfigMatch[] => {
+    const loader = getLoader(ctx)
+    const plugins = loader?.config?.plugins
+    if (!plugins) return []
 
-    return Boolean(plugins && hasPluginConfigEntry(plugins, pluginName))
+    const matches: PluginConfigMatch[] = []
+    findPluginConfigMatches(plugins, pluginName, loader.entry, matches)
+
+    return matches
 }
 
 const isScopeRunning = (scope: RuntimeScope) => {
@@ -187,25 +258,123 @@ const isPluginRunning = (ctx: Context, pluginName: string) => {
     return false
 }
 
-export const createHubModules = (ctx: Context): HubModuleItem[] => {
-    return moduleDefinitions.map(({ pluginName, ...definition }) => {
-        const configured = pluginName
-            ? isPluginConfigured(ctx, pluginName)
-            : true
-        const available = pluginName ? isPluginRunning(ctx, pluginName) : true
-        let reason: string | undefined
+const resolveCandidatePluginNames = (pluginName: string) => {
+    const normalized = normalizePluginName(pluginName)
+    if (!normalized) return [pluginName]
 
-        if (!available) {
-            reason = configured
-                ? `Enable ${pluginName} to open this module.`
-                : `${pluginName} is not installed or configured.`
-        }
+    return Array.from(
+        new Set([
+            pluginName,
+            normalized,
+            `koishi-plugin-${normalized}`,
+            `@koishijs/plugin-${normalized}`
+        ])
+    )
+}
 
-        return {
-            ...definition,
-            configured,
-            available,
-            reason
+const isPluginInstalled = async (ctx: Context, pluginName: string) => {
+    const loader = getLoader(ctx)
+    if (!loader?.resolve) return true
+
+    for (const candidate of resolveCandidatePluginNames(pluginName)) {
+        try {
+            const resolved = await loader.resolve(candidate)
+            if (resolved) return true
+        } catch {
+            // Try the next Koishi package-name variant.
         }
-    })
+    }
+
+    return false
+}
+
+const getConfigStatus = (
+    pluginName: string | undefined,
+    installed: boolean,
+    matchCount: number
+): HubModuleConfigStatus => {
+    if (!pluginName) return 'none'
+    if (!installed) return 'missing-package'
+    if (matchCount === 0) return 'not-configured'
+    if (matchCount === 1) return 'single'
+    return 'multiple'
+}
+
+const createUnavailableReason = (
+    pluginName: string | undefined,
+    configStatus: HubModuleConfigStatus,
+    available: boolean
+) => {
+    if (!pluginName) return
+    if (configStatus === 'missing-package') {
+        return `${pluginName} is not installed.`
+    }
+    if (configStatus === 'not-configured') {
+        return `${pluginName} is not configured.`
+    }
+    if (configStatus === 'multiple') {
+        return `${pluginName} has multiple config entries.`
+    }
+    if (!available) return `Enable ${pluginName} to open this module.`
+}
+
+const getModuleRoutePath = (
+    definition: HubModuleDefinition,
+    configPath: string | undefined
+) => {
+    if (definition.entryType === 'config' && configPath) {
+        return `/plugins/${configPath}`
+    }
+
+    return definition.routePath
+}
+
+export const resolveHubModuleState = async (
+    ctx: Context,
+    definition: HubModuleDefinition
+): Promise<HubModuleRuntimeState> => {
+    const pluginName = definition.pluginName
+    const matches = pluginName ? getPluginConfigMatches(ctx, pluginName) : []
+    const matchCount = matches.length
+    const installed = pluginName
+        ? await isPluginInstalled(ctx, pluginName)
+        : true
+    const configured = pluginName ? matchCount > 0 : true
+    const available = pluginName ? isPluginRunning(ctx, pluginName) : true
+    const configStatus = getConfigStatus(pluginName, installed, matchCount)
+    const configPath = configStatus === 'single' ? matches[0].path : undefined
+    const routePath = getModuleRoutePath(definition, configPath)
+    const reason = createUnavailableReason(pluginName, configStatus, available)
+
+    return {
+        installed,
+        configured,
+        available,
+        configStatus,
+        matches,
+        configPath,
+        routePath,
+        reason
+    }
+}
+
+export const createHubModules = async (
+    ctx: Context
+): Promise<HubModuleItem[]> => {
+    return Promise.all(
+        moduleDefinitions.map(async (definition) => {
+            const state = await resolveHubModuleState(ctx, definition)
+
+            return {
+                ...definition,
+                installed: state.installed,
+                configured: state.configured,
+                available: state.available,
+                configStatus: state.configStatus,
+                configPath: state.configPath,
+                routePath: state.routePath,
+                reason: state.reason
+            }
+        })
+    )
 }

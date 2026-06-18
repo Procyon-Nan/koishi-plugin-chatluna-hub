@@ -13,7 +13,7 @@ export interface ModuleDetail {
     tip?: string
 }
 
-export const moduleDetails: Record<HubModuleId, ModuleDetail> = {
+export const moduleDetails: Partial<Record<HubModuleId, ModuleDetail>> = {
     chatluna: {
         title: 'ChatLuna 主插件',
         subtitle: 'ChatLuna生态的核心',
@@ -78,5 +78,17 @@ export const moduleDetails: Record<HubModuleId, ModuleDetail> = {
             '通过关键词进行表情包库的分类'
         ],
         tip: '文档链接：https://www.npmjs.com/package/koishi-plugin-memesluna/v/0.2.10'
+    },
+    character: {
+        title: 'ChatLuna Character',
+        subtitle: '角色预设扩展配置',
+        description:
+            '提供 Character 预设相关的配置入口。该插件没有独立 WebUI，节点用于跳转到 Koishi 插件配置页面',
+        features: [
+            '维护 Character 插件配置项',
+            '配合 ChatLuna Core 预设管理使用',
+            '通过 Koishi 插件配置页启用或调整插件行为'
+        ],
+        tip: '此节点进入插件配置页，不进入独立 WebUI'
     }
 }
