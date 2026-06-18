@@ -1609,10 +1609,12 @@ const handleGraphWheel = (event: WheelEvent) => {
     const delta = normalizeWheelDelta(event)
     if (!Number.isFinite(delta) || delta === 0) return
 
-    event.preventDefault()
     const previous = graphZoom.value
     setGraphZoom(graphZoom.value * Math.exp(-delta * 0.0012))
-    if (graphZoom.value !== previous) savePersistedGraphZoom()
+    if (graphZoom.value !== previous) {
+        event.preventDefault()
+        savePersistedGraphZoom()
+    }
 }
 
 const eventToPoint = (event: PointerEvent): Point | null => {
@@ -2638,7 +2640,6 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
     .edge-flow,
-    .edge-joint,
     .node-disc,
     .node-glow {
         animation: none !important;

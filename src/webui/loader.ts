@@ -53,7 +53,7 @@ export const getConfigPathFromKey = (key: string) => {
     const activeKey = getActiveConfigKey(key)
     const separator = activeKey.indexOf(':')
 
-    return separator < 0 ? '' : activeKey.slice(separator + 1)
+    return separator < 0 ? activeKey : activeKey.slice(separator + 1)
 }
 
 export const getForkContext = (parent: Context | undefined, key: string) => {
