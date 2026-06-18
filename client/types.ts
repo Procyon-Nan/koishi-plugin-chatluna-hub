@@ -8,6 +8,28 @@ export type HubModuleId =
     | 'mediaLuna'
     | 'memesLuna'
     | 'character'
+    | 'multimodalService'
+    | 'usage'
+    | 'groupAnalysis'
+    | 'affinity'
+    | 'searchService'
+    | 'forwardMsg'
+    | 'llmWebSearch'
+
+export type HubModuleIconName =
+    | 'ChatRound'
+    | 'Collection'
+    | 'Connection'
+    | 'Palette'
+    | 'MemesLunaEmoji'
+    | 'UserFilled'
+    | 'Picture'
+    | 'TrendCharts'
+    | 'DataAnalysis'
+    | 'Star'
+    | 'Search'
+    | 'Message'
+    | 'Link'
 
 export type HubModuleEntryType = 'hub' | 'webui' | 'config'
 export type HubModuleRing = 'core' | 'webui' | 'config'
@@ -24,7 +46,7 @@ export interface HubModuleItem {
     entryType: HubModuleEntryType
     ring: HubModuleRing
     title: string
-    icon: string
+    icon: HubModuleIconName
     order: number
     installed: boolean
     configured: boolean

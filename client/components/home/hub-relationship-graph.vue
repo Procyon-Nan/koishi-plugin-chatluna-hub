@@ -12,7 +12,7 @@
 
             <aside class="ecosystem-meter" aria-label="ChatLuna ecosystem plugins">
                 <span>ChatLuna &#29983;&#24577;&#25554;&#20214;</span>
-                <strong>{{ availableEcosystemCount }} / {{ confirmedEcosystemTotal }}</strong>
+                <strong>{{ availableEcosystemCount }} / {{ ecosystemModuleCount }}</strong>
                 <small>&#21487;&#29992; / &#20840;&#37096;</small>
             </aside>
 
@@ -399,12 +399,12 @@
                                 <div class="step-item"></div>
                                 <div class="step-item">
                                     <span class="step-num">3</span>
-                                    <p>支持开关控制的 WebUI 节点被拖动到距离主节点过远的位置时，该节点所属插件将会被关闭</p>
+                                    <p>支持开关控制的生态节点被拖动到距离主节点过远的位置时，该节点所属插件将会被关闭</p>
                                 </div>
                                 <div class="step-item"></div>
                                 <div class="step-item">
                                     <span class="step-num">4</span>
-                                    <p>未安装、未配置、多配置和配置入口节点不会触发插件开关操作</p>
+                                    <p>未安装、未配置和多配置节点不会触发插件开关操作</p>
                                 </div>
                                 <div class="step-item"></div>
                                 <div class="step-item">
@@ -449,9 +449,15 @@ import {
     ChatRound,
     Collection,
     Connection,
-    Cpu,
+    DataAnalysis,
     Guide,
+    Link,
+    Message,
     Operation,
+    Picture,
+    Search,
+    Star,
+    TrendCharts,
     UserFilled
 } from '@element-plus/icons-vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
@@ -463,6 +469,7 @@ import {
     isHubModuleStatusActive
 } from '../../module-access'
 import type {
+    HubModuleIconName,
     HubModuleId,
     HubModuleItem,
     HubModuleToggleResult
@@ -585,17 +592,21 @@ const detailFontSizePx = ref(18)
 const detailFontSizeStorageKey = 'chatluna-hub:detail-font-size:v1'
 const graphZoomStorageKey = 'chatluna-hub:relationship-graph-zoom:v1'
 
-const icons: Record<string, Component> = {
+const icons = {
     ChatRound,
     Collection,
     Connection,
-    Cpu,
+    DataAnalysis,
+    Link,
+    Message,
+    Picture,
+    Search,
+    Star,
+    TrendCharts,
     UserFilled,
     MemesLunaEmoji: MemesLunaIcon
-}
+} satisfies Record<HubModuleIconName, Component>
 
-// Manually maintained; do not infer this from installed packages.
-const confirmedEcosystemTotal = 5
 const positionStorageKey = 'chatluna-hub:relationship-node-positions:v1'
 const rangeStorageKey = 'chatluna-hub:relationship-effective-range:v1'
 const stageRef = ref<HTMLElement | null>(null)
@@ -627,18 +638,15 @@ const errorTimers: Partial<Record<HubModuleId, number>> = {}
 const sortedModules = computed(() =>
     props.modules.slice().sort((left, right) => left.order - right.order)
 )
-const availableEcosystemCount = computed(() => {
-    const count = sortedModules.value.filter(
-        (item) => item.group === 'ecosystem' && item.available
-    ).length
-
-    return Math.min(count, confirmedEcosystemTotal)
-})
 const coreModule = computed(() =>
     sortedModules.value.find((item) => item.id === 'chatluna') ?? null
 )
 const ecosystemModules = computed(() =>
     sortedModules.value.filter((item) => item.id !== 'chatluna')
+)
+const ecosystemModuleCount = computed(() => ecosystemModules.value.length)
+const availableEcosystemCount = computed(
+    () => ecosystemModules.value.filter((item) => item.available).length
 )
 const webuiModules = computed(() =>
     ecosystemModules.value.filter((item) => item.ring !== 'config')
@@ -873,7 +881,7 @@ const edgeStyle = (edge: GraphEdge) =>
         color: edge.color
     }) as Record<string, string>
 
-const resolveIcon = (icon: string) => icons[icon] ?? Cpu
+const resolveIcon = (icon: HubModuleIconName) => icons[icon]
 const getFloatDelay = (id: HubModuleId) => {
     if (id === 'agent') return -0.8
     if (id === 'livingMemory') return -2.2

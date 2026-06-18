@@ -75,8 +75,14 @@ import {
     CircleClose,
     Collection,
     Connection,
-    Cpu,
     Brush,
+    DataAnalysis,
+    Link,
+    Message,
+    Picture,
+    Search,
+    Star,
+    TrendCharts,
     UserFilled
 } from '@element-plus/icons-vue'
 import HubRelationshipGraph from '../home/hub-relationship-graph.vue'
@@ -84,20 +90,33 @@ import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
 import { canOpenHubModule } from '../../module-access'
-import type { HubModuleId, HubModuleItem } from '../../types'
+import type {
+    HubModuleIconName,
+    HubModuleId,
+    HubModuleItem
+} from '../../types'
 
 const fallbackReason = 'Waiting for Hub module data.'
 
+type FallbackModuleDefinition = Omit<
+    HubModuleItem,
+    | 'available'
+    | 'configPath'
+    | 'configStatus'
+    | 'configured'
+    | 'installed'
+    | 'reason'
+>
+
+interface ConfigFallbackDefinitionInput {
+    id: HubModuleId
+    title: string
+    icon: HubModuleIconName
+    order: number
+}
+
 const createFallbackModule = (
-    definition: Omit<
-        HubModuleItem,
-        | 'available'
-        | 'configPath'
-        | 'configStatus'
-        | 'configured'
-        | 'installed'
-        | 'reason'
-    >
+    definition: FallbackModuleDefinition
 ): HubModuleItem => {
     const isCoreModule = definition.group === 'core'
 
@@ -110,6 +129,67 @@ const createFallbackModule = (
         reason: isCoreModule ? undefined : fallbackReason
     }
 }
+
+const createConfigFallbackDefinition = (
+    definition: ConfigFallbackDefinitionInput
+): FallbackModuleDefinition => ({
+    ...definition,
+    group: 'ecosystem',
+    entryType: 'config',
+    ring: 'config',
+    toggleable: true
+})
+
+const configFallbackModuleDefinitions = [
+    createConfigFallbackDefinition({
+        id: 'character',
+        title: 'Character',
+        icon: 'UserFilled',
+        order: 110
+    }),
+    createConfigFallbackDefinition({
+        id: 'multimodalService',
+        title: 'Multimodal Service',
+        icon: 'Picture',
+        order: 120
+    }),
+    createConfigFallbackDefinition({
+        id: 'usage',
+        title: 'Usage',
+        icon: 'TrendCharts',
+        order: 130
+    }),
+    createConfigFallbackDefinition({
+        id: 'groupAnalysis',
+        title: 'Group Analysis',
+        icon: 'DataAnalysis',
+        order: 140
+    }),
+    createConfigFallbackDefinition({
+        id: 'affinity',
+        title: 'Affinity',
+        icon: 'Star',
+        order: 150
+    }),
+    createConfigFallbackDefinition({
+        id: 'searchService',
+        title: 'Search Service',
+        icon: 'Search',
+        order: 160
+    }),
+    createConfigFallbackDefinition({
+        id: 'forwardMsg',
+        title: 'Forward Msg',
+        icon: 'Message',
+        order: 170
+    }),
+    createConfigFallbackDefinition({
+        id: 'llmWebSearch',
+        title: 'LLM Web Search',
+        icon: 'Link',
+        order: 180
+    })
+]
 
 const fallbackModules: HubModuleItem[] = [
     {
@@ -170,27 +250,24 @@ const fallbackModules: HubModuleItem[] = [
         activityId: 'memesluna',
         routePath: '/memesluna/'
     },
-    {
-        id: 'character',
-        group: 'ecosystem',
-        entryType: 'config',
-        ring: 'config',
-        title: 'Character',
-        icon: 'UserFilled',
-        order: 110,
-        toggleable: true
-    }
+    ...configFallbackModuleDefinitions
 ].map(createFallbackModule)
 
-const icons: Record<string, Component> = {
+const icons = {
     ChatRound,
     Collection,
     Connection,
-    Cpu,
+    DataAnalysis,
+    Link,
+    Message,
     Palette: Brush,
+    Picture,
+    Search,
+    Star,
+    TrendCharts,
     UserFilled,
     MemesLunaEmoji: MemesLunaIcon
-}
+} satisfies Record<HubModuleIconName, Component>
 
 const hubHomePath = '/chatluna'
 const active = ref<HubModuleId | null>(null)
@@ -227,7 +304,7 @@ const adapterDescription = computed(() => {
     return 'This page will reuse the living-memory/* RPC contracts.'
 })
 
-const resolveIcon = (icon: string) => icons[icon] ?? Cpu
+const resolveIcon = (icon: HubModuleIconName) => icons[icon]
 const showHome = () => {
     active.value = null
 }

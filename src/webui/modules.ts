@@ -14,6 +14,28 @@ export type HubModuleId =
     | 'mediaLuna'
     | 'memesLuna'
     | 'character'
+    | 'multimodalService'
+    | 'usage'
+    | 'groupAnalysis'
+    | 'affinity'
+    | 'searchService'
+    | 'forwardMsg'
+    | 'llmWebSearch'
+
+export type HubModuleIconName =
+    | 'ChatRound'
+    | 'Collection'
+    | 'Connection'
+    | 'Palette'
+    | 'MemesLunaEmoji'
+    | 'UserFilled'
+    | 'Picture'
+    | 'TrendCharts'
+    | 'DataAnalysis'
+    | 'Star'
+    | 'Search'
+    | 'Message'
+    | 'Link'
 
 export type HubModuleEntryType = 'hub' | 'webui' | 'config'
 export type HubModuleRing = 'core' | 'webui' | 'config'
@@ -30,7 +52,7 @@ export interface HubModuleItem {
     entryType: HubModuleEntryType
     ring: HubModuleRing
     title: string
-    icon: string
+    icon: HubModuleIconName
     order: number
     installed: boolean
     configured: boolean
@@ -107,6 +129,83 @@ interface RuntimeContext {
     }
 }
 
+interface ConfigModuleDefinitionInput {
+    id: HubModuleId
+    title: string
+    icon: HubModuleIconName
+    order: number
+    pluginName: string
+}
+
+const defineConfigModule = (
+    definition: ConfigModuleDefinitionInput
+): HubModuleDefinition => ({
+    ...definition,
+    group: 'ecosystem',
+    entryType: 'config',
+    ring: 'config',
+    toggleable: true
+})
+
+const configModuleDefinitions = [
+    defineConfigModule({
+        id: 'character',
+        title: 'Character',
+        icon: 'UserFilled',
+        order: 110,
+        pluginName: 'chatluna-character'
+    }),
+    defineConfigModule({
+        id: 'multimodalService',
+        title: 'Multimodal Service',
+        icon: 'Picture',
+        order: 120,
+        pluginName: 'chatluna-multimodal-service'
+    }),
+    defineConfigModule({
+        id: 'usage',
+        title: 'Usage',
+        icon: 'TrendCharts',
+        order: 130,
+        pluginName: 'chatluna-usage'
+    }),
+    defineConfigModule({
+        id: 'groupAnalysis',
+        title: 'Group Analysis',
+        icon: 'DataAnalysis',
+        order: 140,
+        pluginName: 'chatluna-group-analysis'
+    }),
+    defineConfigModule({
+        id: 'affinity',
+        title: 'Affinity',
+        icon: 'Star',
+        order: 150,
+        pluginName: 'chatluna-affinity'
+    }),
+    defineConfigModule({
+        id: 'searchService',
+        title: 'Search Service',
+        icon: 'Search',
+        order: 160,
+        pluginName: 'chatluna-search-service'
+    }),
+    defineConfigModule({
+        id: 'forwardMsg',
+        title: 'Forward Msg',
+        icon: 'Message',
+        order: 170,
+        pluginName: 'chatluna-forward-msg'
+    }),
+    defineConfigModule({
+        id: 'llmWebSearch',
+        title: 'LLM Web Search',
+        icon: 'Link',
+        order: 180,
+        pluginName: 'chatluna-llm-web-search'
+    })
+]
+
 export const moduleDefinitions: HubModuleDefinition[] = [
     {
         id: 'chatluna',
@@ -170,17 +269,7 @@ export const moduleDefinitions: HubModuleDefinition[] = [
         routePath: '/memesluna/',
         toggleable: true
     },
-    {
-        id: 'character',
-        group: 'ecosystem',
-        entryType: 'config',
-        ring: 'config',
-        title: 'Character',
-        icon: 'UserFilled',
-        order: 110,
-        pluginName: 'chatluna-character',
-        toggleable: true
-    }
+    ...configModuleDefinitions
 ]
 
 export const getHubModuleDefinition = (id: HubModuleId) => {

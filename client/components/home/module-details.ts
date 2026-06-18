@@ -13,7 +13,7 @@ export interface ModuleDetail {
     tip?: string
 }
 
-export const moduleDetails: Partial<Record<HubModuleId, ModuleDetail>> = {
+export const moduleDetails = {
     chatluna: {
         title: 'ChatLuna 主插件',
         subtitle: 'ChatLuna生态的核心',
@@ -91,5 +91,96 @@ export const moduleDetails: Partial<Record<HubModuleId, ModuleDetail>> = {
             '支持agent能力足够的模型通过工具调用进行回复'
         ],
         tip: '文档链接：https://chatluna.chat/ecosystem/other/character.html'
+    },
+    multimodalService: {
+        title: 'ChatLuna Multimodal Service',
+        subtitle: '多模态内容处理服务',
+        description:
+            '为 ChatLuna 提供图像、语音、GIF 和文件读取能力，使模型能够处理更复杂的上下文输入',
+        features: [
+            '为不具备原生视觉能力的模型提供图片读取支持',
+            '支持语音文件转写和多媒体内容解析',
+            '提供 GIF 图片处理与文件读取工具',
+            '可配合存储服务管理请求中的文件资源'
+        ],
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/multimodal-service.html'
+    },
+    usage: {
+        title: 'ChatLuna Usage',
+        subtitle: '模型调用用量记录',
+        description:
+            '记录 ChatLuna 模型调用产生的 token 用量、调用来源和执行结果，用于后续统计与审计',
+        features: [
+            '按模型、平台和调用来源记录 token 消耗',
+            '保留调用成功状态和估算标记',
+            '支持按时间范围查询调用明细',
+            '提供 tokens 指令输出整体消耗趋势'
+        ],
+        tip: '文档链接：https://github.com/ChatLunaLab/chatluna/tree/v1-dev/packages/extension-usage#readme'
+    },
+    groupAnalysis: {
+        title: 'ChatLuna Group Analysis',
+        subtitle: '群聊分析与报告生成',
+        description:
+            '分析群聊历史并生成统计报告，可借助大语言模型总结话题和用户画像',
+        features: [
+            '统计群聊消息量、活跃时段和发言排行',
+            '使用自然语言指定分析时间、人物或话题',
+            '支持生成图片形式的群聊分析报告',
+            '可通过命令或定时任务触发分析'
+        ],
+        tip: '文档链接：https://github.com/ChatLunaLab/chatluna-group-analysis#readme'
+    },
+    affinity: {
+        title: 'ChatLuna Affinity',
+        subtitle: '角色长期互动状态系统',
+        description:
+            '为 ChatLuna Character 管理角色与用户之间的长期状态，包括好感度、关系、黑名单和昵称',
+        features: [
+            '按 scopeId 隔离角色互动数据',
+            '提供好感度、关系等级和黑名单变量',
+            '支持 XML 工具调用写入互动状态',
+            '可将排行、黑名单和详情渲染为图片'
+        ],
+        tip: '文档链接：https://github.com/Sor85/AAAAACAT-chatluna-plugins'
+    },
+    searchService: {
+        title: 'ChatLuna Search Service',
+        subtitle: '多源聚合搜索服务',
+        description:
+            '为 ChatLuna 提供联网搜索工具，支持多种搜索服务源和浏览器读取能力',
+        features: [
+            '支持 Bing、Google、DuckDuckGo 等搜索源',
+            '提供 web_search 和浏览器相关工具',
+            '可配置搜索结果数量、语言和地区',
+            '可配合 Puppeteer 完成网页内容读取'
+        ],
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/search-service.html'
+    },
+    forwardMsg: {
+        title: 'ChatLuna Forward Msg',
+        subtitle: 'OneBot 合并转发消息工具',
+        description:
+            '为 ChatLuna 提供 OneBot 合并转发消息读取、发送、伪造发送和图片描述工具',
+        features: [
+            '读取并解析 OneBot 合并转发消息节点',
+            '支持嵌套解析和读取结果缓存',
+            '以 Bot 身份发送文本与图片混合转发消息',
+            '可调用图片描述能力生成适合模型阅读的内容'
+        ],
+        tip: '文档链接：https://github.com/CookSleep/chatluna-forward-msg'
+    },
+    llmWebSearch: {
+        title: 'ChatLuna LLM Web Search',
+        subtitle: '模型内置搜索工具接入',
+        description:
+            '为 ChatLuna 提供基于模型内置搜索能力的 Web Search、Web Read、X Search 和 X Read 工具',
+        features: [
+            '支持 GPT、Gemini 和 Grok 等模型搜索能力',
+            '使用 Jina Reader 读取网页 URL 内容',
+            '支持 X/Twitter 内容搜索与读取',
+            '可为搜索和读取结果中的图片生成描述'
+        ],
+        tip: '文档链接：https://github.com/CookSleep/chatluna-llm-web-search'
     }
-}
+} satisfies Record<HubModuleId, ModuleDetail>
