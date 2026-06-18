@@ -1952,9 +1952,12 @@ onBeforeUnmount(() => {
 }
 
 .detail-tip p {
+    flex: 1 1 auto;
+    min-width: 0;
     margin: 0;
     font-size: calc(var(--detail-font-size) - 1.5px);
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .detail-card-default {

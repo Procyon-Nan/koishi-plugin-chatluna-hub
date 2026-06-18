@@ -90,6 +90,6 @@ export const moduleDetails: Partial<Record<HubModuleId, ModuleDetail>> = {
             '从适配器API自动获取到历史信息进入上下文',
             '支持agent能力足够的模型通过工具调用进行回复'
         ],
-        tip: '文档连接：https://chatluna.chat/ecosystem/other/character.html'
+        tip: '文档链接：https://chatluna.chat/ecosystem/other/character.html'
     }
 }
