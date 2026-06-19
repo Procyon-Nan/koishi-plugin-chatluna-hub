@@ -22,6 +22,7 @@ export type HubModuleId =
     | 'searchService'
     | 'forwardMsg'
     | 'llmWebSearch'
+    | 'longMemory'
 
 export type HubModuleIconName =
     | 'ChatRound'
@@ -204,6 +205,13 @@ const configModuleDefinitions = [
         icon: 'Link',
         order: 180,
         pluginName: 'chatluna-llm-web-search'
+    }),
+    defineConfigModule({
+        id: 'longMemory',
+        title: 'Long Memory',
+        icon: 'Collection',
+        order: 190,
+        pluginName: 'chatluna-long-memory'
     })
 ]
 

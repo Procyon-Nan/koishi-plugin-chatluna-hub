@@ -15,6 +15,7 @@ export type HubModuleId =
     | 'searchService'
     | 'forwardMsg'
     | 'llmWebSearch'
+    | 'longMemory'
 
 export type HubModuleIconName =
     | 'ChatRound'

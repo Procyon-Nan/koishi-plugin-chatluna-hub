@@ -188,6 +188,12 @@ const configFallbackModuleDefinitions = [
         title: 'LLM Web Search',
         icon: 'Link',
         order: 180
+    }),
+    createConfigFallbackDefinition({
+        id: 'longMemory',
+        title: 'Long Memory',
+        icon: 'Collection',
+        order: 190
     })
 ]
 

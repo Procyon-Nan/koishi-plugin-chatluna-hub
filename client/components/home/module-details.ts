@@ -182,5 +182,18 @@ export const moduleDetails = {
             '可为搜索和读取结果中的图片生成描述'
         ],
         tip: '文档链接：https://github.com/CookSleep/chatluna-llm-web-search'
+    },
+    longMemory: {
+        title: 'ChatLuna Long Memory',
+        subtitle: '分层长期记忆系统',
+        description:
+            '为 ChatLuna 提供按全局、预设、群组和用户作用域组织的长期记忆检索与注入能力',
+        features: [
+            '支持 Global、Preset、Guild 和 User 多层记忆作用域',
+            '可为不同记忆层配置 Basic、HippoRAG 或 EMGAS 引擎',
+            '按对话轮次自动抽取长期记忆，并支持查询改写',
+            '提供 memory_search、memory_add、memory_delete、memory_update 工具'
+        ],
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/long-term-memory.html'
     }
 } satisfies Record<HubModuleId, ModuleDetail>
