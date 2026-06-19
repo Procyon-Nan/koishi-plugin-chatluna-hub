@@ -777,8 +777,6 @@ const getSatelliteNodeMetrics = (item: HubModuleItem) => {
 }
 
 const getVisualPosition = (id: HubModuleId, base: Point): Point => {
-    if (draggingId.value === id) return base
-
     const visual = carriedVisuals[id]
     return visual ? { ...visual } : base
 }
@@ -1035,7 +1033,6 @@ const handleNodePointerDown = (event: PointerEvent, node: GraphNode) => {
     draggingId.value = node.id
 
     if (node.id !== 'chatluna') {
-        nodePositions[node.id] = dragState.startPosition
         carriedVisuals[node.id] = dragState.startPosition
         carriedVelocities[node.id] = { x: 0, y: 0 }
     }
@@ -1075,10 +1072,13 @@ const handleDragEnd = (event: PointerEvent) => {
     const target = sortedModules.value.find((item) => item.id === dragState!.id)
     if (!dragState.moved && target) selectModule(target)
     if (dragState.moved) {
-        savePersistedPositions()
         if (target) {
+            const finalPosition =
+                carriedVisuals[target.id] ?? nodePositions[target.id]
+
+            if (finalPosition) nodePositions[target.id] = { ...finalPosition }
             // Set final drop positions and zero velocities to prevent inertia/spring effect
-            carriedVisuals[target.id] = nodePositions[target.id]
+            if (finalPosition) carriedVisuals[target.id] = { ...finalPosition }
             carriedVelocities[target.id] = { x: 0, y: 0 }
 
             if (target.id === 'chatluna') {
@@ -1090,6 +1090,8 @@ const handleDragEnd = (event: PointerEvent) => {
                 void reconcileModuleBoundary(target)
             }
         }
+
+        savePersistedPositions()
     }
 
     dragState = null
@@ -1246,8 +1248,8 @@ const syncPhysicsStates = () => {
         if (stateIndex >= physicsStates.length) {
             physicsStates.push({
                 id,
-                x: isDragging ? base.x : current.x,
-                y: isDragging ? base.y : current.y,
+                x: current.x,
+                y: current.y,
                 vx: isDragging ? 0 : velocity.x,
                 vy: isDragging ? 0 : velocity.y,
                 radius: getSatelliteNodeMetrics(item).radius,
@@ -1259,8 +1261,8 @@ const syncPhysicsStates = () => {
         } else {
             const s = physicsStates[stateIndex]
             s.id = id
-            s.x = isDragging ? base.x : current.x
-            s.y = isDragging ? base.y : current.y
+            s.x = current.x
+            s.y = current.y
             s.vx = isDragging ? 0 : velocity.x
             s.vy = isDragging ? 0 : velocity.y
             s.radius = getSatelliteNodeMetrics(item).radius
@@ -1394,7 +1396,7 @@ const tickCarriedNodes = (deltaFrames: number) => {
         }
     }
 
-    // 4. Apply Rope Constraint (from Core) & Save positions
+    // 4. Apply rope constraint and sync visual state.
     for (let i = 0; i < statesCount; i++) {
         const state = physicsStates[i]
         if (state.isCore) continue
@@ -1447,7 +1449,10 @@ const tickCarriedNodes = (deltaFrames: number) => {
             velocity.y = state.vy
         }
         carriedVisuals[id] = position
-        nodePositions[id] = position
+
+        if (draggingCore && dragState?.moved) {
+            nodePositions[id] = position
+        }
     }
 }
 
