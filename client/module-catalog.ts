@@ -1,9 +1,8 @@
 /**
- * Static descriptive content for each Hub module, shown in the relationship
- * graph's detail card. Pure content — no logic — kept out of the graph SFC so
- * the component focuses on layout and animation.
+ * Static frontend metadata for Hub modules. This keeps fallback graph nodes and
+ * detail-card content in one place so visible ecosystem nodes stay synchronized.
  */
-import type { HubModuleId } from '../../types'
+import type { HubModuleIconName, HubModuleId, HubModuleItem } from './types'
 
 export interface ModuleDetail {
     title: string
@@ -12,6 +11,169 @@ export interface ModuleDetail {
     features: string[]
     tip?: string
 }
+
+type FallbackModuleDefinition = Omit<
+    HubModuleItem,
+    | 'available'
+    | 'configPath'
+    | 'configStatus'
+    | 'configured'
+    | 'installed'
+    | 'reason'
+>
+
+interface ConfigFallbackDefinitionInput {
+    id: HubModuleId
+    title: string
+    icon: HubModuleIconName
+    order: number
+}
+
+const fallbackReason = 'Waiting for Hub module data.'
+
+const createFallbackModule = (
+    definition: FallbackModuleDefinition
+): HubModuleItem => {
+    const isCoreModule = definition.group === 'core'
+
+    return {
+        ...definition,
+        installed: isCoreModule,
+        configured: isCoreModule,
+        available: isCoreModule,
+        configStatus: isCoreModule ? 'none' : 'missing-package',
+        reason: isCoreModule ? undefined : fallbackReason
+    }
+}
+
+const createConfigFallbackDefinition = (
+    definition: ConfigFallbackDefinitionInput
+): FallbackModuleDefinition => ({
+    ...definition,
+    group: 'ecosystem',
+    entryType: 'config',
+    ring: 'config',
+    toggleable: true
+})
+
+const configFallbackModuleDefinitions = [
+    createConfigFallbackDefinition({
+        id: 'character',
+        title: 'Character',
+        icon: 'UserFilled',
+        order: 110
+    }),
+    createConfigFallbackDefinition({
+        id: 'multimodalService',
+        title: 'Multimodal Service',
+        icon: 'Picture',
+        order: 120
+    }),
+    createConfigFallbackDefinition({
+        id: 'usage',
+        title: 'Usage',
+        icon: 'TrendCharts',
+        order: 130
+    }),
+    createConfigFallbackDefinition({
+        id: 'groupAnalysis',
+        title: 'Group Analysis',
+        icon: 'DataAnalysis',
+        order: 140
+    }),
+    createConfigFallbackDefinition({
+        id: 'affinity',
+        title: 'Affinity',
+        icon: 'Star',
+        order: 150
+    }),
+    createConfigFallbackDefinition({
+        id: 'searchService',
+        title: 'Search Service',
+        icon: 'Search',
+        order: 160
+    }),
+    createConfigFallbackDefinition({
+        id: 'forwardMsg',
+        title: 'Forward Msg',
+        icon: 'Message',
+        order: 170
+    }),
+    createConfigFallbackDefinition({
+        id: 'llmWebSearch',
+        title: 'LLM Web Search',
+        icon: 'Link',
+        order: 180
+    }),
+    createConfigFallbackDefinition({
+        id: 'longMemory',
+        title: 'Long Memory',
+        icon: 'Collection',
+        order: 190
+    })
+]
+
+export const fallbackModules: HubModuleItem[] = [
+    {
+        id: 'chatluna',
+        group: 'core',
+        entryType: 'hub',
+        ring: 'core',
+        title: 'ChatLuna',
+        icon: 'ChatRound',
+        order: 0,
+        toggleable: false
+    },
+    {
+        id: 'agent',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'Agent',
+        icon: 'Connection',
+        order: 10,
+        toggleable: true,
+        activityId: 'chatluna-agent',
+        routePath: '/chatluna-agent'
+    },
+    {
+        id: 'livingMemory',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'Living Memory',
+        icon: 'Collection',
+        order: 20,
+        toggleable: true,
+        activityId: 'chatluna-livingmemory',
+        routePath: '/chatluna-livingmemory'
+    },
+    {
+        id: 'mediaLuna',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'media-luna',
+        icon: 'Palette',
+        order: 30,
+        toggleable: true,
+        activityId: 'media-luna',
+        routePath: '/media-luna'
+    },
+    {
+        id: 'memesLuna',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'memesluna',
+        icon: 'MemesLunaEmoji',
+        order: 40,
+        toggleable: true,
+        activityId: 'memesluna',
+        routePath: '/memesluna/'
+    },
+    ...configFallbackModuleDefinitions
+].map(createFallbackModule)
 
 export const moduleDetails = {
     chatluna: {

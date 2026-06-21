@@ -44,7 +44,7 @@
                 <div class="graph-viewport" :style="graphViewportStyle">
                 <svg
                     class="graph-svg"
-                    viewBox="0 0 1000 620"
+                    :viewBox="`0 0 ${graphViewBoxWidth} ${graphViewBoxHeight}`"
                     overflow="visible"
                     preserveAspectRatio="none"
                     aria-hidden="true"
@@ -434,7 +434,9 @@
 <script setup lang="ts">
 import {
     computed,
+    onActivated,
     onBeforeUnmount,
+    onDeactivated,
     onMounted,
     reactive,
     ref,
@@ -464,13 +466,27 @@ import {
     isHubModuleDisabled,
     isHubModuleStatusActive
 } from '../../module-access'
+import { moduleDetails, type ModuleDetail } from '../../module-catalog'
 import type {
     HubModuleIconName,
     HubModuleId,
     HubModuleItem,
     HubModuleToggleResult
 } from '../../types'
-import { moduleDetails, type ModuleDetail } from './module-details'
+import {
+    createOrbitPosition,
+    createStagePointFromScreenDelta,
+    getScreenDistance,
+    graphViewBoxHeight,
+    graphViewBoxWidth,
+    projectStagePointToRadius,
+    rotateStagePoint,
+    toScreenDelta,
+    toScreenPoint,
+    toStagePoint,
+    type Point
+} from './graph-geometry'
+import { createGraphRuntime } from './graph-runtime'
 
 // ============================================================================
 // Customizable Orbit Configuration (手动调整子节点自转速度与到主节点中心的距离)
@@ -504,11 +520,6 @@ const configOrbitRadiusPx = 360
  */
 const orbitSpeedRad = 0.001
 // ============================================================================
-
-interface Point {
-    x: number
-    y: number
-}
 
 interface GraphNode extends HubModuleItem {
     x: number
@@ -614,8 +625,8 @@ const effectiveRangeRadiusInput = ref(0)
 const effectiveRangePreviewVisible = ref(false)
 const graphZoom = ref(1)
 const stageSize = reactive({
-    width: 1000,
-    height: 620
+    width: graphViewBoxWidth,
+    height: graphViewBoxHeight
 })
 const nodePositions = reactive<Partial<Record<HubModuleId, Point>>>({})
 const carriedVisuals = reactive<Partial<Record<HubModuleId, Point>>>({})
@@ -623,9 +634,7 @@ const carriedVelocities: Partial<Record<HubModuleId, Point>> = {}
 const togglePending = reactive<Partial<Record<HubModuleId, ToggleDirection>>>({})
 const toggleErrors = reactive<Partial<Record<HubModuleId, string>>>({})
 
-let resizeObserver: ResizeObserver | undefined
 let dragState: DragState | null = null
-let animationFrame = 0
 let lastAnimationTime = 0
 let effectiveRangePreviewHideTimer = 0
 let rangeControlPointerActive = false
@@ -696,8 +705,10 @@ const effectiveRange = computed(() => {
     return {
         cx: coreNode.value.x,
         cy: coreNode.value.y,
-        rx: effectiveRangeRadiusPx.value * (1000 / stageSize.width),
-        ry: effectiveRangeRadiusPx.value * (620 / stageSize.height)
+        rx: effectiveRangeRadiusPx.value * (graphViewBoxWidth / stageSize.width),
+        ry:
+            effectiveRangeRadiusPx.value *
+            (graphViewBoxHeight / stageSize.height)
     }
 })
 const isOrbitActive = computed(
@@ -754,13 +765,7 @@ const getDefaultSatellitePosition = (item: HubModuleItem): Point => {
     const angle = ((2 * Math.PI) / count) * index - Math.PI / 2
     const metrics = getSatelliteNodeMetrics(item)
 
-    const dxPx = Math.cos(angle) * metrics.orbitRadiusPx
-    const dyPx = Math.sin(angle) * metrics.orbitRadiusPx
-
-    return {
-        x: core.x + dxPx * (1000 / stageSize.width),
-        y: core.y + dyPx * (620 / stageSize.height)
-    }
+    return createOrbitPosition(core, angle, metrics.orbitRadiusPx, stageSize)
 }
 
 const getDefaultCorePosition = (): Point => ({
@@ -816,21 +821,34 @@ const getEdgeColor = (node: GraphNode, risk: number) => {
 }
 
 const createEdge = (from: GraphNode, to: GraphNode) => {
-    const dxPx = ((to.x - from.x) / 1000) * stageSize.width
-    const dyPx = ((to.y - from.y) / 620) * stageSize.height
-    const length = Math.hypot(dxPx, dyPx) || 1
-    const unitXPx = dxPx / length
-    const unitYPx = dyPx / length
-    const x1 = from.x + unitXPx * from.radius * (1000 / stageSize.width)
-    const y1 = from.y + unitYPx * from.radius * (620 / stageSize.height)
-    const x2 = to.x - unitXPx * to.radius * (1000 / stageSize.width)
-    const y2 = to.y - unitYPx * to.radius * (620 / stageSize.height)
+    const delta = toScreenDelta(from, to, stageSize)
+    const length = Math.hypot(delta.x, delta.y) || 1
+    const unit = {
+        x: delta.x / length,
+        y: delta.y / length
+    }
+    const start = createStagePointFromScreenDelta(
+        from,
+        {
+            x: unit.x * from.radius,
+            y: unit.y * from.radius
+        },
+        stageSize
+    )
+    const end = createStagePointFromScreenDelta(
+        to,
+        {
+            x: -unit.x * to.radius,
+            y: -unit.y * to.radius
+        },
+        stageSize
+    )
 
     return {
-        x1,
-        y1,
-        x2,
-        y2
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y
     }
 }
 
@@ -846,7 +864,7 @@ const createEdgePath = (edge: {
 const getEdgeRisk = (node: GraphNode) => {
     if (!coreNode.value || draggingId.value !== node.id) return 0
 
-    const distance = distancePx(node, coreNode.value)
+    const distance = getScreenDistance(node, coreNode.value, stageSize)
     const radius = effectiveRangeRadiusPx.value
     const start = radius * 0.72
 
@@ -856,17 +874,23 @@ const getEdgeRisk = (node: GraphNode) => {
 const isPointWithinEffectiveRange = (point: Point) => {
     if (!coreNode.value) return true
 
-    return distancePx(point, coreNode.value) <= effectiveRangeRadiusPx.value
+    return (
+        getScreenDistance(point, coreNode.value, stageSize) <=
+        effectiveRangeRadiusPx.value
+    )
 }
 
-const nodeStyle = (node: GraphNode) =>
-    ({
-        '--node-px': `${(node.x / 1000) * stageSize.width}px`,
-        '--node-py': `${(node.y / 620) * stageSize.height}px`,
+const nodeStyle = (node: GraphNode) => {
+    const point = toScreenPoint(node, stageSize)
+
+    return {
+        '--node-px': `${point.x}px`,
+        '--node-py': `${point.y}px`,
         '--node-size': `${node.size}px`,
         '--node-tone': node.tone,
         '--float-delay': `${getFloatDelay(node.id)}s`
-    }) as Record<string, string>
+    } as Record<string, string>
+}
 
 const edgeStyle = (edge: GraphEdge) =>
     ({
@@ -985,24 +1009,13 @@ const clearRecord = <T,>(record: Partial<Record<HubModuleId, T>>) => {
 }
 
 const handleResetGraphDefaults = () => {
-    if (dragState) {
-        dragState = null
-        draggingId.value = null
-        detachDragListeners()
-    }
-
-    detachRangeControlPointerListeners()
-    rangeControlPointerActive = false
-    clearEffectiveRangePreviewHideTimer()
-    effectiveRangePreviewVisible.value = false
+    resetActiveInteractionState()
     effectiveRangeRadiusInput.value = 0
     detailFontSizePx.value = 18
     graphZoom.value = 1
     lastActiveNodeId.value = null
     clearRecord(nodePositions)
-    clearRecord(carriedVisuals)
-    clearRecord(carriedVelocities)
-    physicsStates.splice(0, physicsStates.length)
+    clearTransientOrbitState()
 
     try {
         window.localStorage.removeItem(positionStorageKey)
@@ -1103,6 +1116,16 @@ const detachDragListeners = () => {
     window.removeEventListener('pointermove', handleDragMove)
     window.removeEventListener('pointerup', handleDragEnd)
     window.removeEventListener('pointercancel', handleDragEnd)
+}
+
+const resetActiveInteractionState = () => {
+    dragState = null
+    draggingId.value = null
+    rangeControlPointerActive = false
+    detachDragListeners()
+    detachRangeControlPointerListeners()
+    clearEffectiveRangePreviewHideTimer()
+    effectiveRangePreviewVisible.value = false
 }
 
 const getBasePosition = (node: GraphNode): Point => {
@@ -1296,24 +1319,16 @@ const tickCarriedNodes = (deltaFrames: number) => {
         if (state.isCore || state.isDragging) continue
 
         if (isOrbitActiveVal) {
-            // Calculate orbital rotation in screen pixels to avoid stretching distortions
-            const dx = state.x - core.x
-            const dy = state.y - core.y
             const speed = orbitSpeedRad * deltaFrames
+            const nextPosition = rotateStagePoint(
+                state,
+                core,
+                speed,
+                stageSize
+            )
 
-            const dxPx = (dx / 1000) * stageSize.width
-            const dyPx = (dy / 620) * stageSize.height
-
-            const cosVal = Math.cos(speed)
-            const sinVal = Math.sin(speed)
-
-            const nextDxPx = dxPx * cosVal - dyPx * sinVal
-            const nextDyPx = dxPx * sinVal + dyPx * cosVal
-
-            state.x = core.x + nextDxPx * (1000 / stageSize.width)
-            state.y = core.y + nextDyPx * (620 / stageSize.height)
-
-            // Bring velocity to 0 to prevent inertia conflicts during orbit
+            state.x = nextPosition.x
+            state.y = nextPosition.y
             state.vx = 0
             state.vy = 0
             continue
@@ -1347,48 +1362,53 @@ const tickCarriedNodes = (deltaFrames: number) => {
                     const a = physicsStates[i]
                     const b = physicsStates[j]
 
-                    const dxPx = ((b.x - a.x) / 1000) * stageSize.width
-                    const dyPx = ((b.y - a.y) / 620) * stageSize.height
-                    const distPx = Math.hypot(dxPx, dyPx)
+                    const delta = toScreenDelta(a, b, stageSize)
+                    const distPx = Math.hypot(delta.x, delta.y)
                     const minDistancePx = a.radius + b.radius + 16 // Radius + padding to avoid overlapping
 
                     if (distPx < minDistancePx) {
                         const overlapPx = minDistancePx - distPx
-                        const nx = dxPx / (distPx || 1)
-                        const ny = dyPx / (distPx || 1)
+                        const nx = delta.x / (distPx || 1)
+                        const ny = delta.y / (distPx || 1)
 
-                        const pushX = overlapPx * nx * (1000 / stageSize.width)
-                        const pushY = overlapPx * ny * (620 / stageSize.height)
+                        const push = createStagePointFromScreenDelta(
+                            { x: 0, y: 0 },
+                            {
+                                x: overlapPx * nx,
+                                y: overlapPx * ny
+                            },
+                            stageSize
+                        )
 
                         // Distribute push based on whether nodes are static (dragging, core, etc.)
                         const aStatic = a.isDragging || (a.isCore && draggingId.value === 'chatluna')
                         const bStatic = b.isDragging || (b.isCore && draggingId.value === 'chatluna')
 
                         if (aStatic && !bStatic) {
-                            b.x += pushX
-                            b.y += pushY
+                            b.x += push.x
+                            b.y += push.y
                             if (!b.isDragging) {
-                                b.vx += pushX * 0.1
-                                b.vy += pushY * 0.1
+                                b.vx += push.x * 0.1
+                                b.vy += push.y * 0.1
                             }
                         } else if (!aStatic && bStatic) {
-                            a.x -= pushX
-                            a.y -= pushY
+                            a.x -= push.x
+                            a.y -= push.y
                             if (!a.isDragging) {
-                                a.vx -= pushX * 0.1
-                                a.vy -= pushY * 0.1
+                                a.vx -= push.x * 0.1
+                                a.vy -= push.y * 0.1
                             }
                         } else if (!aStatic && !bStatic) {
                             // Split the push equally
-                            a.x -= pushX * 0.5
-                            a.y -= pushY * 0.5
-                            b.x += pushX * 0.5
-                            b.y += pushY * 0.5
+                            a.x -= push.x * 0.5
+                            a.y -= push.y * 0.5
+                            b.x += push.x * 0.5
+                            b.y += push.y * 0.5
 
-                            a.vx -= pushX * 0.05
-                            a.vy -= pushY * 0.05
-                            b.vx += pushX * 0.05
-                            b.vy += pushY * 0.05
+                            a.vx -= push.x * 0.05
+                            a.vy -= push.y * 0.05
+                            b.vx += push.x * 0.05
+                            b.vy += push.y * 0.05
                         }
                     }
                 }
@@ -1413,30 +1433,25 @@ const tickCarriedNodes = (deltaFrames: number) => {
             !isDisabling &&
             !state.isDragging
         ) {
-            // Calculate distance in screen pixels to ensure the boundary matches the perfect circle rendered on screen
-            const dxPx = ((state.x - core.x) / 1000) * stageSize.width
-            const dyPx = ((state.y - core.y) / 620) * stageSize.height
-            const distPx = Math.hypot(dxPx, dyPx)
+            const distPx = getScreenDistance(state, core, stageSize)
             const rangePx = effectiveRangeRadiusPx.value
 
             if (distPx > rangePx) {
-                // Rope is taut: project back onto perfect circle boundary in screen pixels
-                const scale = rangePx / distPx
-                const targetXPx = dxPx * scale
-                const targetYPx = dyPx * scale
-
-                // Convert back to SVG coordinate space
-                const targetX = core.x + targetXPx * (1000 / stageSize.width)
-                const targetY = core.y + targetYPx * (620 / stageSize.height)
+                const target = projectStagePointToRadius(
+                    state,
+                    core,
+                    rangePx,
+                    stageSize
+                )
 
                 // Only transfer pulling force to velocity if dragging the core (rope pulls satellite)
                 if (draggingCore) {
-                    state.vx = (targetX - state.x) / deltaFrames
-                    state.vy = (targetY - state.y) / deltaFrames
+                    state.vx = (target.x - state.x) / deltaFrames
+                    state.vy = (target.y - state.y) / deltaFrames
                 }
 
-                state.x = targetX
-                state.y = targetY
+                state.x = target.x
+                state.y = target.y
             }
         }
 
@@ -1456,14 +1471,13 @@ const tickCarriedNodes = (deltaFrames: number) => {
     }
 }
 
-const tickAnimation = (time = window.performance.now()) => {
+const tickAnimation = (time: number) => {
     const deltaFrames = lastAnimationTime
         ? clampNumber((time - lastAnimationTime) / 16.667, 0.45, 2.2)
         : 1
 
     lastAnimationTime = time
     tickCarriedNodes(deltaFrames)
-    animationFrame = window.requestAnimationFrame(tickAnimation)
 }
 
 const loadPersistedFontSize = () => {
@@ -1624,49 +1638,53 @@ const eventToPoint = (event: PointerEvent): Point | null => {
     const logicalX = centerX + (visualX - centerX) / graphZoom.value
     const logicalY = centerY + (visualY - centerY) / graphZoom.value
 
-    return {
-        x: (logicalX / rect.width) * 1000,
-        y: (logicalY / rect.height) * 620
-    }
+    return toStagePoint({ x: logicalX, y: logicalY }, rect)
 }
 
-const distancePx = (left: Point, right: Point) => {
-    const dx = ((left.x - right.x) / 1000) * stageSize.width
-    const dy = ((left.y - right.y) / 620) * stageSize.height
-
-    return Math.hypot(dx, dy)
+const clearTransientOrbitState = () => {
+    clearRecord(carriedVisuals)
+    clearRecord(carriedVelocities)
+    physicsStates.splice(0, physicsStates.length)
+    lastAnimationTime = 0
 }
 
 const refreshStageSize = () => {
-    const rect = stageRef.value?.getBoundingClientRect()
-    if (!rect) return
+    const rect = stageRef.value!.getBoundingClientRect()
 
-    stageSize.width = rect.width || 1000
-    stageSize.height = rect.height || 620
+    stageSize.width = rect.width
+    stageSize.height = rect.height
 }
 
+const graphRuntime = createGraphRuntime({
+    getStageElement: () => stageRef.value!,
+    refreshStageSize,
+    clearTransientState: clearTransientOrbitState,
+    tickFrame: tickAnimation
+})
+
 onMounted(() => {
-    refreshStageSize()
     loadPersistedGraphZoom()
     loadPersistedPositions()
     loadPersistedRange()
     loadPersistedFontSize()
-    if (!stageRef.value) return
+    graphRuntime.start()
+})
 
-    resizeObserver = new ResizeObserver(refreshStageSize)
-    resizeObserver.observe(stageRef.value)
-    animationFrame = window.requestAnimationFrame(tickAnimation)
+onActivated(() => {
+    graphRuntime.start()
+})
+
+onDeactivated(() => {
+    resetActiveInteractionState()
+    graphRuntime.stop()
 })
 
 onBeforeUnmount(() => {
-    detachDragListeners()
-    detachRangeControlPointerListeners()
-    clearEffectiveRangePreviewHideTimer()
-    window.cancelAnimationFrame(animationFrame)
+    resetActiveInteractionState()
+    graphRuntime.stop()
     for (const timer of Object.values(errorTimers)) {
         if (timer) window.clearTimeout(timer)
     }
-    resizeObserver?.disconnect()
 })
 </script>
 
