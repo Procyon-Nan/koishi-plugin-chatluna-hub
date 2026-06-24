@@ -343,7 +343,6 @@
 
         <AdapterTypePickerDialog
             v-model:visible="pickerVisible"
-            v-model:keyword="pickerKeyword"
             :types="types"
             @choose="chooseType"
         />
@@ -413,7 +412,6 @@ const {
     adapterScope,
     busyKey,
     pickerVisible,
-    pickerKeyword,
     editorVisible,
     editorDescriptor,
     editorInstanceKey,

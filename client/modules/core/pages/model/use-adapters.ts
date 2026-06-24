@@ -226,7 +226,6 @@ export function useAdapters(refreshModels: () => Promise<void>) {
     const busyKey = ref<string | null>(null)
 
     const pickerVisible = ref(false)
-    const pickerKeyword = ref('')
     const editorVisible = ref(false)
     const editorDescriptor = ref<EditorDescriptor | null>(null)
     const editorInstanceKey = ref<string | undefined>(undefined)
@@ -310,7 +309,6 @@ export function useAdapters(refreshModels: () => Promise<void>) {
     const statusLabel = (status: ChatLunaAdapterStatus) => statusLabels[status]
 
     const openCreatePicker = async () => {
-        pickerKeyword.value = ''
         const refreshed = await fetchAdapters()
         if (!refreshed) return
 
@@ -526,7 +524,6 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         adapterScope,
         busyKey,
         pickerVisible,
-        pickerKeyword,
         editorVisible,
         editorDescriptor,
         editorInstanceKey,

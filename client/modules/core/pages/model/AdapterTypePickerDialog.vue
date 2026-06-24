@@ -1,97 +1,78 @@
 <template>
     <el-dialog
         v-model="visible"
-        width="720px"
-        class="adapter-dialog picker-dialog"
+        width="480px"
+        class="chatluna-picker-dialog"
         align-center
         append-to-body
         :show-close="false"
     >
-        <template #header>
-            <div class="dialog-hero">
-                <div class="dialog-hero-icon">
-                    <el-icon :size="22"><Plus /></el-icon>
-                </div>
-                <div class="dialog-hero-text">
-                    <span class="dialog-hero-kicker">Adapter</span>
-                    <h3>添加适配器</h3>
-                    <p>
-                        选择适配器类型。平台名可自定义的适配器可重复添加多份配置实例，平台固定的适配器每种仅可配置一份。
-                    </p>
-                </div>
-                <el-button
-                    class="dialog-hero-close"
-                    text
-                    :icon="Close"
-                    @click="visible = false"
-                />
-            </div>
-        </template>
-
-        <el-input
-            v-model="keyword"
-            class="picker-search"
-            placeholder="搜索适配器名称或平台"
-            clearable
-        >
-            <template #prefix>
-                <el-icon><Search /></el-icon>
-            </template>
-        </el-input>
-
-        <div v-if="filteredPickerTypes.length === 0" class="picker-empty">
-            没有匹配的适配器类型
+        <div class="picker-header">
+            <h3>添加新的模型适配器</h3>
+            <el-button
+                class="header-close-btn"
+                text
+                circle
+                :icon="Close"
+                @click="visible = false"
+            />
         </div>
 
-        <div v-else class="type-grid">
-            <button
-                v-for="type in filteredPickerTypes"
-                :key="type.id"
-                type="button"
-                class="type-tile"
-                :class="{
-                    'is-disabled': !type.canCreate,
-                    'is-missing': !type.installed
-                }"
-                :aria-disabled="!type.canCreate"
-                :title="type.createReason"
-                @click="emit('choose', type)"
+        <div class="picker-body">
+            <div
+                class="adapter-list-wrapper"
+                @wheel.prevent="handleWheel"
+                @pointerdown="handlePointerDown"
+                @pointerup="handlePointerUp"
+                @pointercancel="resetSwipeState"
+                @click.capture="handleListClick"
             >
-                <span class="type-avatar">{{ typeInitial(type) }}</span>
-                <span class="type-info">
-                    <span class="type-title">{{ type.title }}</span>
-                    <span class="type-platform">{{
-                        type.platformDefault
-                    }}</span>
-                </span>
-                <span
-                    v-if="!type.installed"
-                    class="type-badge is-blocked"
-                >
-                    未安装
-                </span>
-                <span
-                    v-else-if="type.instanceCount > 0"
-                    class="type-badge is-count"
-                >
-                    已配置 {{ type.instanceCount }}
-                </span>
-                <span
-                    v-else-if="!type.canCreate"
-                    class="type-badge is-blocked"
-                >
-                    不可添加
-                </span>
-                <el-icon v-else class="type-arrow"><ArrowRight /></el-icon>
-            </button>
+                <Transition :name="transitionName" mode="out-in">
+                    <div :key="currentPage" class="adapter-list">
+                        <button
+                            v-for="type in currentPageItems"
+                            :key="type.id"
+                            type="button"
+                            class="adapter-tile-btn"
+                            :class="{
+                                'is-disabled': !type.canCreate,
+                                'is-missing': !type.installed
+                            }"
+                            :aria-disabled="!type.canCreate"
+                            :title="type.createReason"
+                            @click="emit('choose', type)"
+                        >
+                            <div class="tile-avatar">{{ typeInitial(type) }}</div>
+                            <div class="tile-info">
+                                <span class="tile-name">{{ type.title }}</span>
+                            </div>
+
+                            <span v-if="!type.installed" class="tile-badge badge-missing">
+                                未安装
+                            </span>
+                            <span v-else-if="type.instanceCount > 0" class="tile-badge badge-count">
+                                已配置 {{ type.instanceCount }}
+                            </span>
+                            <span v-else-if="!type.canCreate" class="tile-badge badge-disabled">
+                                已存在
+                            </span>
+                            <el-icon v-else class="tile-arrow"><ArrowRight /></el-icon>
+                        </button>
+                    </div>
+                </Transition>
+            </div>
+
+            <div class="pagination-footer">
+                <span class="page-indicator">{{ currentPage }} / {{ totalPages }}</span>
+            </div>
         </div>
     </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { ElButton, ElDialog, ElIcon, ElInput } from 'element-plus'
-import { ArrowRight, Close, Plus, Search } from '@element-plus/icons-vue'
+import { computed, ref, watch } from 'vue'
+import { ElButton, ElDialog, ElIcon } from 'element-plus'
+import { ArrowRight, Close } from '@element-plus/icons-vue'
 import type { ChatLunaAdapterType } from '../../types'
 
 const props = defineProps<{
@@ -102,242 +83,335 @@ const emit = defineEmits<{
     (event: 'choose', type: ChatLunaAdapterType): void
 }>()
 
-// Dialog visibility and search keyword are owned by the parent via v-model so
-// the parent can reset the keyword when opening the picker.
 const visible = defineModel<boolean>('visible', { required: true })
-const keyword = defineModel<string>('keyword', { required: true })
 
-const filteredPickerTypes = computed(() => {
-    const text = keyword.value.trim().toLowerCase()
-    if (!text) return props.types
+const currentPage = ref(1)
+const itemsPerPage = 6
+const transitionName = ref('slide-next')
+const swipeStart = ref<{ id: number; x: number; y: number } | null>(null)
+const suppressedClick = ref<{ x: number; y: number; expiresAt: number } | null>(
+    null
+)
 
-    return props.types.filter((type) =>
-        [type.title, type.platformDefault, type.pluginName]
-            .join(' ')
-            .toLowerCase()
-            .includes(text)
-    )
+const swipeMinDistancePx = 56
+const clickSuppressDistancePx = 24
+const clickSuppressDurationMs = 350
+
+const totalPages = computed(() => {
+    return Math.max(1, Math.ceil(props.types.length / itemsPerPage))
+})
+
+const currentPageItems = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage
+    const end = start + itemsPerPage
+    return props.types.slice(start, end)
 })
 
 const typeInitial = (type: ChatLunaAdapterType) => {
     const source = type.title || type.platformDefault || '?'
     return source.trim().charAt(0).toUpperCase()
 }
+
+const goToNextPage = () => {
+    if (currentPage.value >= totalPages.value) return false
+    transitionName.value = 'slide-next'
+    currentPage.value++
+    return true
+}
+
+const goToPreviousPage = () => {
+    if (currentPage.value <= 1) return false
+    transitionName.value = 'slide-prev'
+    currentPage.value--
+    return true
+}
+
+const handleWheel = (event: WheelEvent) => {
+    if (event.deltaY > 0) {
+        goToNextPage()
+    } else if (event.deltaY < 0) {
+        goToPreviousPage()
+    }
+}
+
+const handlePointerDown = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+
+    swipeStart.value = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY
+    }
+}
+
+const handlePointerUp = (event: PointerEvent) => {
+    const start = swipeStart.value
+    swipeStart.value = null
+    if (!start || start.id !== event.pointerId) return
+
+    const deltaX = event.clientX - start.x
+    const deltaY = event.clientY - start.y
+    const isHorizontalSwipe =
+        Math.abs(deltaX) >= swipeMinDistancePx &&
+        Math.abs(deltaX) > Math.abs(deltaY) * 1.2
+
+    if (!isHorizontalSwipe) return
+
+    suppressClickFromSwipe(event)
+    if (deltaX < 0) {
+        goToNextPage()
+    } else {
+        goToPreviousPage()
+    }
+}
+
+const resetSwipeState = () => {
+    swipeStart.value = null
+}
+
+const suppressClickFromSwipe = (event: PointerEvent) => {
+    suppressedClick.value = {
+        x: event.clientX,
+        y: event.clientY,
+        expiresAt: window.performance.now() + clickSuppressDurationMs
+    }
+
+    window.setTimeout(() => {
+        const current = suppressedClick.value
+        if (current && current.expiresAt <= window.performance.now()) {
+            suppressedClick.value = null
+        }
+    }, clickSuppressDurationMs)
+}
+
+const handleListClick = (event: MouseEvent) => {
+    const click = suppressedClick.value
+    if (!click) return
+
+    const isExpired = click.expiresAt <= window.performance.now()
+    const isSwipeClick =
+        Math.abs(event.clientX - click.x) <= clickSuppressDistancePx &&
+        Math.abs(event.clientY - click.y) <= clickSuppressDistancePx
+
+    if (isExpired || !isSwipeClick) {
+        suppressedClick.value = null
+        return
+    }
+
+    suppressedClick.value = null
+    event.preventDefault()
+    event.stopPropagation()
+}
+
+watch(visible, (val) => {
+    if (!val) {
+        currentPage.value = 1
+        transitionName.value = 'slide-next'
+        resetSwipeState()
+        suppressedClick.value = null
+    }
+})
+
+watch(totalPages, (pageCount) => {
+    if (currentPage.value > pageCount) {
+        currentPage.value = pageCount
+    }
+})
 </script>
 
+<style>
+.el-dialog.chatluna-picker-dialog {
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    background: var(--k-card-bg) !important;
+    border: 1px solid var(--k-color-divider) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35) !important;
+}
+
+.el-dialog.chatluna-picker-dialog .el-dialog__header {
+    display: none !important;
+}
+
+.el-dialog.chatluna-picker-dialog .el-dialog__body {
+    padding: 0 !important;
+    background: transparent !important;
+}
+</style>
+
 <style scoped>
-:deep(.el-dialog.picker-dialog) {
-    max-width: calc(100vw - 32px);
-    border-radius: 16px;
-    overflow: hidden;
-    background: var(--k-page-bg);
-}
-
-.adapter-dialog :deep(.el-dialog__header) {
-    margin-right: 0;
-    padding: 0;
-    background: var(--k-page-bg);
-}
-
-.adapter-dialog :deep(.el-dialog__body) {
-    padding: 18px 20px 20px;
-    background: var(--k-page-bg);
-}
-
-.dialog-hero {
-    position: relative;
+.picker-header {
     display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    padding: 20px 22px;
-    border-radius: 16px 16px 0 0;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
     background: var(--k-card-bg);
     border-bottom: 1px solid var(--k-color-divider);
 }
 
-.dialog-hero::before {
-    content: none;
-}
-
-.dialog-hero-icon {
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    color: #fff;
-    background: var(--k-color-primary);
-}
-
-.dialog-hero-text {
-    min-width: 0;
-    flex: 1;
-}
-
-.dialog-hero-kicker {
-    display: inline-block;
-    margin-bottom: 4px;
-    padding: 2px 9px;
-    border-radius: 999px;
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.dialog-hero-text h3 {
-    margin: 2px 0 0;
-    color: var(--k-text-dark);
-    font-size: 19px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.dialog-hero-text p {
-    margin: 5px 0 0;
-    color: var(--k-text-light);
-    font-size: 12px;
-    line-height: 1.6;
-}
-
-.dialog-hero-text code {
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: var(--k-color-fill);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 11px;
+.picker-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--k-text-dark);
 }
 
-.dialog-hero-close {
-    flex-shrink: 0;
-    margin: -4px -8px 0 0;
-}
-
-.picker-search {
-    margin-bottom: 14px;
-}
-
-.picker-empty {
-    min-height: 100px;
-    display: grid;
-    place-items: center;
+.header-close-btn {
     color: var(--k-text-light);
-    font-size: 14px;
 }
 
-.type-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+.picker-body {
+    padding: 14px 18px;
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-page-bg) 25%);
+}
+
+.adapter-list-wrapper {
+    height: 400px;
+    overflow: hidden;
+    position: relative;
+    touch-action: pan-y;
+}
+
+.adapter-list {
+    display: flex;
+    flex-direction: column;
     gap: 10px;
-    max-height: 52vh;
-    overflow-y: auto;
-    padding: 2px;
+    height: 100%;
 }
 
-.type-tile {
+.adapter-tile-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 16px;
+    height: 58px;
+    padding: 0 16px;
+    box-sizing: border-box;
     border: 1px solid var(--k-color-divider);
     border-radius: 12px;
     background: var(--k-card-bg);
-    text-align: left;
     cursor: pointer;
-    transition:
-        border-color 0.15s ease,
-        transform 0.15s ease,
-        box-shadow 0.15s ease;
+    text-align: left;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    width: 100%;
 }
 
-.type-tile:hover:not(.is-disabled) {
-    border-color: color-mix(in srgb, var(--k-color-primary), transparent 40%);
-    transform: translateY(-2px);
+.adapter-tile-btn:hover:not(.is-disabled) {
+    border-color: var(--k-color-primary);
+    box-shadow: 0 0 0 1px var(--k-color-primary);
 }
 
-.type-tile:hover:not(.is-disabled) .type-arrow {
-    color: var(--k-color-primary);
-    transform: translateX(2px);
-}
-
-.type-tile.is-disabled {
-    opacity: 0.55;
+.adapter-tile-btn.is-disabled {
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
-.type-tile.is-missing .type-avatar {
-    color: var(--k-text-light);
-    background: var(--k-color-fill);
-}
-
-.type-avatar {
-    flex-shrink: 0;
+.tile-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 36px;
     height: 36px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    font-size: 16px;
+    border-radius: 8px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 86%);
-}
-
-.type-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
-}
-
-.type-title {
-    font-size: 14px;
-    font-weight: 650;
-    color: var(--k-text-dark);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.type-platform {
-    font-size: 12px;
-    color: var(--k-text-light);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.type-badge {
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
     flex-shrink: 0;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
 }
 
-.type-badge.is-count {
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 88%);
-}
-
-.type-badge.is-blocked {
+.adapter-tile-btn.is-missing .tile-avatar {
     color: var(--k-text-light);
     background: var(--k-color-fill);
 }
 
-.type-arrow {
+.tile-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.tile-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--k-text-dark);
+}
+
+.tile-badge {
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
     flex-shrink: 0;
-    color: var(--k-color-divider);
-    transition:
-        color 0.15s ease,
-        transform 0.15s ease;
+}
+
+.badge-count {
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
+}
+
+.badge-missing {
+    color: var(--k-text-light);
+    background: var(--k-color-fill);
+}
+
+.badge-disabled {
+    color: var(--k-text-light);
+    background: var(--k-color-fill);
+}
+
+.tile-arrow {
+    color: var(--k-text-light);
+    opacity: 0.5;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.adapter-tile-btn:hover:not(.is-disabled) .tile-arrow {
+    transform: translateX(2px);
+    opacity: 1;
+    color: var(--k-color-primary);
+}
+
+.pagination-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.page-indicator {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--k-text-light);
+    background: var(--k-card-bg);
+    border: 1px solid var(--k-color-divider);
+    padding: 3px 10px;
+    border-radius: 6px;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.slide-next-enter-active,
+.slide-next-leave-active,
+.slide-prev-enter-active,
+.slide-prev-leave-active {
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slide-next-enter-from {
+    opacity: 0;
+    transform: translateX(24px);
+}
+.slide-next-leave-to {
+    opacity: 0;
+    transform: translateX(-24px);
+}
+
+.slide-prev-enter-from {
+    opacity: 0;
+    transform: translateX(-24px);
+}
+.slide-prev-leave-to {
+    opacity: 0;
+    transform: translateX(24px);
 }
 </style>
