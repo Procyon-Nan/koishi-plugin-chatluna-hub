@@ -37,28 +37,27 @@
             class="dialog-body"
             :class="{ 'is-single-column': visibleSections.length === 0 }"
         >
-            <aside
-                v-if="visibleSections.length > 0"
-                class="section-rail"
-                aria-label="适配器配置分组"
-            >
-                <button
-                    v-for="section in visibleSections"
-                    :key="section.title"
-                    type="button"
-                    class="section-rail-item"
-                    :class="{ 'is-active': activeSectionTitle === section.title }"
-                    @click="activeSectionTitle = section.title"
-                >
-                    <span class="section-rail-dot" />
-                    <span class="section-rail-text">
-                        <span>{{ section.title }}</span>
-                        <small>{{ visibleFieldCount(section) }} 项配置</small>
-                    </span>
-                </button>
-            </aside>
-
             <div class="dialog-main">
+                <div
+                    v-if="visibleSections.length > 0"
+                    class="section-tabs"
+                    aria-label="适配器配置分组"
+                >
+                    <button
+                        v-for="section in visibleSections"
+                        :key="section.title"
+                        type="button"
+                        class="section-tab"
+                        :class="{
+                            'is-active': activeSectionTitle === section.title
+                        }"
+                        @click="activeSectionTitle = section.title"
+                    >
+                        <span>{{ section.title }}</span>
+                        <small>{{ visibleFieldCount(section) }} 项</small>
+                    </button>
+                </div>
+
                 <el-form
                     v-if="descriptor.platformConfigurable"
                     label-position="top"
@@ -989,11 +988,7 @@ const removeDictEntry = (
 
 <style scoped>
 :deep(.el-dialog.editor-dialog) {
-    --adapter-dialog-bg: color-mix(
-        in srgb,
-        var(--k-card-bg),
-        var(--k-page-bg) 46%
-    );
+    --adapter-dialog-bg: var(--k-page-bg);
     max-width: calc(100vw - 32px);
     max-height: calc(100vh - 8vh);
     margin: 4vh auto !important;
@@ -1037,28 +1032,12 @@ const removeDictEntry = (
     padding: 20px 22px;
     border-radius: 14px;
     overflow: hidden;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 62%
-        ),
-        var(--k-card-bg);
+    background: var(--k-card-bg);
     border-bottom: 1px solid var(--k-color-divider);
 }
 
 .dialog-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    border-radius: 14px 14px 0 0;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
+    content: none;
 }
 
 .dialog-hero-icon {
@@ -1069,13 +1048,7 @@ const removeDictEntry = (
     display: grid;
     place-items: center;
     color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 18px
-        color-mix(in srgb, var(--k-color-primary), transparent 68%);
+    background: var(--k-color-primary);
 }
 
 .dialog-hero-text {
@@ -1127,9 +1100,6 @@ const removeDictEntry = (
 }
 
 .dialog-body {
-    display: grid;
-    grid-template-columns: 190px minmax(0, 1fr);
-    gap: 16px;
     height: min(68vh, 680px);
     max-height: 100%;
     min-height: min(460px, calc(100vh - 220px));
@@ -1138,122 +1108,54 @@ const removeDictEntry = (
 }
 
 .dialog-body.is-single-column {
-    grid-template-columns: minmax(0, 1fr);
-}
-
-.section-rail {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    background: var(--k-card-bg);
-    overflow: auto;
-}
-
-.section-rail-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--k-text-light);
-    text-align: left;
-    cursor: pointer;
-    transition:
-        border-color 0.18s ease,
-        background 0.18s ease,
-        color 0.18s ease,
-        box-shadow 0.18s ease;
-}
-
-.section-rail-item:hover {
-    color: var(--k-text-dark);
-    background: var(--adapter-dialog-bg);
-}
-
-.section-rail-item.is-active {
-    color: var(--k-text-dark);
-    border-color: color-mix(in srgb, var(--k-color-primary), transparent 58%);
-    background: var(--adapter-dialog-bg);
-    box-shadow: 0 8px 18px
-        color-mix(in srgb, var(--k-color-primary), transparent 90%);
-}
-
-.section-rail-dot {
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--k-text-light);
-    opacity: 0.55;
-}
-
-.section-rail-item.is-active .section-rail-dot {
-    background: var(--k-color-primary);
-    opacity: 1;
-    box-shadow: 0 0 8px var(--k-color-primary);
-}
-
-.section-rail-text {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.section-rail-text small {
-    color: var(--k-text-light);
-    font-size: 11px;
-    font-weight: 500;
+    height: min(68vh, 680px);
 }
 
 .dialog-main {
     min-width: 0;
     min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 14px;
     overflow: auto;
-    padding-right: 4px;
+    padding: 16px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 14px;
+    background: var(--k-card-bg);
 }
 
 .dialog-main::-webkit-scrollbar,
-.section-rail::-webkit-scrollbar {
+.section-tabs::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
 .dialog-main::-webkit-scrollbar-track,
-.section-rail::-webkit-scrollbar-track {
+.section-tabs::-webkit-scrollbar-track {
     background: color-mix(in srgb, var(--k-color-fill), transparent 35%);
     border-radius: 999px;
 }
 
 .dialog-main::-webkit-scrollbar-thumb,
-.section-rail::-webkit-scrollbar-thumb {
+.section-tabs::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: color-mix(in srgb, var(--k-text-light), transparent 62%);
 }
 
 .editor-block {
-    padding: 14px 16px;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 12px;
-    background: var(--k-card-bg);
-    box-shadow: 0 4px 14px
-        color-mix(in srgb, var(--k-color-divider), transparent 88%);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .editor-form {
-    background: var(--k-card-bg);
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--k-color-divider);
+    background: transparent;
 }
 
 .config-panel {
@@ -1261,6 +1163,52 @@ const removeDictEntry = (
     flex-direction: column;
     gap: 14px;
     padding-bottom: 16px;
+}
+
+.section-tabs {
+    display: flex;
+    gap: 6px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--k-color-divider);
+    overflow-x: auto;
+}
+
+.section-tab {
+    min-height: 34px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 6px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+    color: var(--k-text-light);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition:
+        border-color 0.16s ease,
+        background 0.16s ease,
+        color 0.16s ease;
+}
+
+.section-tab small {
+    color: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.72;
+}
+
+.section-tab:hover {
+    color: var(--k-text-dark);
+    background: var(--k-color-fill);
+}
+
+.section-tab.is-active {
+    color: var(--k-color-primary);
+    border-color: color-mix(in srgb, var(--k-color-primary), transparent 60%);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
 }
 
 .config-panel-head {
@@ -1305,6 +1253,8 @@ const removeDictEntry = (
     display: flex;
     flex-direction: column;
     gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--k-color-divider);
 }
 
 .cred-section-head {
@@ -1690,19 +1640,8 @@ const removeDictEntry = (
     }
 
     .dialog-body {
-        grid-template-columns: 1fr;
         height: calc(100vh - 220px);
         min-height: 360px;
-    }
-
-    .section-rail {
-        min-height: auto;
-        flex-direction: row;
-        overflow-x: auto;
-    }
-
-    .section-rail-item {
-        min-width: 150px;
     }
 
     .config-form {

@@ -213,7 +213,7 @@ watch(text, () => {
         var(--k-text-dark) 30%
     );
     box-sizing: border-box;
-    height: clamp(560px, calc(100vh - 360px), 920px);
+    height: 100%;
     border: 0;
     border-radius: 0;
     display: grid;
@@ -344,7 +344,7 @@ watch(text, () => {
     .code-editor,
     .editor-input-wrap,
     .preset-editor {
-        height: 420px;
+        height: 100%;
     }
 }
 </style>

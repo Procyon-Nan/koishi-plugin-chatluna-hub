@@ -126,13 +126,22 @@ const typeInitial = (type: ChatLunaAdapterType) => {
 </script>
 
 <style scoped>
+:deep(.el-dialog.picker-dialog) {
+    max-width: calc(100vw - 32px);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--k-page-bg);
+}
+
 .adapter-dialog :deep(.el-dialog__header) {
     margin-right: 0;
     padding: 0;
+    background: var(--k-page-bg);
 }
 
 .adapter-dialog :deep(.el-dialog__body) {
-    padding-top: 18px;
+    padding: 18px 20px 20px;
+    background: var(--k-page-bg);
 }
 
 .dialog-hero {
@@ -141,29 +150,13 @@ const typeInitial = (type: ChatLunaAdapterType) => {
     align-items: flex-start;
     gap: 14px;
     padding: 20px 22px;
-    border-radius: 12px 12px 0 0;
-    background:
-        radial-gradient(
-            120% 160% at 0% 0%,
-            color-mix(in srgb, var(--k-color-primary), transparent 86%),
-            transparent 62%
-        ),
-        var(--k-card-bg);
+    border-radius: 16px 16px 0 0;
+    background: var(--k-card-bg);
     border-bottom: 1px solid var(--k-color-divider);
 }
 
 .dialog-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    border-radius: 12px 12px 0 0;
-    background: linear-gradient(
-        90deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), transparent 55%) 60%,
-        transparent
-    );
+    content: none;
 }
 
 .dialog-hero-icon {
@@ -174,13 +167,7 @@ const typeInitial = (type: ChatLunaAdapterType) => {
     display: grid;
     place-items: center;
     color: #fff;
-    background: linear-gradient(
-        135deg,
-        var(--k-color-primary),
-        color-mix(in srgb, var(--k-color-primary), #7c5cff 50%)
-    );
-    box-shadow: 0 8px 18px
-        color-mix(in srgb, var(--k-color-primary), transparent 68%);
+    background: var(--k-color-primary);
 }
 
 .dialog-hero-text {
@@ -271,7 +258,6 @@ const typeInitial = (type: ChatLunaAdapterType) => {
 .type-tile:hover:not(.is-disabled) {
     border-color: color-mix(in srgb, var(--k-color-primary), transparent 40%);
     transform: translateY(-2px);
-    box-shadow: var(--k-card-shadow);
 }
 
 .type-tile:hover:not(.is-disabled) .type-arrow {

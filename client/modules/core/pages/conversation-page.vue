@@ -198,7 +198,7 @@
 
                     <el-table-column
                         label="状态"
-                        width="92"
+                        width="80"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -226,7 +226,7 @@
                     <el-table-column
                         prop="seq"
                         label="序号"
-                        width="82"
+                        width="50"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -235,7 +235,7 @@
                     <el-table-column
                         prop="title"
                         label="标题"
-                        min-width="180"
+                        min-width="150"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -245,7 +245,7 @@
                     <el-table-column
                         prop="createdBy"
                         label="创建者"
-                        width="118"
+                        width="110"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -268,6 +268,7 @@
                                 class="usage-select"
                                 :loading="optionsLoading"
                                 :disabled="isConversationBusy(scope.row)"
+                                @change="saveConversation(scope.row)"
                             >
                                 <el-option
                                     v-for="model in options.models"
@@ -281,7 +282,7 @@
 
                     <el-table-column
                         label="预设"
-                        min-width="180"
+                        min-width="100"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -295,6 +296,7 @@
                                 class="usage-select"
                                 :loading="optionsLoading"
                                 :disabled="isConversationBusy(scope.row)"
+                                @change="saveConversation(scope.row)"
                             >
                                 <el-option
                                     v-for="preset in options.presets"
@@ -309,7 +311,7 @@
                     <el-table-column
                         prop="chatMode"
                         label="模式"
-                        width="112"
+                        width="80"
                         :resizable="false"
                         align="center"
                         header-align="center"
@@ -330,49 +332,24 @@
 
                     <el-table-column
                         label="操作"
-                        width="210"
+                        width="96"
                         :resizable="false"
                         align="center"
                         header-align="center"
                     >
                         <template #default="scope">
-                            <el-space>
-                                <el-button
-                                    size="small"
-                                    type="primary"
-                                    :disabled="
-                                        !isConversationDirty(scope.row) ||
-                                        isConversationBusy(scope.row)
-                                    "
-                                    :loading="
-                                        savingConversationIds.has(scope.row.id)
-                                    "
-                                    @click="saveConversation(scope.row)"
-                                >
-                                    保存
-                                </el-button>
-                                <el-button
-                                    size="small"
-                                    :disabled="
-                                        !isConversationDirty(scope.row) ||
-                                        isConversationBusy(scope.row)
-                                    "
-                                    @click="resetDraft(scope.row)"
-                                >
-                                    还原
-                                </el-button>
-                                <el-button
-                                    size="small"
-                                    type="danger"
-                                    :disabled="isConversationBusy(scope.row)"
-                                    :loading="
-                                        deletingConversationIds.has(scope.row.id)
-                                    "
-                                    @click="removeConversation(scope.row)"
-                                >
-                                    删除
-                                </el-button>
-                            </el-space>
+                            <el-button
+                                class="delete-action"
+                                size="small"
+                                :icon="DeleteIcon"
+                                :disabled="isConversationBusy(scope.row)"
+                                :loading="
+                                    deletingConversationIds.has(scope.row.id)
+                                "
+                                @click="removeConversation(scope.row)"
+                            >
+                                删除
+                            </el-button>
                         </template>
                     </el-table-column>
                 </el-table>
@@ -406,7 +383,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ChatRound, FolderOpened, Refresh, Search } from '@element-plus/icons-vue'
+import {
+    ChatRound,
+    Delete as DeleteIcon,
+    FolderOpened,
+    Refresh,
+    Search
+} from '@element-plus/icons-vue'
 import * as api from '../api'
 import { useCoreCompactMode } from '../use-compact-mode'
 import { reportError } from '../use-error-toast'
@@ -669,8 +652,9 @@ const saveConversation = async (conversation: ChatLunaConversationListItem) => {
         })
 
         updateConversationInList(updated)
-        ElMessage.success('ChatLuna 会话已更新')
+        ElMessage.success('会话设置已自动保存')
     } catch (error) {
+        resetDraft(conversation)
         reportError(error, '保存 ChatLuna 会话失败')
     } finally {
         savingConversationIds.delete(conversation.id)
@@ -971,12 +955,9 @@ onMounted(() => {
 }
 
 .route-list {
-    max-height: 680px;
-    overflow: auto;
-    padding-right: 4px;
     display: grid;
     gap: 12px;
-    scrollbar-width: thin;
+    overflow: visible;
 }
 
 .route-section {
@@ -1261,6 +1242,23 @@ onMounted(() => {
     box-shadow: 0 0 0 1px var(--k-color-primary) inset;
 }
 
+.delete-action {
+    color: var(--k-color-danger);
+    border-color: color-mix(in srgb, var(--k-color-danger), transparent 58%);
+    background: transparent;
+    transition:
+        background 0.16s ease,
+        border-color 0.16s ease,
+        color 0.16s ease;
+}
+
+.delete-action:hover:not(.is-disabled),
+.delete-action:focus-visible:not(.is-disabled) {
+    color: #fff;
+    border-color: var(--k-color-danger);
+    background: var(--k-color-danger);
+}
+
 /* Status chip with dot */
 .status-chip {
     display: inline-flex;
@@ -1327,8 +1325,7 @@ html.dark .conversation-table :deep(thead th.el-table__cell),
     }
 
     .route-list {
-        max-height: 360px;
-        overflow: auto;
+        overflow: visible;
     }
 }
 

@@ -187,26 +187,6 @@
                         </el-form-item>
                     </el-form>
 
-                    <div class="summary-row">
-                        <span class="summary-label">关键词</span>
-                        <span class="keyword-row">
-                            <el-tag
-                                v-for="item in summaryKeywords"
-                                :key="item"
-                                size="small"
-                                effect="plain"
-                            >
-                                {{ item }}
-                            </el-tag>
-                            <span
-                                v-if="summaryKeywords.length === 0"
-                                class="muted"
-                            >
-                                未解析
-                            </span>
-                        </span>
-                    </div>
-
                     <el-alert
                         v-if="validationResult && !validationResult.valid"
                         :title="validationResult.error || '预设校验失败'"
@@ -338,14 +318,6 @@ const editorMeta = computed(() => {
     return `${preset.sourceLabel} · ${formatPresetCount(preset)} · ${formatSize(
         preset.size
     )}`
-})
-
-const summaryKeywords = computed(() => {
-    return (
-        validationResult.value?.keywords ??
-        selectedPreset.value?.keywords ??
-        []
-    )
 })
 
 const editorFileLabel = computed(() => {
@@ -621,13 +593,33 @@ onMounted(async () => {
     display: grid;
     grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
     gap: 16px;
-    align-items: start;
+    align-items: stretch;
+    height: calc(100vh - 290px);
+    min-height: 600px;
 }
 
 .preset-list-card,
 .preset-editor-card {
     min-width: 0;
     border-radius: 12px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-list-card :deep(.el-card__body) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.preset-editor-card :deep(.el-card__body) {
+    padding: 20px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .preset-list-card :deep(.el-card__header),
@@ -659,7 +651,9 @@ onMounted(async () => {
 }
 
 .preset-list-scroll {
-    height: 590px;
+    height: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .preset-list-scroll :deep(.el-scrollbar__view) {
@@ -800,8 +794,25 @@ onMounted(async () => {
 }
 
 .editor-body {
-    display: grid;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     gap: 14px;
+}
+
+.editor-body > :deep(.code-window) {
+    flex: 1;
+    min-height: 0;
+}
+
+.editor-body :deep(.code-window) {
+    box-shadow: none;
+}
+
+.editor-body :deep(.code-editor) {
+    height: 100%;
+    min-height: 0;
 }
 
 .create-form {
@@ -810,19 +821,6 @@ onMounted(async () => {
 
 .create-form :deep(.el-select) {
     width: 100%;
-}
-
-.summary-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
-}
-
-.summary-label {
-    color: var(--k-text-light);
-    font-size: 13px;
-    font-weight: 600;
 }
 
 @media (max-width: 980px) {
@@ -843,8 +841,7 @@ onMounted(async () => {
     }
 
     .editor-actions,
-    .list-toolbar,
-    .summary-row {
+    .list-toolbar {
         width: 100%;
         grid-template-columns: 1fr;
     }
