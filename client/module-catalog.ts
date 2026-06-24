@@ -265,7 +265,7 @@ export const moduleDetails = {
             '提供 GIF 图片处理与文件读取工具',
             '可配合存储服务管理请求中的文件资源'
         ],
-        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/multimodal-service.html'
+        tip: '文档链接：https://chatluna.chat/guide/best-practice/character-recommended-plugins.html#chatluna-multimodal-service'
     },
     usage: {
         title: 'ChatLuna Usage',
@@ -276,9 +276,9 @@ export const moduleDetails = {
             '按模型、平台和调用来源记录 token 消耗',
             '保留调用成功状态和估算标记',
             '支持按时间范围查询调用明细',
-            '提供 tokens 指令输出整体消耗趋势'
+            '提供 tokens 指令输出不同时间粒度的消耗趋势图表'
         ],
-        tip: '文档链接：https://github.com/ChatLunaLab/chatluna/tree/v1-dev/packages/extension-usage#readme'
+        tip: '文档链接：待补充'
     },
     groupAnalysis: {
         title: 'ChatLuna Group Analysis',
@@ -304,7 +304,7 @@ export const moduleDetails = {
             '支持 XML 工具调用写入互动状态',
             '可将排行、黑名单和详情渲染为图片'
         ],
-        tip: '文档链接：https://github.com/Sor85/AAAAACAT-chatluna-plugins'
+        tip: '文档链接：https://github.com/Sor85/AAAAACAT-chatluna-plugins/tree/main/plugins/chatluna-affinity#readme.md'
     },
     searchService: {
         title: 'ChatLuna Search Service',
