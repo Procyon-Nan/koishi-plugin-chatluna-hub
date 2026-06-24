@@ -14,6 +14,11 @@ export const name = 'chatluna-hub'
 export function apply(ctx: Context, config: Config = {}) {
     ctx.plugin(ChatLunaHubService, config)
 
+    // Capture Character requests through its public before/after chat events.
+    ctx.inject(['chatluna_hub'], (ctx) => {
+        ctx.chatluna_hub.registerCharacterLogEvents()
+    })
+
     // Instrument ChatLuna's callback resolution to capture LLM run logs.
     ctx.inject(['chatluna_hub', 'chatluna'], (ctx) => {
         const chatluna = ctx.get(
@@ -23,7 +28,10 @@ export function apply(ctx: Context, config: Config = {}) {
         if (!chatluna) return
 
         const dispose = ctx.chatluna_hub.registerCoreLogProvider(chatluna)
+        const disposeCharacterModel =
+            ctx.chatluna_hub.registerCharacterModelProvider(chatluna)
         ctx.on('dispose', dispose)
+        ctx.on('dispose', disposeCharacterModel)
     })
 
     // Register the console bundle, the RPC listeners, and the data service.

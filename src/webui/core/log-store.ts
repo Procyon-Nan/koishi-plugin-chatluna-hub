@@ -19,6 +19,14 @@ import {
 } from '../shared'
 import { parseRouteInfo } from './conversation-routes'
 import {
+    type ChatLunaCharacterAfterChatPayload,
+    type ChatLunaCharacterBeforeChatPayload,
+    normalizeCharacterLogEnd,
+    normalizeCharacterLogStart,
+    type NormalizedCharacterLogStart,
+    type NormalizedCharacterModelCall
+} from './character-log'
+import {
     type ChatLunaCallbackProviderInputLike,
     type ChatLunaCoreLogDetail,
     type ChatLunaCoreLogGetInput,
@@ -114,6 +122,8 @@ const createCallbackHandler = (
 export class ChatLunaCoreLogStore {
     private entries = new Map<string, ChatLunaCoreLogDetail>()
 
+    private activeCharacterEntries = new Map<string, string>()
+
     private sequence = 0
 
     private readonly filePath?: string
@@ -165,6 +175,7 @@ export class ChatLunaCoreLogStore {
             this.entries.clear()
             for (const entry of parsed.entries) {
                 if (entry && typeof entry.id === 'string') {
+                    entry.source ??= 'chatluna'
                     this.entries.set(entry.id, entry)
                 }
             }
@@ -317,10 +328,15 @@ export class ChatLunaCoreLogStore {
         const pageSize = normalizePageSize(query.pageSize)
         const keyword = query.keyword?.trim().toLowerCase()
         const status = query.status ?? 'all'
+        const source = query.source ?? 'all'
         let items = Array.from(this.entries.values()).map(summarizeCoreLog)
 
         if (status !== 'all') {
             items = items.filter((item) => item.status === status)
+        }
+
+        if (source !== 'all') {
+            items = items.filter((item) => item.source === source)
         }
 
         if (keyword) {
@@ -367,10 +383,170 @@ export class ChatLunaCoreLogStore {
 
     clear() {
         this.entries.clear()
+        this.activeCharacterEntries.clear()
         this.scheduleSave()
     }
 
+    // --- Character event logs ---------------------------------------------
+
+    recordCharacterBeforeChat(payload: ChatLunaCharacterBeforeChatPayload) {
+        const normalized = normalizeCharacterLogStart(payload)
+        const existingId = this.activeCharacterEntries.get(normalized.key)
+
+        if (existingId) {
+            this.failPendingCharacterEntry(
+                existingId,
+                'Character request was superseded before after-chat was observed.'
+            )
+        }
+
+        const entry = this.createCharacterEntry(normalized)
+        this.activeCharacterEntries.set(normalized.key, entry.id)
+    }
+
+    recordCharacterAfterChat(payload: ChatLunaCharacterAfterChatPayload) {
+        const normalized = normalizeCharacterLogEnd(payload)
+        let entry = this.resolveActiveCharacterEntry(normalized.key)
+
+        if (!entry) {
+            const start = normalizeCharacterLogStart(payload)
+            entry = this.createCharacterEntry(start)
+        }
+
+        if (entry.runs.length === 0) {
+            const run = this.createRun(
+                entry,
+                'character-request',
+                null,
+                'character',
+                'character-request',
+                normalized.requestBody
+            )
+            entry.runs.push(run)
+            this.completeCharacterRun(run, normalized.responseBody)
+        } else {
+            const pendingRun = entry.runs.find(
+                (run) => run.status === 'pending'
+            )
+            if (pendingRun) {
+                this.completeCharacterRun(pendingRun, normalized.responseBody)
+            }
+        }
+
+        this.activeCharacterEntries.delete(normalized.key)
+        this.refreshEntrySummary(entry, 'success', new Date().toISOString())
+    }
+
+    startCharacterModelCall(
+        call: NormalizedCharacterModelCall
+    ): { entryId: string; runId: string } | null {
+        const entry = this.resolveActiveCharacterEntry(call.key)
+        if (!entry) return null
+
+        const run = this.createRun(
+            entry,
+            `character-${call.method}-${++this.sequence}`,
+            null,
+            'character',
+            `character-${call.method}`,
+            call.requestBody
+        )
+
+        entry.runs.push(run)
+        this.refreshEntrySummary(entry, 'pending', new Date().toISOString())
+
+        return { entryId: entry.id, runId: run.runId }
+    }
+
+    completeCharacterModelCall(
+        ref: { entryId: string; runId: string },
+        output: unknown
+    ) {
+        const entry = this.entries.get(ref.entryId)
+        const run = entry?.runs.find((item) => item.runId === ref.runId)
+        if (!entry || !run) return
+
+        this.completeCharacterRun(run, stringifyLogBody({ output }))
+        this.refreshEntrySummary(entry, 'success', new Date().toISOString())
+    }
+
+    failCharacterModelCall(
+        ref: { entryId: string; runId: string },
+        error: unknown
+    ) {
+        const entry = this.entries.get(ref.entryId)
+        const run = entry?.runs.find((item) => item.runId === ref.runId)
+        if (!entry || !run) return
+
+        const responseBody = stringifyLogBody({ error })
+        const now = new Date().toISOString()
+
+        run.status = 'error'
+        run.completedAt = now
+        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
+        run.responseBody = responseBody
+        run.responseSize = responseBody.length
+        run.error = coerceReason(error)
+
+        this.deleteActiveCharacterEntry(entry.id)
+        this.refreshEntrySummary(entry, 'error', now)
+    }
+
     // --- run bookkeeping --------------------------------------------------
+
+    private createCharacterEntry(
+        normalized: NormalizedCharacterLogStart
+    ): ChatLunaCoreLogDetail {
+        const now = new Date().toISOString()
+        const requestId = `chatluna-character-${Date.now()}-${++this.sequence}`
+        const entry: ChatLunaCoreLogDetail = {
+            id: requestId,
+            requestId,
+            source: 'character',
+            conversationId: normalized.conversationId,
+            conversationTitle: normalized.conversationTitle,
+            bindingKey: normalized.bindingKey,
+            model: '',
+            preset: normalized.preset,
+            chatMode: 'character',
+            platform: normalized.platform,
+            userId: normalized.userId,
+            guildId: normalized.guildId,
+            channelId: normalized.channelId,
+            messageSummary: normalized.messageSummary,
+            messageBody: normalized.messageBody,
+            status: 'pending',
+            stream: false,
+            startedAt: now,
+            updatedAt: now,
+            completedAt: null,
+            durationMs: null,
+            runCount: 0,
+            errorCount: 0,
+            requestSize: 0,
+            responseSize: 0,
+            latestRunName: null,
+            route: parseRouteInfo(normalized.bindingKey),
+            runs: []
+        }
+
+        const run = this.createRun(
+            entry,
+            'character-request',
+            null,
+            'character',
+            'character-request',
+            normalized.requestBody
+        )
+        run.startedAt = now
+        entry.runs.push(run)
+
+        this.entries.set(entry.id, entry)
+        this.trimEntries()
+        this.refreshEntrySummary(entry, 'pending', now)
+
+        return entry
+    }
 
     private createEntry(
         input: ChatLunaCallbackProviderInputLike
@@ -385,6 +561,7 @@ export class ChatLunaCoreLogStore {
         const entry: ChatLunaCoreLogDetail = {
             id: requestId,
             requestId,
+            source: 'chatluna',
             conversationId: coerceString(conversation?.id),
             conversationTitle: coerceString(conversation?.title),
             bindingKey,
@@ -427,6 +604,7 @@ export class ChatLunaCoreLogStore {
     private requestSnapshot(entry: ChatLunaCoreLogDetail) {
         return {
             requestId: entry.requestId,
+            source: entry.source ?? 'chatluna',
             conversationId: entry.conversationId,
             conversationTitle: entry.conversationTitle,
             bindingKey: entry.bindingKey,
@@ -440,6 +618,57 @@ export class ChatLunaCoreLogStore {
             message: entry.messageBody,
             stream: entry.stream
         }
+    }
+
+    private resolveActiveCharacterEntry(
+        key: string
+    ): ChatLunaCoreLogDetail | undefined {
+        const entryId = this.activeCharacterEntries.get(key)
+        if (!entryId) return undefined
+
+        return this.entries.get(entryId)
+    }
+
+    private deleteActiveCharacterEntry(entryId: string) {
+        for (const [key, activeEntryId] of this.activeCharacterEntries) {
+            if (activeEntryId === entryId) {
+                this.activeCharacterEntries.delete(key)
+            }
+        }
+    }
+
+    private failPendingCharacterEntry(entryId: string, reason: string) {
+        const entry = this.entries.get(entryId)
+        if (!entry) return
+
+        const now = new Date().toISOString()
+        for (const run of entry.runs) {
+            if (run.status !== 'pending') continue
+
+            const responseBody = stringifyLogBody({ error: reason })
+            run.status = 'error'
+            run.completedAt = now
+            run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
+            run.responseBody = responseBody
+            run.responseSize = responseBody.length
+            run.error = reason
+        }
+
+        this.refreshEntrySummary(entry, 'error', now)
+    }
+
+    private completeCharacterRun(
+        run: ChatLunaCoreLogRun,
+        responseBody: string
+    ) {
+        const now = new Date().toISOString()
+
+        run.status = 'success'
+        run.completedAt = now
+        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
+        run.responseBody = responseBody
+        run.responseSize = responseBody.length
+        run.error = null
     }
 
     /** A pending run skeleton with its request body already sized. */

@@ -7,6 +7,7 @@
  * - `conversation-routes` — pure route parsing/formatting/comparison
  * - `presets`           — preset CRUD across core + character sources
  * - `preset-files`      — preset id/path safety and YAML validation
+ * - `character-log`     — Character event payload normalization for logs
  * - `log-store`         — the LLM call log store
  * - `log-types`         — log DTOs and serialization helpers
  *
@@ -20,5 +21,6 @@ export * from './core/conversation-routes'
 export * from './core/conversations'
 export * from './core/preset-files'
 export * from './core/presets'
+export * from './core/character-log'
 export * from './core/log-types'
 export * from './core/log-store'

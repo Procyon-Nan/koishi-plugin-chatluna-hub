@@ -1,9 +1,9 @@
 <template>
     <section class="core-page" :class="{ compact: compactMode }">
         <CorePageHeader
-            kicker="ChatLuna Core"
+            kicker="ChatLuna"
             title="请求日志"
-            subtitle="实时捕获模型调用的请求体与响应体"
+            subtitle="捕获主插件与 Character 的请求体和响应体"
             mobile-variant="row"
             :pills="[
                 { value: total, label: '记录' },
@@ -55,7 +55,7 @@
                 <div class="list-toolbar">
                     <el-input
                         v-model="keyword"
-                        placeholder="搜索 requestId、会话、模型、预设或消息"
+                        placeholder="搜索 requestId、来源、会话、模型、预设或消息"
                         clearable
                     />
                     <el-select v-model="statusFilter" class="status-filter">
@@ -63,6 +63,11 @@
                         <el-option label="进行中" value="pending" />
                         <el-option label="成功" value="success" />
                         <el-option label="错误" value="error" />
+                    </el-select>
+                    <el-select v-model="sourceFilter" class="source-filter">
+                        <el-option label="全部来源" value="all" />
+                        <el-option label="ChatLuna 主插件" value="chatluna" />
+                        <el-option label="Character" value="character" />
                     </el-select>
                 </div>
 
@@ -93,6 +98,13 @@
                                 :type="statusTag(item.status)"
                             >
                                 {{ statusLabel(item.status) }}
+                            </el-tag>
+                            <el-tag
+                                size="small"
+                                effect="plain"
+                                :type="logSourceTag(item.source)"
+                            >
+                                {{ logSourceLabel(item.source) }}
                             </el-tag>
                         </span>
                         <span class="log-list-message">
@@ -173,6 +185,12 @@
                 <div v-else class="detail-body">
                     <div class="detail-summary">
                         <div>
+                            <span>来源</span>
+                            <strong>
+                                {{ logSourceLabel(detail.source) }}
+                            </strong>
+                        </div>
+                        <div>
                             <span>Request ID</span>
                             <strong :title="detail.requestId">
                                 {{ detail.requestId }}
@@ -228,7 +246,11 @@
 
                     <div v-if="selectedRun" class="run-summary">
                         <span class="run-summary-model">
-                            {{ detail.model || '模型调用' }}
+                            {{
+                                detail.source === 'character'
+                                    ? 'Character'
+                                    : detail.model || '模型调用'
+                            }}
                         </span>
                         <span class="run-summary-type">
                             {{ runTypeLabel(selectedRun) }}
@@ -291,6 +313,7 @@ import * as api from '../api'
 import type {
     ChatLunaCoreLogDetail,
     ChatLunaCoreLogListItem,
+    ChatLunaCoreLogSource,
     ChatLunaCoreLogStatus,
     ChatLunaCoreLogStatusCounts
 } from '../types'
@@ -304,6 +327,8 @@ import {
     shortId,
     statusLabel,
     statusTag,
+    logSourceLabel,
+    logSourceTag,
     runTypeLabel,
     runLabel
 } from './log-format'
@@ -314,6 +339,7 @@ const compactMode = useCoreCompactMode()
 
 const keyword = ref('')
 const statusFilter = ref<ChatLunaCoreLogStatus | 'all'>('all')
+const sourceFilter = ref<ChatLunaCoreLogSource | 'all'>('all')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -364,9 +390,12 @@ const detailMeta = computed(() => {
     if (!detail.value) return '捕获 ChatLuna 回复过程中的模型请求与响应'
 
     return [
+        logSourceLabel(detail.value.source),
         detail.value.model || '-',
         detail.value.preset || '-',
-        `${detail.value.runCount} 次模型调用`
+        `${detail.value.runCount} 次${
+            detail.value.source === 'character' ? '请求' : '模型调用'
+        }`
     ].join(' · ')
 })
 
@@ -429,6 +458,7 @@ const fetchLogs = async () => {
         const result = await api.listChatLunaCoreLogs({
             keyword: keyword.value.trim(),
             status: statusFilter.value,
+            source: sourceFilter.value,
             page: page.value,
             pageSize: pageSize.value
         })
@@ -503,7 +533,7 @@ const clearLogs = async () => {
     }
 }
 
-watch([keyword, statusFilter], scheduleFetchLogs)
+watch([keyword, statusFilter, sourceFilter], scheduleFetchLogs)
 
 const copyBody = async (kind: 'request' | 'response' | 'error') => {
     const run = selectedRun.value
@@ -632,8 +662,13 @@ onBeforeUnmount(() => {
 }
 
 .status-filter,
+.source-filter,
 .run-select {
     width: 100%;
+}
+
+.source-filter {
+    grid-column: 1 / -1;
 }
 
 .run-select {
@@ -711,7 +746,18 @@ onBeforeUnmount(() => {
     background: color-mix(in srgb, var(--k-color-primary), transparent 94%);
 }
 
-.log-list-title-row,
+.log-list-title-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.log-list-title {
+    flex: 1;
+    min-width: 0;
+}
+
 .log-list-footer {
     min-width: 0;
     display: grid;

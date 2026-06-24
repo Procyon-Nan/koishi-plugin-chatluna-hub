@@ -8,7 +8,9 @@ import type { ChatLunaConversationRouteInfo } from './conversation-routes'
 
 export type ChatLunaCoreLogStatus = 'pending' | 'success' | 'error'
 
-export type ChatLunaCoreLogRunType = 'chat-model' | 'llm'
+export type ChatLunaCoreLogSource = 'chatluna' | 'character'
+
+export type ChatLunaCoreLogRunType = 'chat-model' | 'llm' | 'character'
 
 export interface ChatLunaCoreLogRunSummary {
     id: string
@@ -34,6 +36,7 @@ export interface ChatLunaCoreLogRun extends ChatLunaCoreLogRunSummary {
 export interface ChatLunaCoreLogListItem {
     id: string
     requestId: string
+    source: ChatLunaCoreLogSource
     conversationId: string
     conversationTitle: string
     bindingKey: string
@@ -67,6 +70,7 @@ export interface ChatLunaCoreLogDetail extends ChatLunaCoreLogListItem {
 export interface ChatLunaCoreLogListQuery {
     keyword?: string
     status?: ChatLunaCoreLogStatus | 'all'
+    source?: ChatLunaCoreLogSource | 'all'
     page?: number
     pageSize?: number
 }
@@ -204,6 +208,7 @@ export const summarizeCoreLog = (
     return {
         id: entry.id,
         requestId: entry.requestId,
+        source: entry.source ?? 'chatluna',
         conversationId: entry.conversationId,
         conversationTitle: entry.conversationTitle,
         bindingKey: entry.bindingKey,
@@ -244,6 +249,7 @@ export const logKeywordFields = (
     item: ChatLunaCoreLogListItem
 ): (string | null | undefined)[] => [
     item.requestId,
+    item.source,
     item.conversationId,
     item.conversationTitle,
     item.bindingKey,

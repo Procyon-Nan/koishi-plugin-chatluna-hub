@@ -29,6 +29,8 @@ import {
     batchUpdateChatLunaConversationUsage,
     type BatchUpdateChatLunaConversationUsageInput,
     type BatchUpdateChatLunaConversationUsageResult,
+    type ChatLunaCharacterAfterChatPayload,
+    type ChatLunaCharacterBeforeChatPayload,
     type ChatLunaConversationListItem,
     type ChatLunaConversationListQuery,
     type ChatLunaConversationOptions,
@@ -57,6 +59,7 @@ import {
     listChatLunaConversations,
     listChatLunaCoreModels,
     listChatLunaCorePresets,
+    normalizeCharacterModelCall,
     type PageResult,
     updateChatLunaConversationUsage,
     type UpdateChatLunaConversationUsageInput,
@@ -68,12 +71,39 @@ import type { Config } from './config'
 /** The slice of the ChatLuna service the core-log instrumentation patches. */
 export interface ChatLunaCallbackProviderService {
     resolveCallbacks?: (input: unknown) => Promise<unknown>
+    createChatModel?: (...args: unknown[]) => Promise<unknown>
+}
+
+interface RefLike<T = unknown> {
+    value?: T
+}
+
+interface CharacterModelLike {
+    invoke?: (input: unknown, options?: unknown) => Promise<unknown>
+    stream?: (input: unknown, options?: unknown) => AsyncIterable<unknown>
+}
+
+const findPropertyDescriptor = (
+    value: unknown,
+    key: string
+): PropertyDescriptor | undefined => {
+    let target = value
+
+    while (target && typeof target === 'object') {
+        const descriptor = Object.getOwnPropertyDescriptor(target, key)
+        if (descriptor) return descriptor
+        target = Object.getPrototypeOf(target)
+    }
+
+    return undefined
 }
 
 export class ChatLunaHubService extends Service {
     private readonly coreLogStore: ChatLunaCoreLogStore
 
     private disposeCoreLogProvider?: () => void
+
+    private disposeCharacterModelProvider?: () => void
 
     constructor(
         public readonly ctx: Context,
@@ -98,6 +128,7 @@ export class ChatLunaHubService extends Service {
 
         ctx.on('dispose', () => {
             this.unregisterCoreLogProvider()
+            this.unregisterCharacterModelProvider()
             this.coreLogStore.dispose()
         })
     }
@@ -316,6 +347,184 @@ export class ChatLunaHubService extends Service {
     unregisterCoreLogProvider() {
         this.disposeCoreLogProvider?.()
         this.disposeCoreLogProvider = undefined
+    }
+
+    registerCharacterModelProvider(chatluna: ChatLunaCallbackProviderService) {
+        this.unregisterCharacterModelProvider()
+
+        const logger = this.ctx.logger('chatluna-hub')
+        const target = chatluna
+
+        if (typeof target.createChatModel !== 'function') {
+            logger.warn(
+                'chatluna.createChatModel is unavailable; character raw requests cannot be captured.'
+            )
+            return () => {}
+        }
+
+        const original = target.createChatModel.bind(target)
+        const store = this.coreLogStore
+        const wrappedModels = new WeakSet<object>()
+
+        const patchModel = (model: unknown) => {
+            if (
+                !model ||
+                typeof model !== 'object' ||
+                wrappedModels.has(model)
+            ) {
+                return
+            }
+
+            const candidate = model as CharacterModelLike
+            const originalInvoke = candidate.invoke?.bind(candidate)
+            const originalStream = candidate.stream?.bind(candidate)
+
+            if (originalInvoke) {
+                candidate.invoke = async (input, options) => {
+                    const call = normalizeCharacterModelCall(
+                        'invoke',
+                        input,
+                        options
+                    )
+                    const ref = call
+                        ? store.startCharacterModelCall(call)
+                        : null
+
+                    try {
+                        const output = await originalInvoke(input, options)
+                        if (ref) store.completeCharacterModelCall(ref, output)
+                        return output
+                    } catch (error) {
+                        if (ref) store.failCharacterModelCall(ref, error)
+                        throw error
+                    }
+                }
+            }
+
+            if (originalStream) {
+                candidate.stream = (input, options) => {
+                    const call = normalizeCharacterModelCall(
+                        'stream',
+                        input,
+                        options
+                    )
+                    const ref = call
+                        ? store.startCharacterModelCall(call)
+                        : null
+                    const stream = originalStream(input, options)
+
+                    return this.wrapCharacterStream(stream, ref)
+                }
+            }
+
+            wrappedModels.add(model)
+        }
+
+        const patchRef = (ref: unknown) => {
+            if (!ref || typeof ref !== 'object') return ref
+
+            const descriptor = findPropertyDescriptor(ref, 'value')
+            if (!descriptor?.get || descriptor.configurable === false) {
+                patchModel((ref as RefLike).value)
+                return ref
+            }
+
+            Object.defineProperty(ref, 'value', {
+                ...descriptor,
+                get() {
+                    const model = descriptor.get!.call(this)
+                    patchModel(model)
+                    return model
+                }
+            })
+
+            return ref
+        }
+
+        const patched = async (...args: unknown[]) => {
+            return patchRef(await original(...args))
+        }
+
+        target.createChatModel = patched
+
+        const dispose = () => {
+            if (target.createChatModel === patched) {
+                target.createChatModel = original
+            } else {
+                logger.warn(
+                    'chatluna.createChatModel was patched by another consumer; ' +
+                        'skipping restore to avoid breaking it.'
+                )
+            }
+        }
+
+        this.disposeCharacterModelProvider = dispose
+
+        return () => {
+            if (this.disposeCharacterModelProvider === dispose) {
+                this.disposeCharacterModelProvider = undefined
+            }
+
+            dispose()
+        }
+    }
+
+    unregisterCharacterModelProvider() {
+        this.disposeCharacterModelProvider?.()
+        this.disposeCharacterModelProvider = undefined
+    }
+
+    private async *wrapCharacterStream(
+        stream: AsyncIterable<unknown>,
+        ref: { entryId: string; runId: string } | null
+    ): AsyncIterable<unknown> {
+        const chunks: unknown[] = []
+
+        try {
+            for await (const chunk of stream) {
+                chunks.push(chunk)
+                yield chunk
+            }
+
+            if (ref) this.coreLogStore.completeCharacterModelCall(ref, chunks)
+        } catch (error) {
+            if (ref) this.coreLogStore.failCharacterModelCall(ref, error)
+            throw error
+        }
+    }
+
+    registerCharacterLogEvents() {
+        const logger = this.ctx.logger('chatluna-hub')
+        const onCharacterEvent = this.ctx.on as unknown as (
+            event: string,
+            listener: (payload: unknown) => void
+        ) => void
+
+        onCharacterEvent('chatluna_character/before-chat', (payload) => {
+            try {
+                this.coreLogStore.recordCharacterBeforeChat(
+                    payload as ChatLunaCharacterBeforeChatPayload
+                )
+            } catch (error) {
+                logger.warn(
+                    'character before-chat log capture failed: %s',
+                    coerceReason(error)
+                )
+            }
+        })
+
+        onCharacterEvent('chatluna_character/after-chat', (payload) => {
+            try {
+                this.coreLogStore.recordCharacterAfterChat(
+                    payload as ChatLunaCharacterAfterChatPayload
+                )
+            } catch (error) {
+                logger.warn(
+                    'character after-chat log capture failed: %s',
+                    coerceReason(error)
+                )
+            }
+        })
     }
 
     // --- core log queries -------------------------------------------------
