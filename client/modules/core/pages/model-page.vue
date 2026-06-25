@@ -358,6 +358,7 @@
             @save="saveEditor"
             @add-credential="addCredential"
             @remove-credential="removeCredential"
+            @reset-to-default="resetToDefault"
         />
     </section>
 </template>
@@ -437,6 +438,7 @@ const {
     openEditor,
     addCredential,
     removeCredential,
+    resetToDefault,
     fetchAdapters,
     saveEditor,
     handleToggle,

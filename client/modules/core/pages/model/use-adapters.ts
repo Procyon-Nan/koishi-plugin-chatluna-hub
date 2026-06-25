@@ -394,6 +394,21 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         editorCredentials.splice(index, 1)
     }
 
+    const resetToDefault = () => {
+        const descriptor = editorDescriptor.value
+        if (!descriptor) return
+
+        // 重置凭据列表
+        editorCredentials.splice(
+            0,
+            editorCredentials.length,
+            ...(descriptor.credentialKind === 'opaque' ? [] : [createCredentialEntry()])
+        )
+
+        // 重置额外配置为默认配置
+        resetRecord(editorExtraConfig, descriptor.defaultExtraConfig)
+    }
+
     const fetchAdapters = async (): Promise<boolean> => {
         adapterLoading.value = true
 
@@ -549,6 +564,7 @@ export function useAdapters(refreshModels: () => Promise<void>) {
         openEditor,
         addCredential,
         removeCredential,
+        resetToDefault,
         fetchAdapters,
         saveEditor,
         handleToggle,
