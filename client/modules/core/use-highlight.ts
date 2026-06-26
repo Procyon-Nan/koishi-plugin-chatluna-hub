@@ -9,35 +9,63 @@ const ensureRegistered = () => {
     registered = true
 }
 
-const looksLikeJson = (value: string) => {
-    const trimmed = value.trimStart()
-    return trimmed.startsWith('{') || trimmed.startsWith('[')
+const formatJson = (value: string): string | null => {
+    try {
+        return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+        return null
+    }
 }
 
-/**
- * Highlight a log body. Request/response bodies are 2-space JSON; the error tab
- * is plain text. We only run the JSON grammar when the content actually looks
- * like JSON, otherwise return escaped plain text so non-JSON never renders as
- * broken markup.
- */
+const formatSseJson = (value: string): string | null => {
+    let formattedCount = 0
+    const lines = value.split(/\r?\n/)
+
+    const formattedLines = lines.map((line) => {
+        const match = line.match(/^(\s*data:\s*)(.*)$/)
+        if (!match) return line
+
+        const formatted = formatJson(match[2].trim())
+        if (!formatted) return line
+
+        formattedCount += 1
+        return `${match[1]}${formatted}`
+    })
+
+    return formattedCount > 0 ? formattedLines.join('\n') : null
+}
+
+const formatLogBody = (
+    value: string
+): { text: string; highlightJson: boolean } => {
+    const jsonText = formatJson(value)
+    if (jsonText) return { text: jsonText, highlightJson: true }
+
+    return {
+        text: formatSseJson(value) ?? value,
+        highlightJson: false
+    }
+}
+
+/** Highlight a captured JSON or SSE JSON log body for display. */
 export const highlightLogBody = (
-    value: string | null | undefined,
-    language: 'json' | 'plaintext' = 'json'
+    value: string | null | undefined
 ): string => {
     const text = value ?? ''
     if (!text) return ''
 
     ensureRegistered()
 
-    if (language === 'json' && looksLikeJson(text)) {
+    const formatted = formatLogBody(text)
+    if (formatted.highlightJson) {
         try {
-            return hljs.highlight(text, { language: 'json' }).value
+            return hljs.highlight(formatted.text, { language: 'json' }).value
         } catch {
-            // Fall through to escaped plain text on any grammar failure.
+            // Fall through to escaped text if the highlighter rejects it.
         }
     }
 
-    return escapeHtml(text)
+    return escapeHtml(formatted.text)
 }
 
 const escapeHtml = (value: string): string => {

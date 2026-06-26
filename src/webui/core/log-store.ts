@@ -1,17 +1,12 @@
 /**
- * In-memory + disk-persisted store of ChatLuna LLM call logs. It captures
- * request/response bodies by instrumenting the callback chain (see
- * {@link ChatLunaCoreLogStore.instrumentCallbacks}) and keeps the most recent
- * {@link maxCoreLogEntries} entries. All persistence is best-effort: a failed
- * read or write is logged and ignored, never blocking the chat pipeline.
+ * In-memory + disk-persisted store of ChatLuna model HTTP logs. Hub records the
+ * real fetch exchanges below ChatLunaChatModel requester calls.
  */
 import fs from 'fs/promises'
 import path from 'path'
 import {
     coerceReason,
     coerceString,
-    getRecordString,
-    isRecord,
     normalizePage,
     normalizePageSize,
     paginate,
@@ -19,66 +14,64 @@ import {
 } from '../shared'
 import { parseRouteInfo } from './conversation-routes'
 import {
-    type ChatLunaCharacterAfterChatPayload,
-    type ChatLunaCharacterBeforeChatPayload,
-    normalizeCharacterLogEnd,
-    normalizeCharacterLogStart,
-    type NormalizedCharacterLogStart,
-    type NormalizedCharacterModelCall
-} from './character-log'
-import {
-    type ChatLunaCallbackProviderInputLike,
     type ChatLunaCoreLogDetail,
+    type ChatLunaCoreLogExchange,
     type ChatLunaCoreLogGetInput,
     type ChatLunaCoreLogListQuery,
     type ChatLunaCoreLogListResult,
     type ChatLunaCoreLogRun,
-    type ChatLunaCoreLogRunType,
     type ChatLunaCoreLogStatus,
     type ChatLunaCoreLogStatusCounts,
     cloneCoreLogDetail,
     extractLogText,
-    extractRunUsageMetadata,
     logKeywordFields,
-    stringifyLogBody,
     summarizeCoreLog,
-    summarizeLogText
+    summarizeLogText,
+    summarizeRunBodies
 } from './log-types'
 
 const maxCoreLogEntries = 100
-const coreLogStoreVersion = 1
+const coreLogStoreVersion = 2
 const coreLogSaveDebounceMs = 1500
-
-type LangChainCallbackMethod = (...args: unknown[]) => unknown
-
-interface LangChainCallbackHandlerMethods {
-    handleChatModelStart?: LangChainCallbackMethod
-    handleLLMStart?: LangChainCallbackMethod
-    handleLLMEnd?: LangChainCallbackMethod
-    handleLLMError?: LangChainCallbackMethod
-    handleChainError?: LangChainCallbackMethod
-}
-
-interface LangChainCallbackHandler extends LangChainCallbackHandlerMethods {
-    name: string
-    ignoreLLM: boolean
-    ignoreChain: boolean
-    ignoreAgent: boolean
-    ignoreRetriever: boolean
-    ignoreCustomEvent: boolean
-    raiseError: boolean
-    awaitHandlers: boolean
-    copy: () => LangChainCallbackHandler
-}
-
-interface LangChainCallbackManagerLike {
-    copy?: () => unknown
-    addHandler?: (handler: LangChainCallbackHandler, inherit?: boolean) => void
-}
+const missingHttpExchangeError =
+    'No HTTP exchange was captured for this model run. The model response may have succeeded, but request logging did not observe the underlying fetch call.'
 
 export interface ChatLunaCoreLogStoreOptions {
     filePath?: string
     logger?: { warn: (...args: unknown[]) => void }
+}
+
+export interface ChatLunaModelRunStart {
+    requestId?: string | null
+    source?: string | null
+    method: 'completion' | 'completionStream'
+    model?: string | null
+    platform?: string | null
+    conversationId?: string | null
+    conversationTitle?: string | null
+    bindingKey?: string | null
+    preset?: string | null
+    chatMode?: string | null
+    selfId?: string | null
+    userId?: string | null
+    guildId?: string | null
+    channelId?: string | null
+    message?: unknown
+    stream?: boolean
+}
+
+export interface ChatLunaHttpExchangeStart {
+    url: string
+    method: string
+    requestBody: string
+    requestTruncated?: boolean
+}
+
+export interface ChatLunaHttpExchangeComplete {
+    httpStatus?: number | null
+    httpStatusText?: string | null
+    responseBody: string
+    responseTruncated?: boolean
 }
 
 interface PersistedCoreLogFile {
@@ -87,42 +80,16 @@ interface PersistedCoreLogFile {
     entries: ChatLunaCoreLogDetail[]
 }
 
-const isCallbackManagerLike = (
-    value: unknown
-): value is LangChainCallbackManagerLike => {
-    return (
-        value != null &&
-        typeof value === 'object' &&
-        (typeof (value as LangChainCallbackManagerLike).copy === 'function' ||
-            typeof (value as LangChainCallbackManagerLike).addHandler ===
-                'function')
-    )
+const normalizeSource = (source: string | null | undefined) => {
+    return source === 'character' ? 'character' : 'chatluna'
 }
 
-const createCallbackHandler = (
-    methods: LangChainCallbackHandlerMethods,
-    name = `chatluna-hub-core-log-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}`
-): LangChainCallbackHandler => {
-    return {
-        name,
-        ignoreLLM: false,
-        ignoreChain: false,
-        ignoreAgent: false,
-        ignoreRetriever: false,
-        ignoreCustomEvent: false,
-        raiseError: false,
-        awaitHandlers: false,
-        ...methods,
-        copy: () => createCallbackHandler(methods, name)
-    }
+const isPending = (item: { status: ChatLunaCoreLogStatus }) => {
+    return item.status === 'pending'
 }
 
 export class ChatLunaCoreLogStore {
     private entries = new Map<string, ChatLunaCoreLogDetail>()
-
-    private activeCharacterEntries = new Map<string, string>()
 
     private sequence = 0
 
@@ -143,22 +110,14 @@ export class ChatLunaCoreLogStore {
         this.logger = options.logger
     }
 
-    // --- persistence ------------------------------------------------------
-
-    /**
-     * Load persisted logs from disk. Safe to call once at startup; failures are
-     * logged and ignored (logs are best-effort, never block plugin load).
-     */
     async load() {
         if (!this.filePath) return
-        // Don't clobber live entries captured before load ran (e.g. HMR).
         if (this.entries.size > 0) return
 
         let raw: string
         try {
             raw = await fs.readFile(this.filePath, 'utf8')
         } catch (error) {
-            // Missing file on first run is expected; only warn on real errors.
             if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
                 this.logger?.warn(
                     'failed to read core log store: %s',
@@ -174,10 +133,10 @@ export class ChatLunaCoreLogStore {
 
             this.entries.clear()
             for (const entry of parsed.entries) {
-                if (entry && typeof entry.id === 'string') {
-                    entry.source ??= 'chatluna'
-                    this.entries.set(entry.id, entry)
-                }
+                if (!entry || typeof entry.id !== 'string') continue
+
+                const normalized = this.normalizePersistedEntry(entry)
+                this.entries.set(normalized.id, normalized)
             }
             this.sequence =
                 typeof parsed.sequence === 'number' ? parsed.sequence : 0
@@ -190,7 +149,6 @@ export class ChatLunaCoreLogStore {
         }
     }
 
-    /** Flush any pending save and stop the debounce timer. */
     async dispose() {
         this.disposed = true
         if (this.saveTimer) {
@@ -213,8 +171,6 @@ export class ChatLunaCoreLogStore {
     private async flush() {
         if (!this.filePath) return
 
-        // Coalesce concurrent saves: if a write is in flight, mark that another
-        // is needed and let the current one re-run after it finishes.
         if (this.saving) {
             this.pendingSave = true
             return
@@ -246,82 +202,6 @@ export class ChatLunaCoreLogStore {
             }
         }
     }
-
-    // --- instrumentation --------------------------------------------------
-
-    /**
-     * Inject log handlers into a CallbackManager as *inheritable* handlers, so
-     * they propagate to nested LLM runs via getChild().
-     *
-     * The official registerCallbacksProvider path adds handlers to the
-     * non-inheritable slot of CallbackManager.configure, which means the
-     * chain-level manager drops them before reaching the model run. Patching
-     * resolveCallbacks and re-adding with inherit=true is the only hub-side way
-     * to observe handleChatModelStart / handleLLMEnd.
-     */
-    instrumentCallbacks(manager: unknown, input: unknown): unknown {
-        const handlers = this.buildHandlers(input).map((handler) =>
-            createCallbackHandler(handler)
-        )
-
-        // When no other callbacks provider is registered, chatluna's
-        // resolveCallbacks returns input.callbacks (usually undefined), so
-        // there is no manager to attach to. Return handlers and let ChatLuna's
-        // own LangChain copy build the matching CallbackManager instance. This
-        // avoids binding Hub to a second @langchain/core version.
-        if (!isCallbackManagerLike(manager)) {
-            return handlers
-        }
-
-        const copied = manager.copy?.()
-        const target = isCallbackManagerLike(copied) ? copied : manager
-
-        if (!target.addHandler) {
-            return manager
-        }
-
-        for (const handler of handlers) {
-            target.addHandler(handler, true)
-        }
-
-        return target
-    }
-
-    private buildHandlers(input: unknown): LangChainCallbackHandlerMethods[] {
-        const entry = this.createEntry(
-            input as ChatLunaCallbackProviderInputLike
-        )
-
-        const safely = (fn: () => void) => {
-            try {
-                fn()
-            } catch {
-                // Never let log bookkeeping disrupt the chat callback chain.
-            }
-        }
-
-        return [
-            {
-                handleChatModelStart: (...args: unknown[]) => {
-                    safely(() => this.startRun(entry.id, 'chat-model', args))
-                },
-                handleLLMStart: (...args: unknown[]) => {
-                    safely(() => this.startRun(entry.id, 'llm', args))
-                },
-                handleLLMEnd: (...args: unknown[]) => {
-                    safely(() => this.completeRun(entry.id, args))
-                },
-                handleLLMError: (...args: unknown[]) => {
-                    safely(() => this.failRun(entry.id, args))
-                },
-                handleChainError: (...args: unknown[]) => {
-                    safely(() => this.failEntry(entry.id, args[0]))
-                }
-            }
-        ]
-    }
-
-    // --- queries ----------------------------------------------------------
 
     list(query: ChatLunaCoreLogListQuery = {}): ChatLunaCoreLogListResult {
         const page = normalizePage(query.page)
@@ -383,197 +263,195 @@ export class ChatLunaCoreLogStore {
 
     clear() {
         this.entries.clear()
-        this.activeCharacterEntries.clear()
         this.scheduleSave()
     }
 
-    // --- Character event logs ---------------------------------------------
-
-    recordCharacterBeforeChat(payload: ChatLunaCharacterBeforeChatPayload) {
-        const normalized = normalizeCharacterLogStart(payload)
-        const existingId = this.activeCharacterEntries.get(normalized.key)
-
-        if (existingId) {
-            this.failPendingCharacterEntry(
-                existingId,
-                'Character request was superseded before after-chat was observed.'
-            )
-        }
-
-        const entry = this.createCharacterEntry(normalized)
-        this.activeCharacterEntries.set(normalized.key, entry.id)
-    }
-
-    recordCharacterAfterChat(payload: ChatLunaCharacterAfterChatPayload) {
-        const normalized = normalizeCharacterLogEnd(payload)
-        let entry = this.resolveActiveCharacterEntry(normalized.key)
-
-        if (!entry) {
-            const start = normalizeCharacterLogStart(payload)
-            entry = this.createCharacterEntry(start)
-        }
-
-        if (entry.runs.length === 0) {
-            const run = this.createRun(
-                entry,
-                'character-request',
-                null,
-                'character',
-                'character-request',
-                normalized.requestBody
-            )
-            entry.runs.push(run)
-            this.completeCharacterRun(run, normalized.responseBody)
-        } else {
-            const pendingRun = entry.runs.find(
-                (run) => run.status === 'pending'
-            )
-            if (pendingRun) {
-                this.completeCharacterRun(pendingRun, normalized.responseBody)
-            }
-        }
-
-        this.activeCharacterEntries.delete(normalized.key)
-        this.refreshEntrySummary(entry, 'success', new Date().toISOString())
-    }
-
-    startCharacterModelCall(
-        call: NormalizedCharacterModelCall
-    ): { entryId: string; runId: string } | null {
-        const entry = this.resolveActiveCharacterEntry(call.key)
-        if (!entry) return null
-
-        const run = this.createRun(
-            entry,
-            `character-${call.method}-${++this.sequence}`,
-            null,
-            'character',
-            `character-${call.method}`,
-            call.requestBody
-        )
+    startModelRun(input: ChatLunaModelRunStart) {
+        const now = new Date().toISOString()
+        const entry = this.findOrCreateEntry(input, now)
+        const runId = `${entry.id}:model:${++this.sequence}`
+        const run = this.createRun(entry, runId, input.method, now)
 
         entry.runs.push(run)
-        this.refreshEntrySummary(entry, 'pending', new Date().toISOString())
+        this.entries.set(entry.id, entry)
+        this.trimEntries()
+        this.refreshEntrySummary(entry, now)
 
-        return { entryId: entry.id, runId: run.runId }
+        return { entryId: entry.id, runId }
     }
 
-    completeCharacterModelCall(
-        ref: { entryId: string; runId: string },
-        output: unknown
-    ) {
+    completeModelRun(ref: { entryId: string; runId: string }) {
         const entry = this.entries.get(ref.entryId)
         const run = entry?.runs.find((item) => item.runId === ref.runId)
         if (!entry || !run) return
 
-        this.completeCharacterRun(run, stringifyLogBody({ output }))
-        this.refreshEntrySummary(entry, 'success', new Date().toISOString())
+        const now = new Date().toISOString()
+        run.completedAt = now
+        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
+        run.error = null
+
+        this.refreshRunSummary(run)
+        this.refreshEntrySummary(entry, now)
     }
 
-    failCharacterModelCall(
+    failModelRun(ref: { entryId: string; runId: string }, error: unknown) {
+        const entry = this.entries.get(ref.entryId)
+        const run = entry?.runs.find((item) => item.runId === ref.runId)
+        if (!entry || !run) return
+
+        const now = new Date().toISOString()
+        run.completedAt = now
+        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
+        run.error = coerceReason(error)
+
+        this.refreshRunSummary(run)
+        this.refreshEntrySummary(entry, now)
+    }
+
+    startHttpExchange(
         ref: { entryId: string; runId: string },
+        input: ChatLunaHttpExchangeStart
+    ) {
+        const entry = this.entries.get(ref.entryId)
+        const run = entry?.runs.find((item) => item.runId === ref.runId)
+        if (!entry || !run) return null
+
+        const now = new Date().toISOString()
+        const exchangeId = `${run.runId}:http:${++this.sequence}`
+        const exchange: ChatLunaCoreLogExchange = {
+            id: `${entry.id}:${exchangeId}`,
+            exchangeId,
+            runId: run.runId,
+            url: input.url,
+            method: input.method,
+            status: 'pending',
+            httpStatus: null,
+            httpStatusText: null,
+            startedAt: now,
+            completedAt: null,
+            durationMs: null,
+            requestBody: input.requestBody,
+            responseBody: null,
+            requestSize: input.requestBody.length,
+            responseSize: 0,
+            requestTruncated: input.requestTruncated === true,
+            responseTruncated: false,
+            error: null
+        }
+
+        run.exchanges.push(exchange)
+        this.refreshRunSummary(run)
+        this.refreshEntrySummary(entry, now)
+
+        return { entryId: entry.id, runId: run.runId, exchangeId }
+    }
+
+    completeHttpExchange(
+        ref: { entryId: string; runId: string; exchangeId: string },
+        output: ChatLunaHttpExchangeComplete
+    ) {
+        const entry = this.entries.get(ref.entryId)
+        const run = entry?.runs.find((item) => item.runId === ref.runId)
+        const exchange = run?.exchanges.find(
+            (item) => item.exchangeId === ref.exchangeId
+        )
+        if (!entry || !run || !exchange) return
+
+        const now = new Date().toISOString()
+        exchange.status =
+            output.httpStatus != null && output.httpStatus >= 400
+                ? 'error'
+                : 'success'
+        exchange.httpStatus = output.httpStatus ?? null
+        exchange.httpStatusText = output.httpStatusText ?? null
+        exchange.completedAt = now
+        exchange.durationMs = toTimestamp(now) - toTimestamp(exchange.startedAt)
+        exchange.responseBody = output.responseBody
+        exchange.responseSize = output.responseBody.length
+        exchange.responseTruncated = output.responseTruncated === true
+        exchange.error =
+            exchange.status === 'error' ? output.responseBody : null
+
+        this.refreshRunSummary(run)
+        this.refreshEntrySummary(entry, now)
+    }
+
+    failHttpExchange(
+        ref: { entryId: string; runId: string; exchangeId: string },
         error: unknown
     ) {
         const entry = this.entries.get(ref.entryId)
         const run = entry?.runs.find((item) => item.runId === ref.runId)
-        if (!entry || !run) return
+        const exchange = run?.exchanges.find(
+            (item) => item.exchangeId === ref.exchangeId
+        )
+        if (!entry || !run || !exchange) return
 
-        const responseBody = stringifyLogBody({ error })
         const now = new Date().toISOString()
+        const reason = coerceReason(error)
+        exchange.status = 'error'
+        exchange.completedAt = now
+        exchange.durationMs = toTimestamp(now) - toTimestamp(exchange.startedAt)
+        exchange.responseBody = reason
+        exchange.responseSize = reason.length
+        exchange.error = reason
 
-        run.status = 'error'
-        run.completedAt = now
-        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
-        run.responseBody = responseBody
-        run.responseSize = responseBody.length
-        run.error = coerceReason(error)
-
-        this.deleteActiveCharacterEntry(entry.id)
-        this.refreshEntrySummary(entry, 'error', now)
+        this.refreshRunSummary(run)
+        this.refreshEntrySummary(entry, now)
     }
 
-    // --- run bookkeeping --------------------------------------------------
-
-    private createCharacterEntry(
-        normalized: NormalizedCharacterLogStart
+    private findOrCreateEntry(
+        input: ChatLunaModelRunStart,
+        now: string
     ): ChatLunaCoreLogDetail {
-        const now = new Date().toISOString()
-        const requestId = `chatluna-character-${Date.now()}-${++this.sequence}`
-        const entry: ChatLunaCoreLogDetail = {
-            id: requestId,
-            requestId,
-            source: 'character',
-            conversationId: normalized.conversationId,
-            conversationTitle: normalized.conversationTitle,
-            bindingKey: normalized.bindingKey,
-            model: '',
-            preset: normalized.preset,
-            chatMode: 'character',
-            platform: normalized.platform,
-            userId: normalized.userId,
-            guildId: normalized.guildId,
-            channelId: normalized.channelId,
-            messageSummary: normalized.messageSummary,
-            messageBody: normalized.messageBody,
-            status: 'pending',
-            stream: false,
-            startedAt: now,
-            updatedAt: now,
-            completedAt: null,
-            durationMs: null,
-            runCount: 0,
-            errorCount: 0,
-            requestSize: 0,
-            responseSize: 0,
-            latestRunName: null,
-            route: parseRouteInfo(normalized.bindingKey),
-            runs: []
+        const requestId =
+            input.requestId?.trim() ||
+            `chatluna-hub-model-${Date.now()}-${++this.sequence}`
+        const entryId = input.requestId?.trim()
+            ? `request:${requestId}`
+            : `request:${requestId}:entry:${++this.sequence}`
+        const existing = this.entries.get(entryId)
+
+        if (existing) {
+            this.mergeEntryMeta(existing, input)
+            return existing
         }
 
-        const run = this.createRun(
-            entry,
-            'character-request',
-            null,
-            'character',
-            'character-request',
-            normalized.requestBody
-        )
-        run.startedAt = now
-        entry.runs.push(run)
-
-        this.entries.set(entry.id, entry)
-        this.trimEntries()
-        this.refreshEntrySummary(entry, 'pending', now)
-
-        return entry
+        return this.createEntry(input, requestId, entryId, now)
     }
 
     private createEntry(
-        input: ChatLunaCallbackProviderInputLike
+        input: ChatLunaModelRunStart,
+        requestId: string,
+        entryId: string,
+        now: string
     ): ChatLunaCoreLogDetail {
-        const conversation = input.conversation
-        const session = input.session
-        const requestId =
-            input.requestId?.trim() ||
-            `chatluna-hub-${Date.now()}-${++this.sequence}`
-        const bindingKey = coerceString(conversation?.bindingKey)
-        const now = new Date().toISOString()
-        const entry: ChatLunaCoreLogDetail = {
-            id: requestId,
+        const source = normalizeSource(input.source)
+        const bindingKey =
+            coerceString(input.bindingKey) ||
+            this.createFallbackBindingKey(input, source)
+        const messageBody = extractLogText(input.message)
+
+        return {
+            id: entryId,
             requestId,
-            source: 'chatluna',
-            conversationId: coerceString(conversation?.id),
-            conversationTitle: coerceString(conversation?.title),
+            source,
+            conversationId: coerceString(input.conversationId) || bindingKey,
+            conversationTitle:
+                coerceString(input.conversationTitle) ||
+                (source === 'character' ? 'Character' : 'ChatLuna'),
             bindingKey,
-            model: coerceString(conversation?.model),
-            preset: coerceString(conversation?.preset),
-            chatMode: coerceString(conversation?.chatMode),
-            platform: getRecordString(session, 'platform') || null,
-            userId: getRecordString(session, 'userId') || null,
-            guildId: getRecordString(session, 'guildId') || null,
-            channelId: getRecordString(session, 'channelId') || null,
-            messageSummary: summarizeLogText(input.message),
-            messageBody: extractLogText(input.message),
+            model: coerceString(input.model),
+            preset: coerceString(input.preset),
+            chatMode:
+                coerceString(input.chatMode) ||
+                (source === 'character' ? 'character' : ''),
+            platform: input.platform ?? null,
+            userId: input.userId ?? null,
+            guildId: input.guildId ?? null,
+            channelId: input.channelId ?? null,
+            messageSummary: summarizeLogText(messageBody),
+            messageBody,
             status: 'pending',
             stream: input.stream === true,
             startedAt: now,
@@ -581,6 +459,7 @@ export class ChatLunaCoreLogStore {
             completedAt: null,
             durationMs: null,
             runCount: 0,
+            exchangeCount: 0,
             errorCount: 0,
             requestSize: 0,
             responseSize: 0,
@@ -588,274 +467,121 @@ export class ChatLunaCoreLogStore {
             route: parseRouteInfo(bindingKey),
             runs: []
         }
-
-        this.entries.set(entry.id, entry)
-        this.trimEntries()
-        this.scheduleSave()
-
-        return entry
     }
 
-    private nextRunId(entryId: string): string {
-        return `${entryId}:run:${++this.sequence}`
-    }
-
-    /** A reproducible snapshot of the chat request, embedded in run bodies. */
-    private requestSnapshot(entry: ChatLunaCoreLogDetail) {
-        return {
-            requestId: entry.requestId,
-            source: entry.source ?? 'chatluna',
-            conversationId: entry.conversationId,
-            conversationTitle: entry.conversationTitle,
-            bindingKey: entry.bindingKey,
-            model: entry.model,
-            preset: entry.preset,
-            chatMode: entry.chatMode,
-            platform: entry.platform,
-            userId: entry.userId,
-            guildId: entry.guildId,
-            channelId: entry.channelId,
-            message: entry.messageBody,
-            stream: entry.stream
-        }
-    }
-
-    private resolveActiveCharacterEntry(
-        key: string
-    ): ChatLunaCoreLogDetail | undefined {
-        const entryId = this.activeCharacterEntries.get(key)
-        if (!entryId) return undefined
-
-        return this.entries.get(entryId)
-    }
-
-    private deleteActiveCharacterEntry(entryId: string) {
-        for (const [key, activeEntryId] of this.activeCharacterEntries) {
-            if (activeEntryId === entryId) {
-                this.activeCharacterEntries.delete(key)
+    private mergeEntryMeta(
+        entry: ChatLunaCoreLogDetail,
+        input: ChatLunaModelRunStart
+    ) {
+        if (input.source) {
+            entry.source = normalizeSource(input.source)
+            if (!entry.conversationTitle) {
+                entry.conversationTitle =
+                    entry.source === 'character' ? 'Character' : 'ChatLuna'
             }
         }
-    }
+        entry.model ||= coerceString(input.model)
+        entry.preset ||= coerceString(input.preset)
+        entry.chatMode ||= coerceString(input.chatMode)
+        entry.platform ??= input.platform ?? null
+        entry.userId ??= input.userId ?? null
+        entry.guildId ??= input.guildId ?? null
+        entry.channelId ??= input.channelId ?? null
+        entry.stream ||= input.stream === true
 
-    private failPendingCharacterEntry(entryId: string, reason: string) {
-        const entry = this.entries.get(entryId)
-        if (!entry) return
-
-        const now = new Date().toISOString()
-        for (const run of entry.runs) {
-            if (run.status !== 'pending') continue
-
-            const responseBody = stringifyLogBody({ error: reason })
-            run.status = 'error'
-            run.completedAt = now
-            run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
-            run.responseBody = responseBody
-            run.responseSize = responseBody.length
-            run.error = reason
+        const messageBody = extractLogText(input.message)
+        if (!entry.messageBody && messageBody) {
+            entry.messageBody = messageBody
+            entry.messageSummary = summarizeLogText(messageBody)
         }
-
-        this.refreshEntrySummary(entry, 'error', now)
     }
 
-    private completeCharacterRun(
-        run: ChatLunaCoreLogRun,
-        responseBody: string
+    private createFallbackBindingKey(
+        input: ChatLunaModelRunStart,
+        source: 'chatluna' | 'character'
     ) {
-        const now = new Date().toISOString()
+        const platform = input.platform ?? source
+        const guildId = input.guildId ?? input.channelId
+        const selfId = input.selfId ?? '-'
+        const userId = input.userId ?? '-'
 
-        run.status = 'success'
-        run.completedAt = now
-        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
-        run.responseBody = responseBody
-        run.responseSize = responseBody.length
-        run.error = null
+        if (!guildId) return `personal:${platform}:${selfId}:direct:${userId}`
+        return `personal:${platform}:${selfId}:${guildId}:${userId}`
     }
 
-    /** A pending run skeleton with its request body already sized. */
     private createRun(
         entry: ChatLunaCoreLogDetail,
         runId: string,
-        parentRunId: unknown,
-        type: ChatLunaCoreLogRunType,
         runName: string,
-        requestBody: string
+        now: string
     ): ChatLunaCoreLogRun {
         return {
             id: `${entry.id}:${runId}`,
             runId,
-            parentRunId: typeof parentRunId === 'string' ? parentRunId : null,
+            parentRunId: null,
             runName,
-            type,
+            type: 'model-requester',
             status: 'pending',
-            startedAt: new Date().toISOString(),
+            startedAt: now,
             completedAt: null,
             durationMs: null,
-            requestBody,
+            requestBody: '',
             responseBody: null,
-            requestSize: requestBody.length,
+            requestSize: 0,
             responseSize: 0,
             error: null,
-            usageMetadata: undefined
+            usageMetadata: undefined,
+            exchangeCount: 0,
+            exchanges: []
         }
     }
 
-    private startRun(
-        entryId: string,
-        type: ChatLunaCoreLogRunType,
-        args: unknown[]
-    ) {
-        const entry = this.entries.get(entryId)
-        if (!entry) return
-
-        const [
-            target,
-            payload,
-            runId,
-            parentRunId,
-            extraParams,
-            tags,
-            metadata,
-            runName
-        ] = args
-        const normalizedRunId =
-            typeof runId === 'string' ? runId : this.nextRunId(entryId)
-        const resolvedRunName =
-            typeof runName === 'string'
-                ? runName
-                : (this.resolveRunName(target) ?? type)
-        const requestBody = stringifyLogBody({
-            type,
-            runId: normalizedRunId,
-            parentRunId,
-            runName: resolvedRunName,
-            target,
-            payload,
-            extraParams,
-            tags,
-            metadata,
-            chatluna: this.requestSnapshot(entry)
-        })
-
-        // Ignore duplicate starts for a run id we already track.
-        if (entry.runs.some((item) => item.runId === normalizedRunId)) return
-
-        entry.runs.push(
-            this.createRun(
-                entry,
-                normalizedRunId,
-                parentRunId,
-                type,
-                resolvedRunName,
-                requestBody
-            )
+    private refreshRunSummary(run: ChatLunaCoreLogRun) {
+        const hasError = run.exchanges.some(
+            (exchange) => exchange.status === 'error'
         )
+        const hasPending = run.exchanges.some(isPending)
+        const hasCompleted = run.completedAt != null
+        const hasExchange = run.exchanges.length > 0
+        const bodies = summarizeRunBodies(run)
 
-        this.refreshEntrySummary(entry, 'pending', new Date().toISOString())
-    }
+        run.exchangeCount = run.exchanges.length
+        run.requestSize = run.exchanges.reduce(
+            (sum, exchange) => sum + exchange.requestSize,
+            0
+        )
+        run.responseSize = run.exchanges.reduce(
+            (sum, exchange) => sum + exchange.responseSize,
+            0
+        )
+        run.requestBody = bodies.requestBody
+        run.responseBody = bodies.responseBody
 
-    private completeRun(entryId: string, args: unknown[]) {
-        const entry = this.entries.get(entryId)
-        if (!entry) return
-
-        const [output, runId, parentRunId, tags, extraParams] = args
-        const run = this.resolveRun(entry, runId, parentRunId)
-        const now = new Date().toISOString()
-        const responseBody = stringifyLogBody({ output, extraParams, tags })
-
-        run.status = 'success'
-        run.completedAt = now
-        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
-        run.responseBody = responseBody
-        run.responseSize = responseBody.length
-        run.error = null
-        run.usageMetadata = extractRunUsageMetadata(output)
-
-        this.refreshEntrySummary(entry, 'success', now)
-    }
-
-    private failRun(entryId: string, args: unknown[]) {
-        const entry = this.entries.get(entryId)
-        if (!entry) return
-
-        const [error, runId, parentRunId, tags, extraParams] = args
-        const run = this.resolveRun(entry, runId, parentRunId)
-        const now = new Date().toISOString()
-        const responseBody = stringifyLogBody({ error, extraParams, tags })
-
-        run.status = 'error'
-        run.completedAt = now
-        run.durationMs = toTimestamp(now) - toTimestamp(run.startedAt)
-        run.responseBody = responseBody
-        run.responseSize = responseBody.length
-        run.error = coerceReason(error)
-
-        this.refreshEntrySummary(entry, 'error', now)
-    }
-
-    private failEntry(entryId: string, error: unknown) {
-        const entry = this.entries.get(entryId)
-        if (!entry || entry.status === 'error') return
-
-        const now = new Date().toISOString()
-        if (entry.runs.length === 0) {
-            const body = stringifyLogBody({ error })
-            const run = this.createRun(
-                entry,
-                'chain-error',
-                null,
-                'llm',
-                'chain-error',
-                stringifyLogBody(this.requestSnapshot(entry))
-            )
-
-            run.startedAt = entry.startedAt
-            run.completedAt = now
-            run.durationMs = toTimestamp(now) - toTimestamp(entry.startedAt)
-            run.responseBody = body
-            run.requestSize = 0
-            run.responseSize = body.length
-            run.error = coerceReason(error)
-
-            entry.runs.push(run)
+        if (hasExchange && run.error === missingHttpExchangeError) {
+            run.error = null
         }
 
-        this.refreshEntrySummary(entry, 'error', now)
+        if (run.error || hasError) {
+            run.status = 'error'
+        } else if (!hasCompleted || hasPending) {
+            run.status = 'pending'
+        } else if (!hasExchange) {
+            run.status = 'error'
+            run.error = missingHttpExchangeError
+        } else {
+            run.status = 'success'
+        }
     }
 
-    /** Find an existing run by id, or create a placeholder pending run. */
-    private resolveRun(
-        entry: ChatLunaCoreLogDetail,
-        runId: unknown,
-        parentRunId: unknown
-    ): ChatLunaCoreLogRun {
-        const normalizedRunId =
-            typeof runId === 'string' ? runId : this.nextRunId(entry.id)
-        const existing = entry.runs.find((run) => run.runId === normalizedRunId)
-        if (existing) return existing
+    private refreshEntrySummary(entry: ChatLunaCoreLogDetail, now: string) {
+        for (const run of entry.runs) {
+            this.refreshRunSummary(run)
+        }
 
-        const run = this.createRun(
-            entry,
-            normalizedRunId,
-            parentRunId,
-            'llm',
-            'unknown',
-            stringifyLogBody(this.requestSnapshot(entry))
-        )
-
-        entry.runs.push(run)
-
-        return run
-    }
-
-    private refreshEntrySummary(
-        entry: ChatLunaCoreLogDetail,
-        status: ChatLunaCoreLogStatus,
-        now: string
-    ) {
         const hasError = entry.runs.some((run) => run.status === 'error')
-        const hasPending = entry.runs.some((run) => run.status === 'pending')
+        const hasPending = entry.runs.some(isPending)
 
-        entry.status = hasError ? 'error' : hasPending ? 'pending' : status
+        entry.status = hasError ? 'error' : hasPending ? 'pending' : 'success'
         entry.updatedAt = now
 
         if (entry.status === 'pending') {
@@ -868,6 +594,7 @@ export class ChatLunaCoreLogStore {
 
         const summary = summarizeCoreLog(entry)
         entry.runCount = summary.runCount
+        entry.exchangeCount = summary.exchangeCount
         entry.errorCount = summary.errorCount
         entry.requestSize = summary.requestSize
         entry.responseSize = summary.responseSize
@@ -876,18 +603,60 @@ export class ChatLunaCoreLogStore {
         this.scheduleSave()
     }
 
-    private resolveRunName(value: unknown): string | null {
-        if (!isRecord(value)) return null
+    private normalizePersistedEntry(
+        entry: ChatLunaCoreLogDetail
+    ): ChatLunaCoreLogDetail {
+        entry.source = normalizeSource(entry.source)
+        entry.runs = (entry.runs ?? []).map((run) =>
+            this.normalizePersistedRun(entry, run)
+        )
+        entry.route ??= parseRouteInfo(entry.bindingKey)
+        entry.exchangeCount ??= entry.runs.reduce(
+            (sum, run) => sum + run.exchanges.length,
+            0
+        )
+        this.refreshEntrySummary(
+            entry,
+            entry.updatedAt ?? new Date().toISOString()
+        )
+        return entry
+    }
 
-        const name = coerceString(value.name)
-        if (name) return name
-
-        const id = value.id
-        if (Array.isArray(id)) {
-            return id.map((item) => String(item)).join('/')
-        }
-
-        return coerceString(value.lc_name) || null
+    private normalizePersistedRun(
+        entry: ChatLunaCoreLogDetail,
+        run: ChatLunaCoreLogRun
+    ): ChatLunaCoreLogRun {
+        const legacyType = (run as { type?: string }).type
+        run.type = 'model-requester'
+        run.runName ||= legacyType ?? 'model-requester'
+        run.exchanges = Array.isArray(run.exchanges)
+            ? run.exchanges
+            : [
+                  {
+                      id: `${run.id}:legacy-http`,
+                      exchangeId: `${run.runId}:legacy-http`,
+                      runId: run.runId,
+                      url: '',
+                      method: 'POST',
+                      status: run.status,
+                      httpStatus: null,
+                      httpStatusText: null,
+                      startedAt: run.startedAt,
+                      completedAt: run.completedAt ?? null,
+                      durationMs: run.durationMs ?? null,
+                      requestBody: run.requestBody ?? '',
+                      responseBody: run.responseBody ?? null,
+                      requestSize: run.requestSize ?? 0,
+                      responseSize: run.responseSize ?? 0,
+                      requestTruncated: false,
+                      responseTruncated: false,
+                      error: run.error ?? null
+                  }
+              ]
+        run.exchangeCount = run.exchanges.length
+        run.id ||= `${entry.id}:${run.runId}`
+        this.refreshRunSummary(run)
+        return run
     }
 
     private trimEntries() {

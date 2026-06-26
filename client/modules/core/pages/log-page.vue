@@ -122,6 +122,9 @@
                             <span>{{ shortId(item.requestId) }}</span>
                             <span>
                                 {{ item.runCount }} 次调用
+                                <template v-if="item.exchangeCount > 0">
+                                    / {{ item.exchangeCount }} HTTP
+                                </template>
                                 <template v-if="item.errorCount > 0">
                                     / {{ item.errorCount }} 错误
                                 </template>
@@ -151,7 +154,14 @@
                     <div class="detail-header">
                         <div class="detail-heading-wrap">
                             <span class="detail-title">{{ detailTitle }}</span>
-                            <span class="detail-meta">{{ detailMeta }}</span>
+                            <el-tag
+                                v-if="detail"
+                                class="detail-status"
+                                effect="plain"
+                                :type="statusTag(detail.status)"
+                            >
+                                {{ statusLabel(detail.status) }}
+                            </el-tag>
                         </div>
                         <div class="detail-actions">
                             <el-select
@@ -167,13 +177,22 @@
                                     :value="run.id"
                                 />
                             </el-select>
-                            <el-tag
-                                v-if="detail"
-                                effect="plain"
-                                :type="statusTag(detail.status)"
+                            <el-select
+                                v-if="
+                                    selectedRun &&
+                                    selectedRun.exchanges.length > 1
+                                "
+                                v-model="selectedExchangeId"
+                                class="exchange-select"
+                                placeholder="选择 HTTP 请求"
                             >
-                                {{ statusLabel(detail.status) }}
-                            </el-tag>
+                                <el-option
+                                    v-for="exchange in selectedRun.exchanges"
+                                    :key="exchange.id"
+                                    :label="exchangeLabel(exchange)"
+                                    :value="exchange.id"
+                                />
+                            </el-select>
                         </div>
                     </div>
                 </template>
@@ -191,27 +210,15 @@
                             </strong>
                         </div>
                         <div>
+                            <span>总耗时</span>
+                            <strong>
+                                {{ formatDuration(detail.durationMs) }}
+                            </strong>
+                        </div>
+                        <div>
                             <span>Request ID</span>
                             <strong :title="detail.requestId">
                                 {{ detail.requestId }}
-                            </strong>
-                        </div>
-                        <div>
-                            <span>模型</span>
-                            <strong :title="detail.model">
-                                {{ detail.model || '-' }}
-                            </strong>
-                        </div>
-                        <div>
-                            <span>预设</span>
-                            <strong :title="detail.preset">
-                                {{ detail.preset || '-' }}
-                            </strong>
-                        </div>
-                        <div>
-                            <span>耗时</span>
-                            <strong>
-                                {{ formatDuration(detail.durationMs) }}
                             </strong>
                         </div>
                     </div>
@@ -235,15 +242,6 @@
                         </span>
                     </div>
 
-                    <div class="message-panel">
-                        <span>触发消息</span>
-                        <pre
-                            v-text="
-                                detail.messageBody || detail.messageSummary || '-'
-                            "
-                        ></pre>
-                    </div>
-
                     <div v-if="selectedRun" class="run-summary">
                         <span class="run-summary-model">
                             {{
@@ -261,25 +259,34 @@
                             请求 {{ formatBytes(selectedRun.requestSize, '-', 'MB') }} / 响应
                             {{ formatBytes(selectedRun.responseSize, '-', 'MB') }}
                         </span>
+                        <span v-if="selectedExchange">
+                            HTTP {{ selectedExchange.method }}
+                            <template v-if="selectedExchange.httpStatus">
+                                · {{ selectedExchange.httpStatus }}
+                            </template>
+                        </span>
+                        <span v-if="selectedExchange?.url" class="run-summary-url">
+                            {{ selectedExchange.url }}
+                        </span>
                     </div>
 
                     <el-tabs v-if="selectedRun" v-model="activeBodyTab">
                         <el-tab-pane label="请求体" name="request">
                             <LogBodyViewer
-                                :name="`request · ${formatBytes(selectedRun.requestSize, '-', 'MB')}`"
+                                :name="requestBodyName"
                                 :html="requestBodyHtml"
                                 @copy="copyBody('request')"
                             />
                         </el-tab-pane>
                         <el-tab-pane label="响应体" name="response">
                             <LogBodyViewer
-                                :name="`response · ${formatBytes(selectedRun.responseSize, '-', 'MB')}`"
+                                :name="responseBodyName"
                                 :html="responseBodyHtml"
                                 @copy="copyBody('response')"
                             />
                         </el-tab-pane>
                         <el-tab-pane
-                            v-if="selectedRun.error"
+                            v-if="selectedRun.error || selectedExchange?.error"
                             label="错误"
                             name="error"
                         >
@@ -329,6 +336,7 @@ import {
     statusTag,
     logSourceLabel,
     logSourceTag,
+    exchangeLabel,
     runTypeLabel,
     runLabel
 } from './log-format'
@@ -352,6 +360,7 @@ const logList = ref<ChatLunaCoreLogListItem[]>([])
 const detail = ref<ChatLunaCoreLogDetail | null>(null)
 const selectedId = ref('')
 const selectedRunId = ref('')
+const selectedExchangeId = ref('')
 const activeBodyTab = ref('request')
 const listLoading = ref(false)
 const detailLoading = ref(false)
@@ -368,35 +377,59 @@ const selectedRun = computed(() => {
     )
 })
 
+const selectedExchange = computed(() => {
+    const run = selectedRun.value
+    if (!run) return null
+
+    return (
+        run.exchanges.find(
+            (exchange) => exchange.id === selectedExchangeId.value
+        ) ??
+        run.exchanges[0] ??
+        null
+    )
+})
+
 const requestBodyHtml = computed(() =>
-    highlightLogBody(selectedRun.value?.requestBody)
+    highlightLogBody(
+        selectedExchange.value?.requestBody ?? selectedRun.value?.requestBody
+    )
 )
 
 const responseBodyHtml = computed(() =>
-    highlightLogBody(selectedRun.value?.responseBody || '尚未捕获响应体')
+    highlightLogBody(
+        selectedExchange.value?.responseBody ??
+            selectedRun.value?.responseBody ??
+            '尚未捕获响应体'
+    )
 )
 
 const errorBodyHtml = computed(() =>
-    highlightLogBody(selectedRun.value?.error, 'plaintext')
+    highlightLogBody(
+        selectedExchange.value?.error ?? selectedRun.value?.error
+    )
 )
+
+const requestBodyName = computed(() => {
+    const target = selectedExchange.value ?? selectedRun.value
+    const truncated =
+        selectedExchange.value?.requestTruncated === true ? ' · 已截断' : ''
+
+    return `request · ${formatBytes(target?.requestSize, '-', 'MB')}${truncated}`
+})
+
+const responseBodyName = computed(() => {
+    const target = selectedExchange.value ?? selectedRun.value
+    const truncated =
+        selectedExchange.value?.responseTruncated === true ? ' · 已截断' : ''
+
+    return `response · ${formatBytes(target?.responseSize, '-', 'MB')}${truncated}`
+})
 
 const detailTitle = computed(() => {
     if (!detail.value) return '请求详情'
 
     return detail.value.conversationTitle || detail.value.conversationId
-})
-
-const detailMeta = computed(() => {
-    if (!detail.value) return '捕获 ChatLuna 回复过程中的模型请求与响应'
-
-    return [
-        logSourceLabel(detail.value.source),
-        detail.value.model || '-',
-        detail.value.preset || '-',
-        `${detail.value.runCount} 次${
-            detail.value.source === 'character' ? '请求' : '模型调用'
-        }`
-    ].join(' · ')
 })
 
 // Where the request came from: who sent it and in which chat. Prefer the
@@ -441,7 +474,18 @@ const loadLog = async (id: string) => {
             ? selectedRunId.value
             : result.runs[0]?.id ?? ''
 
-        if (activeBodyTab.value === 'error' && !selectedRun.value?.error) {
+        const exchangeExists = selectedRun.value?.exchanges.some(
+            (exchange) => exchange.id === selectedExchangeId.value
+        )
+        selectedExchangeId.value = exchangeExists
+            ? selectedExchangeId.value
+            : selectedRun.value?.exchanges[0]?.id ?? ''
+
+        if (
+            activeBodyTab.value === 'error' &&
+            !selectedRun.value?.error &&
+            !selectedExchange.value?.error
+        ) {
             activeBodyTab.value = 'request'
         }
     } catch (error) {
@@ -477,6 +521,7 @@ const fetchLogs = async () => {
         } else {
             selectedId.value = ''
             selectedRunId.value = ''
+            selectedExchangeId.value = ''
             detail.value = null
         }
     } catch (error) {
@@ -526,6 +571,7 @@ const clearLogs = async () => {
         ElMessage.success('日志已清空')
         selectedId.value = ''
         selectedRunId.value = ''
+        selectedExchangeId.value = ''
         detail.value = null
         await fetchLogs()
     } catch (error) {
@@ -535,16 +581,29 @@ const clearLogs = async () => {
 
 watch([keyword, statusFilter, sourceFilter], scheduleFetchLogs)
 
+watch(selectedRunId, () => {
+    selectedExchangeId.value = selectedRun.value?.exchanges[0]?.id ?? ''
+    if (
+        activeBodyTab.value === 'error' &&
+        !selectedRun.value?.error &&
+        !selectedExchange.value?.error
+    ) {
+        activeBodyTab.value = 'request'
+    }
+})
+
 const copyBody = async (kind: 'request' | 'response' | 'error') => {
     const run = selectedRun.value
     if (!run) return
 
     const text =
         kind === 'request'
-            ? run.requestBody
+            ? (selectedExchange.value?.requestBody ?? run.requestBody)
             : kind === 'response'
-              ? run.responseBody || ''
-              : run.error || ''
+              ? (selectedExchange.value?.responseBody ??
+                run.responseBody ??
+                '')
+              : (selectedExchange.value?.error ?? run.error ?? '')
 
     if (!text) {
         ElMessage.info('当前内容为空')
@@ -663,7 +722,8 @@ onBeforeUnmount(() => {
 
 .status-filter,
 .source-filter,
-.run-select {
+.run-select,
+.exchange-select {
     width: 100%;
 }
 
@@ -673,6 +733,10 @@ onBeforeUnmount(() => {
 
 .run-select {
     min-width: 260px;
+}
+
+.exchange-select {
+    min-width: 280px;
 }
 
 .log-list-scroll {
@@ -784,8 +848,7 @@ onBeforeUnmount(() => {
 }
 
 .log-list-meta,
-.log-list-footer,
-.detail-meta {
+.log-list-footer {
     color: var(--k-text-light);
     font-size: 13px;
 }
@@ -822,7 +885,7 @@ onBeforeUnmount(() => {
 
 .detail-heading-wrap {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
     min-width: 0;
 }
@@ -833,10 +896,6 @@ onBeforeUnmount(() => {
     font-size: 17px;
     font-weight: 650;
     line-height: 1.4;
-}
-
-.detail-meta {
-    margin: 0;
 }
 
 .detail-empty,
@@ -859,7 +918,7 @@ onBeforeUnmount(() => {
 .detail-summary {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -873,8 +932,7 @@ onBeforeUnmount(() => {
     background: var(--k-hover-bg);
 }
 
-.detail-summary span,
-.message-panel span {
+.detail-summary span {
     color: var(--k-text-light);
     font-size: 12px;
     font-weight: 650;
@@ -888,43 +946,6 @@ onBeforeUnmount(() => {
     color: var(--k-text-dark);
     font-size: 13px;
     font-weight: 650;
-}
-
-.message-panel {
-    flex-shrink: 0;
-    display: grid;
-    gap: 6px;
-}
-
-.message-panel pre {
-    --log-scrollbar-track: color-mix(
-        in srgb,
-        var(--k-card-bg),
-        var(--k-page-bg) 34%
-    );
-    --log-scrollbar-thumb: color-mix(
-        in srgb,
-        var(--k-color-divider),
-        var(--k-text-light) 28%
-    );
-    box-sizing: border-box;
-    margin: 0;
-    border: 1px solid var(--k-color-divider);
-    border-radius: 8px;
-    overflow: auto;
-    color: var(--k-text-dark);
-    background: var(--k-card-bg);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-    scrollbar-color: var(--log-scrollbar-thumb) var(--log-scrollbar-track);
-    scrollbar-width: thin;
-}
-
-.message-panel pre {
-    max-height: 120px;
-    padding: 10px 12px;
-    white-space: pre-wrap;
 }
 
 .run-summary {
@@ -955,6 +976,16 @@ onBeforeUnmount(() => {
 .run-summary-type {
     color: var(--k-text-dark);
     font-weight: 650;
+}
+
+.run-summary-url {
+    min-width: 160px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .source-bar {
@@ -1015,25 +1046,6 @@ onBeforeUnmount(() => {
     flex-direction: column;
 }
 
-.message-panel pre::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-.message-panel pre::-webkit-scrollbar-track {
-    background: var(--log-scrollbar-track);
-}
-
-.message-panel pre::-webkit-scrollbar-thumb {
-    border: 2px solid var(--log-scrollbar-track);
-    border-radius: 999px;
-    background: var(--log-scrollbar-thumb);
-}
-
-.message-panel pre::-webkit-scrollbar-corner {
-    background: var(--log-scrollbar-track);
-}
-
 @media (max-width: 980px) {
     .core-page {
         height: auto;
@@ -1066,7 +1078,8 @@ onBeforeUnmount(() => {
         grid-template-columns: 1fr;
     }
 
-    .run-select {
+    .run-select,
+    .exchange-select {
         min-width: 0;
     }
 }

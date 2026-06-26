@@ -2,7 +2,7 @@ import { resolve } from 'path'
 import { Context } from 'koishi'
 import { Config } from './webui/config'
 import {
-    type ChatLunaCallbackProviderService,
+    type ChatLunaCreateModelService,
     ChatLunaHubService
 } from './webui/service'
 import { ChatLunaHubConsoleService } from './console/data-service'
@@ -14,24 +14,16 @@ export const name = 'chatluna-hub'
 export function apply(ctx: Context, config: Config = {}) {
     ctx.plugin(ChatLunaHubService, config)
 
-    // Capture Character requests through its public before/after chat events.
-    ctx.inject(['chatluna_hub'], (ctx) => {
-        ctx.chatluna_hub.registerCharacterLogEvents()
-    })
-
-    // Instrument ChatLuna's callback resolution to capture LLM run logs.
+    // Capture model-scoped raw HTTP exchanges through ChatLuna's fetch service.
     ctx.inject(['chatluna_hub', 'chatluna'], (ctx) => {
         const chatluna = ctx.get(
             'chatluna'
-        ) as ChatLunaCallbackProviderService | null
+        ) as ChatLunaCreateModelService | null
 
         if (!chatluna) return
 
-        const dispose = ctx.chatluna_hub.registerCoreLogProvider(chatluna)
-        const disposeCharacterModel =
-            ctx.chatluna_hub.registerCharacterModelProvider(chatluna)
+        const dispose = ctx.chatluna_hub.registerRequesterLogProvider(chatluna)
         ctx.on('dispose', dispose)
-        ctx.on('dispose', disposeCharacterModel)
     })
 
     // Register the console bundle, the RPC listeners, and the data service.

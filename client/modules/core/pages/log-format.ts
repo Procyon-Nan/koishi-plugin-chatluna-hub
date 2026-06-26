@@ -4,6 +4,7 @@
  */
 import type {
     ChatLunaConversationRouteMode,
+    ChatLunaCoreLogExchangeSummary,
     ChatLunaCoreLogListItem,
     ChatLunaCoreLogRunSummary,
     ChatLunaCoreLogSource,
@@ -60,17 +61,25 @@ export const logSourceTag = (
     return source === 'character' ? 'warning' : 'info'
 }
 
-/**
- * A friendly call-type label. `run.runName` is the LangChain class path (e.g.
- * .../ChatLunaChatModel), not a model name, so we show the call type instead.
- */
 export const runTypeLabel = (run: ChatLunaCoreLogRunSummary): string => {
-    if (run.type === 'character') return 'Character 请求'
-    return run.type === 'chat-model' ? '对话模型' : '语言模型'
+    return run.type === 'model-requester' ? '模型调用' : run.runName || '请求'
 }
 
 export const runLabel = (run: ChatLunaCoreLogRunSummary): string => {
     return `${statusLabel(run.status)} · ${runTypeLabel(run)} · ${shortId(
         run.runId
+    )}`
+}
+
+export const exchangeLabel = (
+    exchange: ChatLunaCoreLogExchangeSummary
+): string => {
+    const status =
+        exchange.httpStatus == null
+            ? statusLabel(exchange.status)
+            : `${exchange.httpStatus} ${exchange.httpStatusText || ''}`.trim()
+
+    return `${status} · ${exchange.method || 'HTTP'} · ${shortId(
+        exchange.exchangeId
     )}`
 }

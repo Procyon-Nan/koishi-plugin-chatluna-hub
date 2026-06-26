@@ -1,7 +1,6 @@
 /**
- * Helpers for the core log store: safe JSON serialization of arbitrary LLM
- * payloads, log-text normalization, and run/entry summarization. Kept separate
- * from the store so the store class is purely about lifecycle and bookkeeping.
+ * Helpers for the core HTTP log store: safe serialization of arbitrary values,
+ * log-text normalization, and run/entry summarization.
  */
 import { coerceReason, coerceString, isRecord } from '../shared'
 import type { ChatLunaConversationRouteInfo } from './conversation-routes'
@@ -10,7 +9,31 @@ export type ChatLunaCoreLogStatus = 'pending' | 'success' | 'error'
 
 export type ChatLunaCoreLogSource = 'chatluna' | 'character'
 
-export type ChatLunaCoreLogRunType = 'chat-model' | 'llm' | 'character'
+export type ChatLunaCoreLogRunType = 'model-requester'
+
+export interface ChatLunaCoreLogExchangeSummary {
+    id: string
+    exchangeId: string
+    runId: string
+    url: string
+    method: string
+    status: ChatLunaCoreLogStatus
+    httpStatus?: number | null
+    httpStatusText?: string | null
+    startedAt: string
+    completedAt?: string | null
+    durationMs?: number | null
+    requestSize: number
+    responseSize: number
+    requestTruncated?: boolean
+    responseTruncated?: boolean
+    error?: string | null
+}
+
+export interface ChatLunaCoreLogExchange extends ChatLunaCoreLogExchangeSummary {
+    requestBody: string
+    responseBody?: string | null
+}
 
 export interface ChatLunaCoreLogRunSummary {
     id: string
@@ -26,11 +49,13 @@ export interface ChatLunaCoreLogRunSummary {
     responseSize: number
     error?: string | null
     usageMetadata?: unknown
+    exchangeCount: number
 }
 
 export interface ChatLunaCoreLogRun extends ChatLunaCoreLogRunSummary {
     requestBody: string
     responseBody?: string | null
+    exchanges: ChatLunaCoreLogExchange[]
 }
 
 export interface ChatLunaCoreLogListItem {
@@ -55,6 +80,7 @@ export interface ChatLunaCoreLogListItem {
     completedAt?: string | null
     durationMs?: number | null
     runCount: number
+    exchangeCount: number
     errorCount: number
     requestSize: number
     responseSize: number
@@ -90,27 +116,58 @@ export interface ChatLunaCoreLogGetInput {
     id: string
 }
 
-/** The callback-provider input ChatLuna passes when resolving callbacks. */
-export interface ChatLunaCallbackProviderInputLike {
-    session?: unknown
-    conversation?: {
-        id?: string
-        title?: string
-        bindingKey?: string
-        model?: string
-        preset?: string
-        chatMode?: string
+const normalizeMessageContent = (value: unknown): string => {
+    if (typeof value === 'string') return value
+    if (Array.isArray(value)) {
+        return value.map(normalizeMessageContent).filter(Boolean).join('\n')
     }
-    message?: unknown
-    stream?: boolean
-    requestId?: string
+    if (!isRecord(value)) return ''
+
+    return (
+        coerceString(value.content) ||
+        normalizeMessageContent(value.data) ||
+        normalizeMessageContent(value.kwargs) ||
+        coerceString(value.text)
+    )
+}
+
+const messageRole = (value: unknown): string => {
+    if (!isRecord(value)) return ''
+
+    const directType = coerceString(value.type)
+    const directRole = coerceString(value.role)
+    const data = value.data
+    const kwargs = value.kwargs
+
+    return (
+        directRole ||
+        directType ||
+        (isRecord(data)
+            ? coerceString(data.type) || coerceString(data.role)
+            : '') ||
+        (isRecord(kwargs)
+            ? coerceString(kwargs.type) || coerceString(kwargs.role)
+            : '')
+    )
 }
 
 const normalizeLogText = (value: unknown): string => {
     if (typeof value === 'string') return value
-    if (!isRecord(value)) return ''
 
-    return coerceString(value.content)
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => {
+                const text = normalizeMessageContent(item)
+                if (!text) return ''
+
+                const role = messageRole(item)
+                return role ? `[${role}]\n${text}` : text
+            })
+            .filter(Boolean)
+            .join('\n\n')
+    }
+
+    return normalizeMessageContent(value)
 }
 
 export const summarizeLogText = (value: unknown, maxLength = 160): string => {
@@ -180,15 +237,20 @@ export const stringifyLogBody = (value: unknown): string => {
     }
 }
 
-export const extractRunUsageMetadata = (output: unknown): unknown => {
-    if (!isRecord(output)) return undefined
+const joinBodies = (values: (string | null | undefined)[]) => {
+    return values.filter(Boolean).join('\n\n')
+}
 
-    const llmOutput = output.llmOutput
-    if (isRecord(llmOutput)) {
-        return llmOutput.usage_metadata ?? llmOutput.tokenUsage
-    }
+export const summarizeRunBodies = (run: ChatLunaCoreLogRun) => {
+    const requestBody =
+        run.requestBody ||
+        joinBodies(run.exchanges.map((exchange) => exchange.requestBody))
+    const responseBody =
+        run.responseBody ||
+        joinBodies(run.exchanges.map((exchange) => exchange.responseBody)) ||
+        null
 
-    return undefined
+    return { requestBody, responseBody }
 }
 
 /** Build a list-item summary from a full log entry. */
@@ -204,6 +266,11 @@ export const summarizeCoreLog = (
         0
     )
     const latestRun = entry.runs.at(-1)
+    const exchangeCount = entry.runs.reduce(
+        (sum, run) => sum + run.exchanges.length,
+        0
+    )
+    const errorCount = entry.runs.filter((run) => run.status === 'error').length
 
     return {
         id: entry.id,
@@ -227,7 +294,8 @@ export const summarizeCoreLog = (
         completedAt: entry.completedAt,
         durationMs: entry.durationMs,
         runCount: entry.runs.length,
-        errorCount: entry.runs.filter((run) => run.status === 'error').length,
+        exchangeCount,
+        errorCount,
         requestSize,
         responseSize,
         latestRunName: latestRun?.runName ?? null
@@ -240,7 +308,10 @@ export const cloneCoreLogDetail = (
     return {
         ...entry,
         route: { ...entry.route },
-        runs: entry.runs.map((run) => ({ ...run }))
+        runs: entry.runs.map((run) => ({
+            ...run,
+            exchanges: run.exchanges.map((exchange) => ({ ...exchange }))
+        }))
     }
 }
 
