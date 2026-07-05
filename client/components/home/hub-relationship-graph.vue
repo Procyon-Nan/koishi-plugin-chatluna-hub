@@ -155,7 +155,9 @@
                     }"
                     :style="nodeStyle(node)"
                     :title="getNodeTitle(node)"
-                    :aria-disabled="isHubModuleDisabled(node)"
+                    :aria-disabled="
+                        isHubModuleDisabled(node) && !canOpenHubModuleMarket(node)
+                    "
                     type="button"
                     @pointerdown="handleNodePointerDown($event, node)"
                     @pointerenter="focusedNodeId = node.id"
@@ -462,6 +464,7 @@ import MemesLunaIcon from '../../icons/memesluna.vue'
 import TreeOfLifeIcon from '../../icons/tree-of-life.vue'
 import {
     canOpenHubModule,
+    canOpenHubModuleMarket,
     canToggleHubModule,
     isHubModuleDisabled,
     isHubModuleStatusActive
@@ -941,7 +944,7 @@ const getDetailStatusText = (item: HubModuleItem) => {
 
 const selectModule = (item: HubModuleItem) => {
     if (isNodePending(item.id)) return
-    if (!canOpenHubModule(item)) return
+    if (!canOpenHubModule(item) && !canOpenHubModuleMarket(item)) return
     emit('select', item.id)
 }
 

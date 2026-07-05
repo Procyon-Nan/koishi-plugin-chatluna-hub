@@ -89,7 +89,10 @@ import HubRelationshipGraph from '../home/hub-relationship-graph.vue'
 import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
-import { canOpenHubModule } from '../../module-access'
+import {
+    canOpenHubModule,
+    canOpenHubModuleMarket
+} from '../../module-access'
 import { fallbackModules } from '../../module-catalog'
 import type {
     HubModuleIconName,
@@ -166,14 +169,27 @@ watch(
 
 const handleSelect = (id: HubModuleId) => {
     const target = modules.value.find((item) => item.id === id)
-    if (!target || !canOpenHubModule(target)) return
+    if (!target) return
 
-    if (target.routePath) {
-        void router.push(target.routePath)
+    if (canOpenHubModule(target)) {
+        if (target.routePath) {
+            void router.push(target.routePath)
+            return
+        }
+
+        active.value = id
         return
     }
 
-    active.value = id
+    if (canOpenHubModuleMarket(target)) {
+        void router.push({
+            path: '/market',
+            query: {
+                keyword: target.marketPackageName
+            }
+        })
+        return
+    }
 }
 </script>
 

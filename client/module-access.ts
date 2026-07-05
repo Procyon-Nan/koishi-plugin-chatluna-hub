@@ -13,6 +13,16 @@ export const canOpenHubModule = (item: HubModuleItem) => {
     )
 }
 
+export const canOpenHubModuleMarket = (
+    item: HubModuleItem
+): item is HubModuleItem & { marketPackageName: string } => {
+    return (
+        item.group === 'ecosystem' &&
+        !item.installed &&
+        Boolean(item.marketPackageName)
+    )
+}
+
 export const canToggleHubModule = (item: HubModuleItem) => {
     return item.toggleable && item.installed && item.configStatus === 'single'
 }

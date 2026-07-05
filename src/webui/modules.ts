@@ -66,6 +66,7 @@ export interface HubModuleItem {
     routePath?: string
     reason?: string
     activityId?: string
+    marketPackageName?: string
 }
 
 export type HubModuleToggleStatus =
@@ -370,6 +371,14 @@ const resolveCandidatePluginNames = (pluginName: string) => {
     )
 }
 
+const resolveMarketPackageName = (pluginName: string) => {
+    if (pluginName.startsWith('@') || pluginName.startsWith('koishi-plugin-')) {
+        return pluginName
+    }
+
+    return `koishi-plugin-${pluginName}`
+}
+
 const isPluginInstalled = (ctx: Context, pluginName: string) => {
     return canResolveAnyPackage(ctx, resolveCandidatePluginNames(pluginName))
 }
@@ -457,7 +466,10 @@ export const createHubModules = async (
                 configStatus: state.configStatus,
                 configPath: state.configPath,
                 routePath: state.routePath,
-                reason: state.reason
+                reason: state.reason,
+                marketPackageName: definition.pluginName
+                    ? resolveMarketPackageName(definition.pluginName)
+                    : undefined
             }
         })
     )

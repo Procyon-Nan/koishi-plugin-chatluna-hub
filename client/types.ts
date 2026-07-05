@@ -59,6 +59,7 @@ export interface HubModuleItem {
     routePath?: string
     reason?: string
     activityId?: string
+    marketPackageName?: string
 }
 
 export type HubModuleToggleStatus =
