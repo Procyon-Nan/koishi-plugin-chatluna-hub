@@ -103,6 +103,7 @@ yarn build
 | 配置项 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `hideDependencyGraphEntry` | `boolean` | `false` | 是否隐藏 Koishi Insight 依赖图侧边栏入口 |
+| `enableHomeGraphAnimations` | `boolean` | `true` | 是否启用首页节点公转、连接线流动、节点浮动和光晕动画 |
 
 ## 维护说明
 

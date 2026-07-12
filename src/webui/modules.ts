@@ -91,6 +91,7 @@ export interface HubConsoleData {
 
 export interface HubConsoleConfig {
     hideDependencyGraphEntry: boolean
+    enableHomeGraphAnimations: boolean
 }
 
 export interface HubModuleDefinition extends Omit<

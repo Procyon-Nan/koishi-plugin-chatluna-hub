@@ -60,6 +60,7 @@
             <div v-else class="content-wrapper home-wrapper">
                 <hub-relationship-graph
                     :modules="modules"
+                    :animations-enabled="homeGraphAnimationsEnabled"
                     @select="handleSelect"
                 />
             </div>
@@ -119,6 +120,9 @@ const icons = {
 const hubHomePath = '/chatluna'
 const active = ref<HubModuleId | null>(null)
 const data = computed(() => store.chatluna_hub_webui)
+const homeGraphAnimationsEnabled = computed(
+    () => data.value?.config?.enableHomeGraphAnimations !== false
+)
 const modules = computed<HubModuleItem[]>(() => {
     const items = data.value?.modules
     return items?.length ? items : fallbackModules

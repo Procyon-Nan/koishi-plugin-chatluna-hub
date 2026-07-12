@@ -108,7 +108,9 @@ export class ChatLunaHubService extends Service {
             modules: await createHubModules(this.ctx),
             config: {
                 hideDependencyGraphEntry:
-                    this.config.hideDependencyGraphEntry ?? false
+                    this.config.hideDependencyGraphEntry ?? false,
+                enableHomeGraphAnimations:
+                    this.config.enableHomeGraphAnimations ?? true
             }
         }
     }

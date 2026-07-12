@@ -40,7 +40,13 @@
                 </div>
             </aside>
 
-            <div class="graph-stage" :class="{ 'orbit-active': isOrbitActive }">
+            <div
+                class="graph-stage"
+                :class="{
+                    'animations-enabled': props.animationsEnabled,
+                    'orbit-active': isOrbitActive
+                }"
+            >
                 <div class="graph-viewport" :style="graphViewportStyle">
                 <svg
                     class="graph-svg"
@@ -588,9 +594,15 @@ const configNodeMetrics: SatelliteNodeMetrics = {
     orbitRadiusPx: configOrbitRadiusPx
 }
 
-const props = defineProps<{
-    modules: HubModuleItem[]
-}>()
+const props = withDefaults(
+    defineProps<{
+        modules: HubModuleItem[]
+        animationsEnabled?: boolean
+    }>(),
+    {
+        animationsEnabled: true
+    }
+)
 
 const emit = defineEmits<{
     select: [id: HubModuleId]
@@ -715,7 +727,10 @@ const effectiveRange = computed(() => {
     }
 })
 const isOrbitActive = computed(
-    () => draggingId.value === null && !rangeControlPointerActive
+    () =>
+        props.animationsEnabled &&
+        draggingId.value === null &&
+        !rangeControlPointerActive
 )
 const graphViewportStyle = computed(
     () =>
@@ -1475,6 +1490,11 @@ const tickCarriedNodes = (deltaFrames: number) => {
 }
 
 const tickAnimation = (time: number) => {
+    if (!props.animationsEnabled && draggingId.value !== 'chatluna') {
+        lastAnimationTime = 0
+        return
+    }
+
     const deltaFrames = lastAnimationTime
         ? clampNumber((time - lastAnimationTime) / 16.667, 0.45, 2.2)
         : 1
@@ -2261,12 +2281,18 @@ onBeforeUnmount(() => {
     stroke-width: 2.2;
     stroke-dasharray: 20 150;
     stroke-dashoffset: 0;
-    opacity: 0.64;
-    filter: url(#hub-graph-glow);
-    animation: edge-flow 3.4s linear infinite;
+    opacity: 0;
+    filter: none;
+    animation: none;
     transition:
         opacity 0.16s ease,
         stroke 0.16s ease;
+}
+
+.animations-enabled .edge-flow {
+    opacity: 0.64;
+    filter: url(#hub-graph-glow);
+    animation: edge-flow 3.4s linear infinite;
 }
 
 .edge-base.risky {
@@ -2274,7 +2300,7 @@ onBeforeUnmount(() => {
     opacity: 0.82;
 }
 
-.edge-flow.risky {
+.animations-enabled .edge-flow.risky {
     opacity: 0.82;
 }
 
@@ -2389,7 +2415,7 @@ onBeforeUnmount(() => {
     color: color-mix(in srgb, var(--k-text-light), var(--node-tone) 20%);
 }
 
-.satellite:not(.dragging) .node-disc {
+.animations-enabled .satellite:not(.dragging) .node-disc {
     animation: node-float 6.8s ease-in-out infinite;
     animation-delay: var(--float-delay);
 }
@@ -2414,6 +2440,10 @@ onBeforeUnmount(() => {
     border-radius: inherit;
     background: radial-gradient(circle, color-mix(in srgb, var(--node-tone), transparent 72%), transparent 68%);
     opacity: 0.54;
+    animation: none;
+}
+
+.animations-enabled .node-glow {
     animation: glow-pulse 3.8s ease-in-out infinite;
 }
 

@@ -164,6 +164,23 @@ dependency graph sidebar activity:
 
 This only hides the sidebar entry. It must not remove the `/graph` route.
 
+## Home Graph Animations
+
+The plugin config has:
+
+```ts
+enableHomeGraphAnimations?: boolean
+```
+
+Default is `true`. When disabled, the home relationship graph stops autonomous
+orbit motion, edge flow, node floating, and glow pulse animations. Static
+edges and user-driven interactions such as dragging, zooming, selecting nodes,
+adjusting the effective range, and toggling configured plugins remain enabled.
+
+Treat a missing client config field as enabled so older or loading Console data
+preserves the default behavior. Do not stop the graph runtime solely because
+animations are disabled; it also owns resize and KeepAlive lifecycle behavior.
+
 ## ChatLuna Core Page
 
 The Core page lives under `client/modules/core/`.

@@ -84,6 +84,7 @@ export interface HubConsoleData {
 
 export interface HubConsoleConfig {
     hideDependencyGraphEntry: boolean
+    enableHomeGraphAnimations: boolean
 }
 
 declare module '@koishijs/plugin-console' {
