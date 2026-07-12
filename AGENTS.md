@@ -332,6 +332,11 @@ The server RPC namespace is:
 ChatLuna model requester HTTP exchanges, then stored in memory and persisted to
 `data/chatluna-hub/core-logs.json` under Koishi `ctx.baseDir`.
 
+Keep requester log patch ownership unique per ChatLuna service instance. Koishi
+config reloads can dispose the Hub service scope and its injected scope in
+either order, so the provider disposer must remain idempotent and a replacement
+provider must release the previous Hub owner before patching model methods.
+
 Current log constraints:
 
 - Maximum retained log entries: `100`.

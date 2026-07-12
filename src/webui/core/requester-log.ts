@@ -1141,12 +1141,21 @@ const patchChatModelPrototype = (
         }
     )
 
+// Config reloads can overlap service and injected-scope disposal. Transfer the
+// patch ownership before installing another provider on the same service.
+const activeRequesterLogProviders = new WeakMap<
+    ChatLunaCreateModelService,
+    () => void
+>()
+
 export const registerChatLunaRequesterLogProvider = (
     chatluna: ChatLunaCreateModelService,
     store: ChatLunaCoreLogStore,
     logger: { warn: (...args: unknown[]) => void },
     baseDir?: string
 ) => {
+    activeRequesterLogProviders.get(chatluna)?.()
+
     const storage = new AsyncLocalStorage<ModelRequestContext>()
     const contextStack: ModelRequestContext[] = []
     const modelSources = new WeakMap<object, string>()
@@ -1221,7 +1230,15 @@ export const registerChatLunaRequesterLogProvider = (
           )
         : () => {}
 
-    return () => {
+    let disposed = false
+    const dispose = () => {
+        if (disposed) return
+        disposed = true
+
+        if (activeRequesterLogProviders.get(chatluna) === dispose) {
+            activeRequesterLogProviders.delete(chatluna)
+        }
+
         restorePrototype()
         for (const restore of instanceRestores.splice(0).reverse()) {
             restore()
@@ -1231,4 +1248,7 @@ export const registerChatLunaRequesterLogProvider = (
         fetchPatcher.dispose()
         storage.disable()
     }
+
+    activeRequesterLogProviders.set(chatluna, dispose)
+    return dispose
 }
