@@ -1,0 +1,925 @@
+.relationship-home {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 560px;
+    overflow: hidden;
+    color: var(--k-text-dark);
+    background: transparent;
+}
+
+.relationship-home::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--k-text-light), transparent 64%) 1px,
+        transparent 1.4px
+    );
+    background-size: 24px 24px;
+    background-position: -12px -12px;
+    -webkit-mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
+    mask-image: radial-gradient(ellipse 78% 78% at 50% 48%, #000 35%, transparent 92%);
+    opacity: 0.5;
+}
+
+.graph-container-box {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.hub-module-detail-panel {
+    position: absolute;
+    bottom: 24px;
+    right: 28px;
+    width: 500px;
+    height: 800px; /* Fixed height so size is not affected by text content */
+    border: 1px solid var(--k-color-divider);
+    border-radius: 16px;
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.detail-panel-scroll {
+    flex: 1;
+    min-height: 0;
+}
+
+.detail-panel-content {
+    box-sizing: border-box;
+    padding: 22px 20px 24px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch; /* Stretch child elements to fill container width to keep margin padding consistent */
+}
+
+.detail-card-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    gap: 16px;
+    width: 100%;
+    will-change: transform, opacity;
+}
+
+.detail-card-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.detail-icon {
+    width: 54px;
+    height: 54px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: var(--detail-tone);
+    background: var(--k-hover-bg);
+}
+
+.detail-icon .chatluna-mark.mini,
+.detail-icon .agent-mark.mini,
+.detail-icon .palette-mark.mini,
+.detail-icon .memesluna-mark.mini {
+    width: 32px;
+    height: 32px;
+}
+
+.header-titles {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.detail-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.detail-tag.core {
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-color-primary), transparent 90%);
+    border: 1px solid color-mix(in srgb, var(--k-color-primary), transparent 78%);
+}
+
+.detail-tag.ecosystem {
+    color: var(--k-color-success);
+    background: color-mix(in srgb, var(--k-color-success), transparent 90%);
+    border: 1px solid color-mix(in srgb, var(--k-color-success), transparent 78%);
+}
+
+.header-titles h3 {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) + 4px);
+    font-weight: 760;
+    color: var(--k-text-dark);
+    line-height: 1.25;
+}
+
+.detail-subtitle {
+    font-size: calc(var(--detail-font-size) - 2px);
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+    font-weight: 550;
+}
+
+.detail-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    font-weight: 600;
+    color: var(--k-text-dark); /* Changed from var(--k-text-light) to var(--k-text-dark) for better readability */
+    background: var(--k-hover-bg);
+    border: 1px solid var(--k-color-divider);
+    width: fit-content;
+    align-self: center; /* Keep the status indicator badge centered */
+}
+
+.detail-status-indicator.is-active {
+    color: var(--k-color-success);
+    background: color-mix(in srgb, var(--k-color-success), transparent 93%);
+    border-color: color-mix(in srgb, var(--k-color-success), transparent 82%);
+}
+
+.detail-description {
+    margin: 0;
+    font-size: var(--detail-font-size);
+    line-height: 1.6;
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+}
+
+.detail-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+    width: 100%;
+}
+
+.detail-section h4 {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    font-weight: 700;
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 6px;
+    width: 100%;
+}
+
+.detail-features li {
+    display: inline-flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 8px;
+    font-size: calc(var(--detail-font-size) - 0.5px);
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+    line-height: 1.4;
+}
+
+.feat-dot {
+    color: var(--k-color-primary);
+    flex-shrink: 0;
+    margin-top: 3px; /* Align checkmark icon with first line of multiline feature text */
+}
+
+.detail-tip {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--k-color-warning), transparent 94%);
+    border: 1px solid color-mix(in srgb, var(--k-color-warning), transparent 84%);
+    color: color-mix(in srgb, var(--k-color-warning), var(--k-text-dark) 34%);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.tip-icon {
+    flex-shrink: 0;
+    color: var(--k-color-warning);
+    margin-top: 2px; /* Align icon vertically with first line of tip description */
+}
+
+.detail-tip p {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1.5px);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.detail-card-default {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    padding: 8px 4px;
+    height: 100%;
+    width: 100%;
+}
+
+.default-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--k-color-primary), transparent 92%);
+    color: var(--k-color-primary);
+    display: grid;
+    place-items: center;
+    margin-bottom: 16px;
+    align-self: center; /* Center the icon at the top of default explanation */
+}
+
+.detail-card-default h3 {
+    margin: 0 0 12px;
+    font-size: calc(var(--detail-font-size) + 4px);
+    font-weight: 760;
+    color: var(--k-text-dark);
+    text-align: center; /* Center only the main title */
+}
+
+.detail-card-default p {
+    margin: 0 0 20px;
+    font-size: var(--detail-font-size);
+    line-height: 1.6;
+    color: var(--k-text-normal); /* Changed from var(--k-text-light) to var(--k-text-normal) for better readability */
+}
+
+.guide-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    align-items: stretch;
+    width: 100%;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 10px;
+    width: 100%;
+}
+
+.step-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--k-hover-bg);
+    border: 1px solid var(--k-color-divider);
+    font-size: 10px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    color: var(--k-text-normal);
+    flex-shrink: 0;
+    margin-top: 2px; /* Align number badge with first line of step text */
+}
+
+.step-item p {
+    margin: 0;
+    font-size: calc(var(--detail-font-size) - 1px);
+    line-height: 1.5;
+    color: var(--k-text-dark); /* Changed from var(--k-text-normal) to var(--k-text-dark) for higher contrast */
+}
+
+.font-size-adjuster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--k-color-divider);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-hover-bg) 35%);
+    font-size: 11px;
+    color: var(--k-text-light);
+    user-select: none;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.font-size-adjuster input {
+    flex: 1;
+    min-width: 0;
+    height: 3px;
+    accent-color: var(--k-color-primary);
+    cursor: pointer;
+}
+
+.font-size-adjuster span {
+    font-weight: 700;
+    min-width: 32px;
+    text-align: right;
+    font-family: monospace;
+}
+
+/* Animations */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-slide-enter-from {
+    opacity: 0;
+    transform: translateX(10px);
+}
+
+.fade-slide-leave-to {
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+.graph-header,
+.ecosystem-meter,
+.range-control {
+    position: absolute;
+    z-index: 4;
+}
+
+.graph-header {
+    top: 24px;
+    left: 28px;
+    max-width: min(420px, calc(100% - 240px));
+}
+
+.graph-header h1 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    color: var(--k-text-dark);
+}
+
+.graph-header p {
+    margin: 10px 0 0;
+    color: var(--k-text-light);
+    font-size: 14px;
+    line-height: 1.45;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.graph-header p::before {
+    content: "";
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--k-color-divider);
+}
+
+.ecosystem-meter {
+    top: 24px;
+    right: 28px;
+    min-width: 150px;
+    padding: 12px 14px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    display: grid;
+    gap: 4px;
+    color: var(--k-text-dark);
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
+}
+
+.ecosystem-meter span,
+.ecosystem-meter small {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.ecosystem-meter strong {
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 800;
+    color: var(--k-color-primary);
+}
+
+.range-control {
+    left: max(24px, env(safe-area-inset-left, 0px));
+    bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    width: min(260px, calc(100% - 36px));
+    padding: 10px 12px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 12px;
+    background: var(--k-card-bg);
+    box-shadow: var(--k-card-shadow);
+}
+
+.range-control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.range-control input {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--k-color-primary);
+    cursor: pointer;
+}
+
+.range-reset-button {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--k-color-divider);
+    border-radius: 8px;
+    color: var(--k-text-dark);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-primary) 6%);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        border-color 0.16s ease,
+        color 0.16s ease,
+        background 0.16s ease;
+}
+
+.range-reset-button:hover,
+.range-reset-button:focus-visible {
+    border-color: color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 34%);
+    color: var(--k-color-primary);
+    background: color-mix(in srgb, var(--k-card-bg), var(--k-color-primary) 12%);
+}
+
+.range-reset-button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--k-color-primary), transparent 38%);
+    outline-offset: 2px;
+}
+
+.graph-stage,
+.graph-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.graph-stage {
+    z-index: 1;
+}
+
+.graph-viewport {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    transform: scale(var(--graph-zoom, 1));
+    transform-origin: 50% 50%;
+    will-change: transform;
+}
+
+.graph-svg {
+    overflow: visible;
+}
+
+.edge-layer {
+    color: var(--k-color-primary);
+    --disabled-edge-tone: color-mix(
+        in srgb,
+        var(--k-text-light),
+        var(--k-color-divider) 42%
+    );
+}
+
+.effective-range {
+    fill: none;
+    stroke: color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 56%);
+    stroke-width: 1.2;
+    stroke-dasharray: 10 14;
+    opacity: 0.58;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.graph-edge {
+    fill: none;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.edge-base {
+    stroke: color-mix(in srgb, currentColor, var(--k-color-divider) 36%);
+    stroke-width: 1.6;
+    opacity: 0.55;
+    transition:
+        opacity 0.16s ease,
+        stroke 0.16s ease,
+        stroke-width 0.16s ease;
+}
+
+.edge-flow {
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-dasharray: 20 150;
+    stroke-dashoffset: 0;
+    opacity: 0;
+    filter: none;
+    animation: none;
+    transition:
+        opacity 0.16s ease,
+        stroke 0.16s ease;
+}
+
+.animations-enabled .edge-flow {
+    opacity: 0.64;
+    filter: url(#hub-graph-glow);
+    animation: edge-flow 3.4s linear infinite;
+}
+
+.edge-base.risky {
+    stroke-width: 2.4;
+    opacity: 0.82;
+}
+
+.animations-enabled .edge-flow.risky {
+    opacity: 0.82;
+}
+
+.graph-edge.disabled {
+    stroke: var(--disabled-edge-tone);
+    filter: none;
+    animation: none;
+}
+
+.edge-base.disabled {
+    opacity: 0.42;
+}
+
+.edge-flow.disabled {
+    opacity: 0;
+}
+
+/* Removed .edge-joint styles since joint circles are deleted */
+
+.graph-node {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: calc(var(--node-size) + 42px);
+    min-height: calc(var(--node-size) + 50px);
+    padding: 0;
+    border: 0;
+    display: grid;
+    justify-items: center;
+    align-content: start;
+    gap: 8px;
+    color: var(--k-text-dark);
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    /* Compositor-only positioning: translate by absolute px every frame, then
+       center the node without triggering layout. */
+    transform:
+        translate(var(--node-px, 0px), var(--node-py, 0px))
+        translate(-50%, calc(var(--node-size) / -2));
+    will-change: transform;
+    transition: opacity 0.2s ease;
+}
+
+.graph-node:focus-visible {
+    outline: 2px solid var(--node-tone);
+    outline-offset: 6px;
+}
+
+.graph-node.dragging {
+    cursor: grabbing;
+    transition-duration: 0.01ms;
+}
+
+.graph-node.core,
+.graph-node.satellite {
+    cursor: grab;
+}
+
+.graph-node.disabled {
+    opacity: 0.52;
+}
+
+.graph-node.pending {
+    opacity: 0.72;
+}
+
+.graph-node.out-of-range .node-status {
+    color: var(--k-color-danger);
+}
+
+.node-disc {
+    position: relative;
+    width: var(--node-size);
+    height: var(--node-size);
+    border: 1px solid color-mix(in srgb, var(--node-tone), var(--k-color-divider) 34%);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--node-tone);
+    background:
+        radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--k-card-bg), var(--node-tone) 12%), transparent 58%),
+        color-mix(in srgb, var(--k-card-bg), var(--node-tone) 8%);
+    /* Static shadow: painted once into the node's compositor layer, so orbital
+       motion just translates the cached texture instead of repainting it. The
+       breathing feel is carried by .node-glow (opacity/scale only). */
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 46%) inset,
+        0 16px 34px color-mix(in srgb, var(--k-text-dark), transparent 88%),
+        0 0 28px color-mix(in srgb, var(--node-tone), transparent 72%);
+    overflow: hidden;
+}
+
+.graph-node.configurable .node-disc {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--node-tone), var(--k-color-divider) 18%);
+    background:
+        radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--k-card-bg), var(--node-tone) 6%), transparent 58%),
+        color-mix(in srgb, var(--k-card-bg), var(--k-hover-bg) 42%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--k-card-bg), transparent 54%) inset,
+        0 12px 24px color-mix(in srgb, var(--k-text-dark), transparent 92%);
+}
+
+.graph-node.configurable .node-glow {
+    opacity: 0.18;
+    animation: none;
+}
+
+.graph-node.configurable .node-status {
+    color: color-mix(in srgb, var(--k-text-light), var(--node-tone) 20%);
+}
+
+.animations-enabled .satellite:not(.dragging) .node-disc {
+    animation: node-float 6.8s ease-in-out infinite;
+    animation-delay: var(--float-delay);
+}
+
+.orbit-active .satellite:not(.dragging) .node-disc {
+    /* Suppress the idle float while the node is already moving along its orbit */
+    animation: none !important;
+}
+
+.node-disc::after {
+    content: "";
+    position: absolute;
+    inset: 17%;
+    border-radius: inherit;
+    border: 1px solid color-mix(in srgb, var(--node-tone), transparent 70%);
+    opacity: 0.72;
+}
+
+.node-glow {
+    position: absolute;
+    inset: -18%;
+    border-radius: inherit;
+    background: radial-gradient(circle, color-mix(in srgb, var(--node-tone), transparent 72%), transparent 68%);
+    opacity: 0.54;
+    animation: none;
+}
+
+.animations-enabled .node-glow {
+    animation: glow-pulse 3.8s ease-in-out infinite;
+}
+
+.core .node-disc {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--node-tone), transparent 58%) inset,
+        0 18px 42px color-mix(in srgb, var(--k-text-dark), transparent 88%),
+        0 0 26px color-mix(in srgb, var(--node-tone), transparent 50%),
+        0 0 64px color-mix(in srgb, var(--node-tone), transparent 70%);
+}
+
+.chatluna-mark,
+.agent-mark,
+.palette-mark,
+.memesluna-mark,
+.node-disc .el-icon {
+    position: relative;
+    z-index: 1;
+}
+
+.chatluna-mark {
+    width: 74px;
+    height: 74px;
+    color: currentColor;
+}
+
+.agent-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.palette-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.memesluna-mark {
+    width: 58px;
+    height: 58px;
+    color: currentColor;
+}
+
+.node-title,
+.node-status {
+    max-width: 168px;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.node-title {
+    color: var(--k-text-dark);
+    font-size: 14px;
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.node-status {
+    color: var(--k-text-light);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+@keyframes edge-flow {
+    to {
+        stroke-dashoffset: -170;
+    }
+}
+
+/* Removed @keyframes joint-pulse since joint circles are deleted */
+
+@keyframes node-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes glow-pulse {
+    0%,
+    100% {
+        opacity: 0.38;
+        transform: scale(0.94);
+    }
+
+    50% {
+        opacity: 0.72;
+        transform: scale(1.08);
+    }
+}
+
+@media (max-width: 1024px) {
+    .hub-module-detail-panel {
+        position: absolute;
+        bottom: 24px;
+        right: 28px;
+        left: 28px;
+        width: auto;
+        max-height: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    .relationship-home {
+        min-height: 520px;
+    }
+
+    .graph-header {
+        top: 16px;
+        left: 16px;
+        max-width: calc(100% - 190px);
+    }
+
+    .graph-header h1 {
+        font-size: 24px;
+    }
+
+    .ecosystem-meter {
+        top: 16px;
+        right: 16px;
+        min-width: 126px;
+    }
+
+    .range-control {
+        left: max(14px, env(safe-area-inset-left, 0px));
+        bottom: max(14px, env(safe-area-inset-bottom, 0px));
+        width: min(248px, calc(100% - 28px));
+        z-index: 6; /* Float above the detail card on mobile if overlapping */
+    }
+
+    .hub-module-detail-panel {
+        bottom: max(14px, env(safe-area-inset-bottom, 0px));
+        right: 14px;
+        left: 14px;
+        max-height: 200px;
+        border-radius: 10px;
+    }
+
+    .detail-panel-content {
+        padding: 16px 14px 18px;
+    }
+
+    .chatluna-mark {
+        width: 68px;
+        height: 68px;
+    }
+
+    .agent-mark {
+        width: 52px;
+        height: 52px;
+    }
+
+    .palette-mark,
+    .memesluna-mark {
+        width: 52px;
+        height: 52px;
+    }
+
+    .node-title,
+    .node-status {
+        max-width: 126px;
+    }
+}
+
+@media (max-width: 520px) {
+    .graph-header {
+        max-width: calc(100% - 32px);
+    }
+
+    .ecosystem-meter {
+        top: 92px;
+        left: 16px;
+        right: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edge-flow,
+    .node-disc,
+    .node-glow {
+        animation: none !important;
+    }
+
+    .graph-node {
+        transition-duration: 0.01ms !important;
+    }
+
+}

@@ -2,7 +2,6 @@ import type { HubModuleId } from '../../types'
 import type { Point } from './graph-geometry'
 import {
     clampNumber,
-    defaultDetailFontSizePx,
     detailFontSizeStorageKey,
     graphZoomMax,
     graphZoomMin,
@@ -138,5 +137,3 @@ export const clearPersistedGraphState = () => {
         // Ignore storage failures; the visible graph has still been reset.
     }
 }
-
-export const resetDetailFontSizeDefault = () => defaultDetailFontSizePx
