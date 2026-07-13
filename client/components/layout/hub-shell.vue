@@ -26,10 +26,7 @@
                                 </div>
                             </header>
 
-                            <div
-                                v-if="!activeModule.available"
-                                class="unavailable-panel"
-                            >
+                            <div class="unavailable-panel">
                                 <div class="panel-icon">
                                     <el-icon :size="28">
                                         <CircleClose />
@@ -37,19 +34,7 @@
                                 </div>
                                 <div>
                                     <h2>Module not enabled</h2>
-                                    <p>{{ activeModule.reason }}</p>
-                                </div>
-                            </div>
-
-                            <div v-else class="adapter-panel">
-                                <div class="panel-icon">
-                                    <el-icon :size="28">
-                                        <Connection />
-                                    </el-icon>
-                                </div>
-                                <div>
-                                    <h2>Adapter pending</h2>
-                                    <p>{{ adapterDescription }}</p>
+                                    <p>{{ activeModule.reason ?? 'This module is not available.' }}</p>
                                 </div>
                             </div>
                         </section>
@@ -118,6 +103,7 @@ const icons = {
 } satisfies Record<HubModuleIconName, Component>
 
 const hubHomePath = '/chatluna'
+/** Only Core (chatluna) embeds inside Hub; ecosystem modules navigate away. */
 const active = ref<HubModuleId | null>(null)
 const data = computed(() => store.chatluna_hub_webui)
 const homeGraphAnimationsEnabled = computed(
@@ -136,23 +122,8 @@ const moduleDescription = computed(() => {
     if (activeModule.value.id === 'chatluna') {
         return 'Core management surfaces for the main ChatLuna plugin.'
     }
-    if (!activeModule.value.available) {
-        return activeModule.value.reason ?? 'This module is not available.'
-    }
-    return `${activeModule.value.title} is detected. The Hub adapter UI will be wired in a later pass.`
-})
-const adapterDescription = computed(() => {
-    if (!activeModule.value) return ''
-    if (activeModule.value.id === 'agent') {
-        return 'This page will reuse chatluna_agent_webui and chatluna-agent/* RPC contracts.'
-    }
-    if (activeModule.value.id === 'mediaLuna') {
-        return 'This page will host media-luna after its Hub adapter contract is confirmed.'
-    }
-    if (activeModule.value.id === 'memesLuna') {
-        return 'This page will reuse memesluna/* RPC contracts through the original WebUI.'
-    }
-    return 'This page will reuse the living-memory/* RPC contracts.'
+
+    return activeModule.value.reason ?? 'This module is not available.'
 })
 
 const resolveIcon = (icon: HubModuleIconName) => icons[icon]
@@ -181,6 +152,7 @@ const handleSelect = (id: HubModuleId) => {
             return
         }
 
+        // Hub-owned embed: ChatLuna Core only (no routePath).
         active.value = id
         return
     }
@@ -281,7 +253,6 @@ const handleSelect = (id: HubModuleId) => {
 }
 
 .module-header h1,
-.adapter-panel h2,
 .unavailable-panel h2 {
     margin: 0;
     color: var(--k-text-dark);
@@ -293,7 +264,6 @@ const handleSelect = (id: HubModuleId) => {
 }
 
 .module-header p,
-.adapter-panel p,
 .unavailable-panel p {
     margin: 0;
     color: var(--k-text-light);
@@ -305,16 +275,11 @@ const handleSelect = (id: HubModuleId) => {
     font-size: 14px;
 }
 
-.adapter-panel,
 .unavailable-panel {
     border: 1px solid var(--k-color-divider);
     border-radius: 8px;
     background: var(--k-card-bg);
     box-shadow: var(--k-card-shadow);
-}
-
-.adapter-panel,
-.unavailable-panel {
     padding: 20px;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -322,12 +287,10 @@ const handleSelect = (id: HubModuleId) => {
     gap: 16px;
 }
 
-.adapter-panel h2,
 .unavailable-panel h2 {
     font-size: 18px;
 }
 
-.adapter-panel p,
 .unavailable-panel p {
     margin-top: 8px;
     font-size: 14px;
@@ -354,7 +317,6 @@ const handleSelect = (id: HubModuleId) => {
         font-size: 24px;
     }
 
-    .adapter-panel,
     .unavailable-panel {
         grid-template-columns: 1fr;
     }

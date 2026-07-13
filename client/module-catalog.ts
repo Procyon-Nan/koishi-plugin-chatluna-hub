@@ -1,6 +1,13 @@
 /**
- * Static frontend metadata for Hub modules. This keeps fallback graph nodes and
- * detail-card content in one place so visible ecosystem nodes stay synchronized.
+ * Static frontend metadata for Hub modules.
+ *
+ * Runtime module list / install / config / routes are owned by
+ * `src/webui/modules.ts` (`moduleDefinitions`). This file only provides:
+ * - graph node fallbacks when Console DataService data is not ready
+ * - detail-card copy (`moduleDetails`) for the home relationship graph
+ *
+ * Keep fallback ids, order, ring, entryType, activityId, and routePath aligned
+ * with the server definitions when adding or renaming modules.
  */
 import type { HubModuleIconName, HubModuleId, HubModuleItem } from './types'
 

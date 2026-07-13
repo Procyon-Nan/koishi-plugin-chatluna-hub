@@ -232,7 +232,7 @@
                     </span>
                     <span class="node-title">{{ node.title }}</span>
                     <span class="node-status">
-                        {{ getNodeStatus(node) }}
+                        {{ resolveNodeStatus(node) }}
                     </span>
                 </button>
                 </div>
@@ -450,7 +450,6 @@ import {
     ref,
     type Component
 } from 'vue'
-import { send } from '@koishijs/client'
 import {
     ChatRound,
     Collection,
@@ -479,8 +478,7 @@ import { moduleDetails, type ModuleDetail } from '../../module-catalog'
 import type {
     HubModuleIconName,
     HubModuleId,
-    HubModuleItem,
-    HubModuleToggleResult
+    HubModuleItem
 } from '../../types'
 import {
     createOrbitPosition,
@@ -488,18 +486,126 @@ import {
     getScreenDistance,
     graphViewBoxHeight,
     graphViewBoxWidth,
-    projectStagePointToRadius,
-    rotateStagePoint,
     toScreenDelta,
     toScreenPoint,
     toStagePoint,
     type Point
 } from './graph-geometry'
+import {
+    clearPersistedGraphState,
+    loadPersistedFontSize,
+    loadPersistedGraphZoom,
+    loadPersistedPositions,
+    loadPersistedRange,
+    savePersistedFontSize,
+    savePersistedGraphZoom,
+    savePersistedPositions,
+    savePersistedRange
+} from './graph-persistence'
+import { tickCarriedNodes, type PhysicsTickContext } from './graph-physics'
 import { createGraphRuntime } from './graph-runtime'
+import {
+    clampNumber,
+    clearRecord,
+    coreNodeMetrics,
+    defaultDetailFontSizePx,
+    effectiveRangeMinRadiusPx,
+    getDefaultCorePosition,
+    getSatelliteNodeMetrics,
+    graphZoomMax,
+    graphZoomMin,
+    type DragState,
+    type GraphEdge,
+    type GraphNode,
+    type PhysicsState
+} from './graph-types'
+import {
+    getDetailStatusText,
+    getEdgeColor,
+    getFloatDelay,
+    getNodeStatus,
+    getTone
+} from './graph-visual'
+import { useModuleToggle } from './use-module-toggle'
 
-// ============================================================================
-// Customizable Orbit Configuration (手动调整子节点自转速度与到主节点中心的距离)
-// ============================================================================
+const props = withDefaults(
+    defineProps<{
+        modules: HubModuleItem[]
+        animationsEnabled?: boolean
+    }>(),
+    {
+        animationsEnabled: true
+    }
+)
+
+const emit = defineEmits<{
+    select: [id: HubModuleId]
+}>()
+
+const focusedNodeId = ref<HubModuleId | null>(null)
+const lastActiveNodeId = ref<HubModuleId | null>(null)
+const detailFontSizePx = ref(defaultDetailFontSizePx)
+
+const icons = {
+    ChatRound,
+    Collection,
+    Connection,
+    DataAnalysis,
+    Link,
+    Message,
+    Picture,
+    Search,
+    Star,
+    TrendCharts,
+    UserFilled,
+    MemesLunaEmoji: MemesLunaIcon
+} satisfies Record<HubModuleIconName, Component>
+
+const stageRef = ref<HTMLElement | null>(null)
+const draggingId = ref<HubModuleId | null>(null)
+const effectiveRangeRadiusInput = ref(0)
+const effectiveRangePreviewVisible = ref(false)
+const graphZoom = ref(1)
+const stageSize = reactive({
+    width: graphViewBoxWidth,
+    height: graphViewBoxHeight
+})
+const nodePositions = reactive<Partial<Record<HubModuleId, Point>>>({})
+const carriedVisuals = reactive<Partial<Record<HubModuleId, Point>>>({})
+const carriedVelocities: Partial<Record<HubModuleId, Point>> = {}
+const physicsStates: PhysicsState[] = []
+
+const {
+    togglePending,
+    toggleErrors,
+    setModuleEnabled,
+    disposeToggleErrors
+} = useModuleToggle()
+
+let dragState: DragState | null = null
+let lastAnimationTime = 0
+let effectiveRangePreviewHideTimer = 0
+let rangeControlPointerActive = false
+
+const sortedModules = computed(() =>
+    props.modules.slice().sort((left, right) => left.order - right.order)
+)
+const coreModule = computed(
+    () => sortedModules.value.find((item) => item.id === 'chatluna') ?? null
+)
+const ecosystemModules = computed(() =>
+    sortedModules.value.filter((item) => item.id !== 'chatluna')
+)
+const ecosystemModuleCount = computed(() => ecosystemModules.value.length)
+const availableEcosystemCount = computed(
+    () => ecosystemModules.value.filter((item) => item.available).length
+)
+const webuiModules = computed(() =>
+    ecosystemModules.value.filter((item) => item.ring !== 'config')
+)
+const configModules = computed(() =>
+    ecosystemModules.value.filter((item) => item.ring === 'config')
+)
 
 const activeDetailModuleId = computed<HubModuleId | null>(() => {
     return focusedNodeId.value || draggingId.value || lastActiveNodeId.value
@@ -518,162 +624,7 @@ const activeModuleDetail = computed<ModuleDetail | null>(() => {
     const id = activeDetailModuleId.value
     return id ? moduleDetails[id] : null
 })
-// 第一层有 WebUI 插件节点到 ChatLuna 主节点中心的默认距离，单位为屏幕像素。
-const orbitRadiusPx = 190
-// 第二层无 WebUI 插件节点到 ChatLuna 主节点中心的默认距离，单位为屏幕像素。
-const configOrbitRadiusPx = 360
 
-/**
- * Rotation speed in radians per frame (at 60fps)
- * 自转的速度 (单位: 弧度/帧)
- */
-const orbitSpeedRad = 0.001
-// ============================================================================
-
-interface GraphNode extends HubModuleItem {
-    x: number
-    y: number
-    size: number
-    radius: number
-    tone: string
-}
-
-interface GraphEdge {
-    id: HubModuleId
-    available: boolean
-    muted: boolean
-    risk: number
-    color: string
-    path: string
-    x1: number
-    y1: number
-    x2: number
-    y2: number
-}
-
-interface DragState {
-    id: HubModuleId
-    pointerId: number
-    startClientX: number
-    startClientY: number
-    startPoint: Point
-    startPosition: Point
-    moved: boolean
-}
-
-type ToggleDirection = 'enable' | 'disable'
-
-interface SatelliteNodeMetrics {
-    size: number
-    radius: number
-    orbitRadiusPx: number
-}
-
-const coreNodeMetrics = {
-    // ChatLuna 主节点直径，单位为屏幕像素。
-    size: 148,
-    // ChatLuna 主节点半径，用于连线端点和节点碰撞计算，通常保持为 size / 2。
-    radius: 74
-}
-
-const webuiNodeMetrics: SatelliteNodeMetrics = {
-    // 第一层有 WebUI 插件节点直径，单位为屏幕像素。
-    size: 110,
-    // 第一层有 WebUI 插件节点半径，通常保持为 size / 2。
-    radius: 55,
-    // 第一层有 WebUI 插件节点到主节点中心的默认距离。
-    orbitRadiusPx
-}
-
-const configNodeMetrics: SatelliteNodeMetrics = {
-    // 第二层无 WebUI 插件节点直径，单位为屏幕像素。
-    size: 100,
-    // 第二层无 WebUI 插件节点半径，通常保持为 size / 2。
-    radius: 50,
-    // 第二层无 WebUI 插件节点到主节点中心的默认距离。
-    orbitRadiusPx: configOrbitRadiusPx
-}
-
-const props = withDefaults(
-    defineProps<{
-        modules: HubModuleItem[]
-        animationsEnabled?: boolean
-    }>(),
-    {
-        animationsEnabled: true
-    }
-)
-
-const emit = defineEmits<{
-    select: [id: HubModuleId]
-}>()
-
-const focusedNodeId = ref<HubModuleId | null>(null)
-const lastActiveNodeId = ref<HubModuleId | null>(null)
-const detailFontSizePx = ref(18)
-const detailFontSizeStorageKey = 'chatluna-hub:detail-font-size:v1'
-const graphZoomStorageKey = 'chatluna-hub:relationship-graph-zoom:v1'
-
-const icons = {
-    ChatRound,
-    Collection,
-    Connection,
-    DataAnalysis,
-    Link,
-    Message,
-    Picture,
-    Search,
-    Star,
-    TrendCharts,
-    UserFilled,
-    MemesLunaEmoji: MemesLunaIcon
-} satisfies Record<HubModuleIconName, Component>
-
-const positionStorageKey = 'chatluna-hub:relationship-node-positions:v2'
-const rangeStorageKey = 'chatluna-hub:relationship-effective-range:v1'
-const stageRef = ref<HTMLElement | null>(null)
-const draggingId = ref<HubModuleId | null>(null)
-const effectiveRangeMinRadiusPx = 260
-const graphZoomMin = 0.5
-const graphZoomMax = 1.5
-const effectiveRangeRadiusInput = ref(0)
-const effectiveRangePreviewVisible = ref(false)
-const graphZoom = ref(1)
-const stageSize = reactive({
-    width: graphViewBoxWidth,
-    height: graphViewBoxHeight
-})
-const nodePositions = reactive<Partial<Record<HubModuleId, Point>>>({})
-const carriedVisuals = reactive<Partial<Record<HubModuleId, Point>>>({})
-const carriedVelocities: Partial<Record<HubModuleId, Point>> = {}
-const togglePending = reactive<Partial<Record<HubModuleId, ToggleDirection>>>({})
-const toggleErrors = reactive<Partial<Record<HubModuleId, string>>>({})
-
-let dragState: DragState | null = null
-let lastAnimationTime = 0
-let effectiveRangePreviewHideTimer = 0
-let rangeControlPointerActive = false
-const errorTimers: Partial<Record<HubModuleId, number>> = {}
-
-const sortedModules = computed(() =>
-    props.modules.slice().sort((left, right) => left.order - right.order)
-)
-const coreModule = computed(() =>
-    sortedModules.value.find((item) => item.id === 'chatluna') ?? null
-)
-const ecosystemModules = computed(() =>
-    sortedModules.value.filter((item) => item.id !== 'chatluna')
-)
-const ecosystemModuleCount = computed(() => ecosystemModules.value.length)
-const availableEcosystemCount = computed(
-    () => ecosystemModules.value.filter((item) => item.available).length
-)
-const webuiModules = computed(() =>
-    ecosystemModules.value.filter((item) => item.ring !== 'config')
-)
-const configModules = computed(() =>
-    ecosystemModules.value.filter((item) => item.ring === 'config')
-)
 const coreNode = computed<GraphNode | null>(() => {
     if (!coreModule.value) return null
     const base = nodePositions[coreModule.value.id] ?? getDefaultCorePosition()
@@ -687,6 +638,7 @@ const coreNode = computed<GraphNode | null>(() => {
         tone: 'color-mix(in srgb, var(--k-color-primary), mediumpurple 58%)'
     }
 })
+
 const defaultEffectiveRangeRadiusPx = computed(() =>
     clampNumber(
         Math.min(stageSize.width, stageSize.height) * 0.52,
@@ -694,8 +646,8 @@ const defaultEffectiveRangeRadiusPx = computed(() =>
         720
     )
 )
+
 const effectiveRangeMaxRadiusPx = computed(() => {
-    // Decouple max range from dynamic core node position by calculating from stage center
     const centerX = stageSize.width * 0.5
     const centerY = stageSize.height * 0.5
     const maxDistance = Math.max(
@@ -707,6 +659,7 @@ const effectiveRangeMaxRadiusPx = computed(() => {
 
     return Math.max(effectiveRangeMinRadiusPx, Math.ceil(maxDistance + 24))
 })
+
 const effectiveRangeRadiusPx = computed(() =>
     clampNumber(
         effectiveRangeRadiusInput.value || defaultEffectiveRangeRadiusPx.value,
@@ -714,6 +667,7 @@ const effectiveRangeRadiusPx = computed(() =>
         effectiveRangeMaxRadiusPx.value
     )
 )
+
 const effectiveRange = computed(() => {
     if (!coreNode.value) return null
 
@@ -726,18 +680,37 @@ const effectiveRange = computed(() => {
             (graphViewBoxHeight / stageSize.height)
     }
 })
+
 const isOrbitActive = computed(
     () =>
         props.animationsEnabled &&
         draggingId.value === null &&
         !rangeControlPointerActive
 )
+
 const graphViewportStyle = computed(
     () =>
         ({
             '--graph-zoom': graphZoom.value.toFixed(3)
         }) as Record<string, string>
 )
+
+const getDefaultSatellitePosition = (item: HubModuleItem): Point => {
+    const core = getDefaultCorePosition()
+    const list =
+        item.ring === 'config' ? configModules.value : webuiModules.value
+    const index = Math.max(0, list.findIndex((module) => module.id === item.id))
+    const count = Math.max(1, list.length)
+    const angle = ((2 * Math.PI) / count) * index - Math.PI / 2
+    const metrics = getSatelliteNodeMetrics(item)
+
+    return createOrbitPosition(core, angle, metrics.orbitRadiusPx, stageSize)
+}
+
+const getVisualPosition = (id: HubModuleId, base: Point): Point => {
+    const visual = carriedVisuals[id]
+    return visual ? { ...visual } : base
+}
 
 const satelliteNodes = computed<GraphNode[]>(() => {
     return ecosystemModules.value.map((item) => {
@@ -755,88 +728,6 @@ const satelliteNodes = computed<GraphNode[]>(() => {
         }
     })
 })
-const edges = computed<GraphEdge[]>(() => {
-    if (!coreNode.value) return []
-
-    return satelliteNodes.value.map((node) => {
-        const edge = createEdge(coreNode.value!, node)
-        const risk = getEdgeRisk(node)
-
-        return {
-            id: node.id,
-            available: node.available,
-            muted: isHubModuleDisabled(node) && draggingId.value !== node.id,
-            risk,
-            color: getEdgeColor(node, risk),
-            path: createEdgePath(edge),
-            ...edge
-        }
-    })
-})
-
-const getDefaultSatellitePosition = (item: HubModuleItem): Point => {
-    const core = getDefaultCorePosition()
-    const list =
-        item.ring === 'config' ? configModules.value : webuiModules.value
-    const index = Math.max(0, list.findIndex((module) => module.id === item.id))
-    const count = Math.max(1, list.length)
-    const angle = ((2 * Math.PI) / count) * index - Math.PI / 2
-    const metrics = getSatelliteNodeMetrics(item)
-
-    return createOrbitPosition(core, angle, metrics.orbitRadiusPx, stageSize)
-}
-
-const getDefaultCorePosition = (): Point => ({
-    x: 350,
-    y: 280
-})
-
-const clampNumber = (value: number, min: number, max: number) => {
-    return Math.min(max, Math.max(min, value))
-}
-
-const getSatelliteNodeMetrics = (item: HubModuleItem) => {
-    return item.ring === 'config' ? configNodeMetrics : webuiNodeMetrics
-}
-
-const getVisualPosition = (id: HubModuleId, base: Point): Point => {
-    const visual = carriedVisuals[id]
-    return visual ? { ...visual } : base
-}
-
-const getTone = (item: HubModuleItem) => {
-    if (!item.installed) return 'var(--k-text-light)'
-    if (item.configStatus === 'not-configured') return 'var(--k-text-light)'
-    if (item.configStatus === 'multiple') return 'var(--k-color-warning)'
-    if (!item.available) return 'var(--k-text-light)'
-    if (item.id === 'agent') return 'var(--k-color-success)'
-    if (item.id === 'livingMemory') return 'var(--k-color-primary)'
-    if (item.id === 'mediaLuna') return 'var(--k-color-warning)'
-    if (item.id === 'memesLuna') return 'var(--k-color-danger)'
-    return 'var(--k-color-primary)'
-}
-
-const getActiveTone = (id: HubModuleId) => {
-    if (id === 'agent') return 'var(--k-color-success)'
-    if (id === 'livingMemory') return 'var(--k-color-primary)'
-    if (id === 'mediaLuna') return 'var(--k-color-warning)'
-    if (id === 'memesLuna') return 'var(--k-color-danger)'
-    return 'var(--k-color-primary)'
-}
-
-const getEdgeColor = (node: GraphNode, risk: number) => {
-    const base =
-        node.entryType === 'config'
-            ? node.tone
-            : node.available
-              ? node.tone
-              : getActiveTone(node.id)
-    if (risk <= 0) return base
-
-    return `color-mix(in srgb, ${base}, var(--k-color-danger) ${Math.round(
-        risk * 100
-    )}%)`
-}
 
 const createEdge = (from: GraphNode, to: GraphNode) => {
     const delta = toScreenDelta(from, to, stageSize)
@@ -889,6 +780,25 @@ const getEdgeRisk = (node: GraphNode) => {
     return clampNumber((distance - start) / (radius - start), 0, 1)
 }
 
+const edges = computed<GraphEdge[]>(() => {
+    if (!coreNode.value) return []
+
+    return satelliteNodes.value.map((node) => {
+        const edge = createEdge(coreNode.value!, node)
+        const risk = getEdgeRisk(node)
+
+        return {
+            id: node.id,
+            available: node.available,
+            muted: isHubModuleDisabled(node) && draggingId.value !== node.id,
+            risk,
+            color: getEdgeColor(node, risk),
+            path: createEdgePath(edge),
+            ...edge
+        }
+    })
+})
+
 const isPointWithinEffectiveRange = (point: Point) => {
     if (!coreNode.value) return true
 
@@ -916,13 +826,6 @@ const edgeStyle = (edge: GraphEdge) =>
     }) as Record<string, string>
 
 const resolveIcon = (icon: HubModuleIconName) => icons[icon]
-const getFloatDelay = (id: HubModuleId) => {
-    if (id === 'agent') return -0.8
-    if (id === 'livingMemory') return -2.2
-    if (id === 'mediaLuna') return -3.4
-    if (id === 'memesLuna') return -4.6
-    return 0
-}
 
 const isNodePending = (id: HubModuleId) => Boolean(togglePending[id])
 const isNodeOutOfRange = (node: GraphNode) => {
@@ -933,28 +836,8 @@ const getNodeTitle = (node: GraphNode) => {
     return toggleErrors[node.id] ?? node.reason ?? node.title
 }
 
-const getNodeStatus = (node: GraphNode) => {
-    const pending = togglePending[node.id]
-    if (pending === 'enable') return 'Enabling...'
-    if (pending === 'disable') return 'Disabling...'
-    if (toggleErrors[node.id]) return 'Action failed'
-    if (node.id === 'chatluna') return 'Core'
-    if (!node.installed) return '未安装'
-    if (node.configStatus === 'not-configured') return '未配置'
-    if (node.configStatus === 'multiple') return '多配置'
-    if (node.entryType === 'config' && !node.toggleable) return '配置'
-
-    return node.available ? 'Ready' : 'Not enabled'
-}
-
-const getDetailStatusText = (item: HubModuleItem) => {
-    if (item.id === 'chatluna') return '运行中'
-    if (!item.installed) return '未安装'
-    if (item.configStatus === 'not-configured') return '未配置'
-    if (item.configStatus === 'multiple') return '存在多份配置'
-    if (item.entryType === 'config' && !item.toggleable) return '插件配置入口'
-
-    return item.available ? '已启用 (Ready)' : '未启用 (Disabled)'
+const resolveNodeStatus = (node: GraphNode) => {
+    return getNodeStatus(node, togglePending[node.id], Boolean(toggleErrors[node.id]))
 }
 
 const selectModule = (item: HubModuleItem) => {
@@ -979,7 +862,7 @@ const handleRangeControlInput = (event: Event) => {
     )
     showEffectiveRangePreview()
     if (!rangeControlPointerActive) scheduleEffectiveRangePreviewHide()
-    savePersistedRange()
+    savePersistedRange(effectiveRangeRadiusPx.value)
 }
 
 const clearEffectiveRangePreviewHideTimer = () => {
@@ -1020,29 +903,15 @@ const handleRangeControlInteractionEnd = () => {
     scheduleEffectiveRangePreviewHide()
 }
 
-const clearRecord = <T,>(record: Partial<Record<HubModuleId, T>>) => {
-    for (const key of Object.keys(record) as HubModuleId[]) {
-        delete record[key]
-    }
-}
-
 const handleResetGraphDefaults = () => {
     resetActiveInteractionState()
     effectiveRangeRadiusInput.value = 0
-    detailFontSizePx.value = 18
+    detailFontSizePx.value = defaultDetailFontSizePx
     graphZoom.value = 1
     lastActiveNodeId.value = null
     clearRecord(nodePositions)
     clearTransientOrbitState()
-
-    try {
-        window.localStorage.removeItem(positionStorageKey)
-        window.localStorage.removeItem(rangeStorageKey)
-        window.localStorage.removeItem(detailFontSizeStorageKey)
-        window.localStorage.removeItem(graphZoomStorageKey)
-    } catch {
-        // Ignore storage failures; the visible graph has still been reset.
-    }
+    clearPersistedGraphState()
 }
 
 const handleNodePointerDown = (event: PointerEvent, node: GraphNode) => {
@@ -1108,12 +977,10 @@ const handleDragEnd = (event: PointerEvent) => {
                 carriedVisuals[target.id] ?? nodePositions[target.id]
 
             if (finalPosition) nodePositions[target.id] = { ...finalPosition }
-            // Set final drop positions and zero velocities to prevent inertia/spring effect
             if (finalPosition) carriedVisuals[target.id] = { ...finalPosition }
             carriedVelocities[target.id] = { x: 0, y: 0 }
 
             if (target.id === 'chatluna') {
-                // If core moved, reconcile boundaries for all satellites
                 for (const item of ecosystemModules.value) {
                     void reconcileModuleBoundary(item)
                 }
@@ -1122,7 +989,10 @@ const handleDragEnd = (event: PointerEvent) => {
             }
         }
 
-        savePersistedPositions()
+        savePersistedPositions(
+            nodePositions,
+            sortedModules.value.map((item) => item.id)
+        )
     }
 
     dragState = null
@@ -1159,9 +1029,7 @@ const getBasePosition = (node: GraphNode): Point => {
     }
 }
 
-const getBasePositionForItem = (
-    item: HubModuleItem
-): Point => {
+const getBasePositionForItem = (item: HubModuleItem): Point => {
     const stored = nodePositions[item.id]
     if (stored) return { ...stored }
     if (item.id === 'chatluna') return getDefaultCorePosition()
@@ -1184,308 +1052,24 @@ const reconcileModuleBoundary = async (item: HubModuleItem) => {
     }
 }
 
-const setModuleEnabled = async (item: HubModuleItem, enabled: boolean) => {
-    if (!canToggleHubModule(item)) return
+const buildPhysicsContext = (): PhysicsTickContext | null => {
+    if (!coreNode.value || !coreModule.value) return null
 
-    clearToggleError(item.id)
-    togglePending[item.id] = enabled ? 'enable' : 'disable'
-
-    try {
-        const result = (await send(
-            'chatluna-hub/module/set-enabled',
-            item.id,
-            enabled
-        )) as HubModuleToggleResult | undefined
-
-        if (!result?.ok) {
-            setToggleError(
-                item.id,
-                result?.reason ?? 'Unable to update plugin state.'
-            )
-        }
-    } catch (error) {
-        setToggleError(
-            item.id,
-            error instanceof Error ? error.message : String(error)
-        )
-    } finally {
-        delete togglePending[item.id]
-    }
-}
-
-const clearToggleError = (id: HubModuleId) => {
-    if (errorTimers[id]) {
-        window.clearTimeout(errorTimers[id])
-        delete errorTimers[id]
-    }
-
-    delete toggleErrors[id]
-}
-
-const setToggleError = (id: HubModuleId, reason: string) => {
-    clearToggleError(id)
-    toggleErrors[id] = reason
-    errorTimers[id] = window.setTimeout(() => {
-        delete toggleErrors[id]
-        delete errorTimers[id]
-    }, 4200)
-}
-
-interface PhysicsState {
-    id: HubModuleId
-    x: number
-    y: number
-    vx: number
-    vy: number
-    radius: number
-    isDragging: boolean
-    isCore: boolean
-    available: boolean
-    item: HubModuleItem
-}
-
-const physicsStates: PhysicsState[] = []
-
-const syncPhysicsStates = () => {
-    const core = coreNode.value
-    if (!core) return
-
-    // Sync core
-    if (physicsStates.length === 0) {
-        physicsStates.push({
-            id: 'chatluna',
-            x: core.x,
-            y: core.y,
-            vx: 0,
-            vy: 0,
-            radius: coreNodeMetrics.radius,
-            isDragging: draggingId.value === 'chatluna',
-            isCore: true,
-            available: true,
-            item: coreModule.value!
-        })
-    } else {
-        const s = physicsStates[0]
-        s.x = core.x
-        s.y = core.y
-        s.isDragging = draggingId.value === 'chatluna'
-        s.item = coreModule.value!
-    }
-
-    const modulesList = ecosystemModules.value
-    while (physicsStates.length - 1 > modulesList.length) {
-        physicsStates.pop()
-    }
-
-    for (let i = 0; i < modulesList.length; i++) {
-        const item = modulesList[i]
-        const id = item.id
-        const isDragging = draggingId.value === id
-        const base = getBasePositionForItem(item)
-        const current = carriedVisuals[id] ?? { ...base }
-        const velocity = carriedVelocities[id] ?? { x: 0, y: 0 }
-
-        const stateIndex = i + 1
-        if (stateIndex >= physicsStates.length) {
-            physicsStates.push({
-                id,
-                x: current.x,
-                y: current.y,
-                vx: isDragging ? 0 : velocity.x,
-                vy: isDragging ? 0 : velocity.y,
-                radius: getSatelliteNodeMetrics(item).radius,
-                isDragging,
-                isCore: false,
-                available: item.available,
-                item
-            })
-        } else {
-            const s = physicsStates[stateIndex]
-            s.id = id
-            s.x = current.x
-            s.y = current.y
-            s.vx = isDragging ? 0 : velocity.x
-            s.vy = isDragging ? 0 : velocity.y
-            s.radius = getSatelliteNodeMetrics(item).radius
-            s.isDragging = isDragging
-            s.available = item.available
-            s.item = item
-        }
-    }
-}
-
-const tickCarriedNodes = (deltaFrames: number) => {
-    // If we're dragging a node, we should update its visual representation directly
-    // If we're not dragging, we apply rope constraints, inertia, and damping.
-    const core = coreNode.value
-    if (!core) return
-
-    syncPhysicsStates()
-
-    // 2. Perform Verlet / Euler step for non-dragging satellites (Inertia & Damping)
-    // Direct Drag Isolation: Only drag core node triggers physics for others.
-    // When directly dragging a satellite node, it follows the pointer statically,
-    // and when released, it has no inertia (immediate stop).
-    const draggingCore = draggingId.value === 'chatluna'
-    const statesCount = physicsStates.length
-
-    // Slow Orbital Motion: Orbit core slowly when no dragging or range adjustment occurs
-    const isOrbitActiveVal = isOrbitActive.value
-
-    for (let i = 0; i < statesCount; i++) {
-        const state = physicsStates[i]
-        if (state.isCore || state.isDragging) continue
-
-        if (isOrbitActiveVal) {
-            const speed = orbitSpeedRad * deltaFrames
-            const nextPosition = rotateStagePoint(
-                state,
-                core,
-                speed,
-                stageSize
-            )
-
-            state.x = nextPosition.x
-            state.y = nextPosition.y
-            state.vx = 0
-            state.vy = 0
-            continue
-        }
-
-        // If we are NOT dragging the core, satellites should not slide or have physics inertia!
-        // Direct Drag Isolation: If a satellite itself was being dragged and just released,
-        // or if we're not dragging the core, set its velocity to zero so it comes to a complete halt immediately.
-        if (!draggingCore) {
-            state.vx = 0
-            state.vy = 0
-            continue
-        }
-
-        const damping = 0.90
-        state.vx *= Math.pow(damping, deltaFrames)
-        state.vy *= Math.pow(damping, deltaFrames)
-
-        state.x += state.vx * deltaFrames
-        state.y += state.vy * deltaFrames
-    }
-
-    // 3. Collision Detection & Resolution (Repulsion)
-    // Avoid overlapping for ALL nodes.
-    // Iterative constraint resolver for stable collision physics
-    // Bypass collision resolution when orbiting to avoid sub-pixel jitter
-    if (!isOrbitActiveVal) {
-        for (let iteration = 0; iteration < 2; iteration++) {
-            for (let i = 0; i < statesCount; i++) {
-                for (let j = i + 1; j < statesCount; j++) {
-                    const a = physicsStates[i]
-                    const b = physicsStates[j]
-
-                    const delta = toScreenDelta(a, b, stageSize)
-                    const distPx = Math.hypot(delta.x, delta.y)
-                    const minDistancePx = a.radius + b.radius + 16 // Radius + padding to avoid overlapping
-
-                    if (distPx < minDistancePx) {
-                        const overlapPx = minDistancePx - distPx
-                        const nx = delta.x / (distPx || 1)
-                        const ny = delta.y / (distPx || 1)
-
-                        const push = createStagePointFromScreenDelta(
-                            { x: 0, y: 0 },
-                            {
-                                x: overlapPx * nx,
-                                y: overlapPx * ny
-                            },
-                            stageSize
-                        )
-
-                        // Distribute push based on whether nodes are static (dragging, core, etc.)
-                        const aStatic = a.isDragging || (a.isCore && draggingId.value === 'chatluna')
-                        const bStatic = b.isDragging || (b.isCore && draggingId.value === 'chatluna')
-
-                        if (aStatic && !bStatic) {
-                            b.x += push.x
-                            b.y += push.y
-                            if (!b.isDragging) {
-                                b.vx += push.x * 0.1
-                                b.vy += push.y * 0.1
-                            }
-                        } else if (!aStatic && bStatic) {
-                            a.x -= push.x
-                            a.y -= push.y
-                            if (!a.isDragging) {
-                                a.vx -= push.x * 0.1
-                                a.vy -= push.y * 0.1
-                            }
-                        } else if (!aStatic && !bStatic) {
-                            // Split the push equally
-                            a.x -= push.x * 0.5
-                            a.y -= push.y * 0.5
-                            b.x += push.x * 0.5
-                            b.y += push.y * 0.5
-
-                            a.vx -= push.x * 0.05
-                            a.vy -= push.y * 0.05
-                            b.vx += push.x * 0.05
-                            b.vy += push.y * 0.05
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 4. Apply rope constraint and sync visual state.
-    for (let i = 0; i < statesCount; i++) {
-        const state = physicsStates[i]
-        if (state.isCore) continue
-
-        const id = state.id
-
-        // Rope constraint applies only if the module is enabled (available),
-        // NOT currently disabling, and NOT currently being dragged by the user!
-        // Direct Drag Isolation: Bypassing rope constraint while dragging allows moving nodes outside.
-        const isDisabling = togglePending[id] === 'disable'
-        if (
-            canToggleHubModule(state.item) &&
-            state.available &&
-            !isDisabling &&
-            !state.isDragging
-        ) {
-            const distPx = getScreenDistance(state, core, stageSize)
-            const rangePx = effectiveRangeRadiusPx.value
-
-            if (distPx > rangePx) {
-                const target = projectStagePointToRadius(
-                    state,
-                    core,
-                    rangePx,
-                    stageSize
-                )
-
-                // Only transfer pulling force to velocity if dragging the core (rope pulls satellite)
-                if (draggingCore) {
-                    state.vx = (target.x - state.x) / deltaFrames
-                    state.vy = (target.y - state.y) / deltaFrames
-                }
-
-                state.x = target.x
-                state.y = target.y
-            }
-        }
-
-        const position = { x: state.x, y: state.y }
-        let velocity = carriedVelocities[id]
-        if (!velocity) {
-            carriedVelocities[id] = { x: state.vx, y: state.vy }
-        } else {
-            velocity.x = state.vx
-            velocity.y = state.vy
-        }
-        carriedVisuals[id] = position
-
-        if (draggingCore && dragState?.moved) {
-            nodePositions[id] = position
-        }
+    return {
+        physicsStates,
+        core: coreNode.value,
+        coreModule: coreModule.value,
+        ecosystemModules: ecosystemModules.value,
+        draggingId: draggingId.value,
+        dragMoved: Boolean(dragState?.moved),
+        stageSize,
+        effectiveRangeRadiusPx: effectiveRangeRadiusPx.value,
+        isOrbitActive: isOrbitActive.value,
+        togglePending,
+        carriedVisuals,
+        carriedVelocities,
+        nodePositions,
+        getBasePositionForItem
     }
 }
 
@@ -1500,123 +1084,13 @@ const tickAnimation = (time: number) => {
         : 1
 
     lastAnimationTime = time
-    tickCarriedNodes(deltaFrames)
-}
-
-const loadPersistedFontSize = () => {
-    try {
-        const raw = window.localStorage.getItem(detailFontSizeStorageKey)
-        if (raw) {
-            const val = Number(raw)
-            if (val >= 12 && val <= 20) {
-                detailFontSizePx.value = val
-            }
-        }
-    } catch {
-        window.localStorage.removeItem(detailFontSizeStorageKey)
-    }
-}
-
-const savePersistedFontSize = (val: number) => {
-    try {
-        window.localStorage.setItem(detailFontSizeStorageKey, String(val))
-    } catch {
-        // Ignore failures
-    }
-}
-
-const loadPersistedPositions = () => {
-    try {
-        const raw = window.localStorage.getItem(positionStorageKey)
-        if (!raw) return
-
-        const data = JSON.parse(raw) as Partial<Record<HubModuleId, Point>>
-        for (const item of sortedModules.value) {
-            const point = data[item.id]
-            if (!isPoint(point)) continue
-            nodePositions[item.id] = { ...point }
-        }
-    } catch {
-        window.localStorage.removeItem(positionStorageKey)
-    }
-}
-
-const loadPersistedRange = () => {
-    try {
-        const raw = window.localStorage.getItem(rangeStorageKey)
-        if (!raw) return
-
-        const value = Number(raw)
-        if (!Number.isFinite(value)) return
-        const radius =
-            value <= 160 ? defaultEffectiveRangeRadiusPx.value * (value / 100) : value
-
-        effectiveRangeRadiusInput.value = clampNumber(
-            radius,
-            effectiveRangeMinRadiusPx,
-            effectiveRangeMaxRadiusPx.value
-        )
-    } catch {
-        window.localStorage.removeItem(rangeStorageKey)
-    }
-}
-
-const savePersistedRange = () => {
-    try {
-        window.localStorage.setItem(
-            rangeStorageKey,
-            String(Math.round(effectiveRangeRadiusPx.value))
-        )
-    } catch {
-        // Ignore storage failures; the control should still work for this session.
-    }
+    const ctx = buildPhysicsContext()
+    if (ctx) tickCarriedNodes(ctx, deltaFrames)
 }
 
 const setGraphZoom = (value: number) => {
     const clamped = clampNumber(value, graphZoomMin, graphZoomMax)
     graphZoom.value = Math.round(clamped * 1000) / 1000
-}
-
-const loadPersistedGraphZoom = () => {
-    try {
-        const raw = window.localStorage.getItem(graphZoomStorageKey)
-        if (!raw) return
-
-        const value = Number(raw)
-        if (Number.isFinite(value)) setGraphZoom(value)
-    } catch {
-        window.localStorage.removeItem(graphZoomStorageKey)
-    }
-}
-
-const savePersistedGraphZoom = () => {
-    try {
-        window.localStorage.setItem(graphZoomStorageKey, String(graphZoom.value))
-    } catch {
-        // Ignore storage failures; wheel zoom should still work for this session.
-    }
-}
-
-const savePersistedPositions = () => {
-    const data: Partial<Record<HubModuleId, Point>> = {}
-
-    for (const item of sortedModules.value) {
-        const point = nodePositions[item.id]
-        if (point) data[item.id] = { ...point }
-    }
-
-    try {
-        window.localStorage.setItem(positionStorageKey, JSON.stringify(data))
-    } catch {
-        // Ignore storage failures; dragging should still work for this session.
-    }
-}
-
-const isPoint = (value: unknown): value is Point => {
-    if (!value || typeof value !== 'object') return false
-
-    const point = value as Partial<Point>
-    return Number.isFinite(point.x) && Number.isFinite(point.y)
 }
 
 const shouldIgnoreGraphWheel = (target: EventTarget | null) => {
@@ -1646,7 +1120,7 @@ const handleGraphWheel = (event: WheelEvent) => {
     setGraphZoom(graphZoom.value * Math.exp(-delta * 0.0012))
     if (graphZoom.value !== previous) {
         event.preventDefault()
-        savePersistedGraphZoom()
+        savePersistedGraphZoom(graphZoom.value)
     }
 }
 
@@ -1686,10 +1160,29 @@ const graphRuntime = createGraphRuntime({
 })
 
 onMounted(() => {
-    loadPersistedGraphZoom()
-    loadPersistedPositions()
-    loadPersistedRange()
-    loadPersistedFontSize()
+    const zoom = loadPersistedGraphZoom()
+    if (zoom != null) setGraphZoom(zoom)
+
+    const positions = loadPersistedPositions(
+        sortedModules.value.map((item) => item.id)
+    )
+    for (const [id, point] of Object.entries(positions) as [
+        HubModuleId,
+        Point
+    ][]) {
+        nodePositions[id] = point
+    }
+
+    const range = loadPersistedRange({
+        defaultRadius: defaultEffectiveRangeRadiusPx.value,
+        minRadius: effectiveRangeMinRadiusPx,
+        maxRadius: effectiveRangeMaxRadiusPx.value
+    })
+    if (range != null) effectiveRangeRadiusInput.value = range
+
+    const fontSize = loadPersistedFontSize()
+    if (fontSize != null) detailFontSizePx.value = fontSize
+
     graphRuntime.start()
 })
 
@@ -1705,11 +1198,10 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
     resetActiveInteractionState()
     graphRuntime.stop()
-    for (const timer of Object.values(errorTimers)) {
-        if (timer) window.clearTimeout(timer)
-    }
+    disposeToggleErrors()
 })
 </script>
+
 
 <style scoped>
 .relationship-home {
