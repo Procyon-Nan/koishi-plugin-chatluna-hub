@@ -94,6 +94,10 @@ type HubModuleId =
     | 'forwardMsg'
     | 'llmWebSearch'
     | 'longMemory'
+    | 'pluginCommon'
+    | 'vectorStoreService'
+    | 'storageService'
+    | 'toolbox'
 ```
 
 Each module carries `installed`, `configured`, `available`, `configStatus`,

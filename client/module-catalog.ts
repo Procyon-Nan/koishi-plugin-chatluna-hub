@@ -111,6 +111,30 @@ const configFallbackModuleDefinitions = [
         title: 'Long Memory',
         icon: 'Collection',
         order: 190
+    }),
+    createConfigFallbackDefinition({
+        id: 'pluginCommon',
+        title: 'Plugin Common',
+        icon: 'Connection',
+        order: 200
+    }),
+    createConfigFallbackDefinition({
+        id: 'vectorStoreService',
+        title: 'Vector Store',
+        icon: 'Collection',
+        order: 210
+    }),
+    createConfigFallbackDefinition({
+        id: 'storageService',
+        title: 'Storage Service',
+        icon: 'Picture',
+        order: 220
+    }),
+    createConfigFallbackDefinition({
+        id: 'toolbox',
+        title: 'Toolbox',
+        icon: 'Link',
+        order: 230
     })
 ]
 
@@ -370,5 +394,56 @@ export const moduleDetails = {
             '提供 memory_search、memory_add、memory_delete、memory_update 工具'
         ],
         tip: '文档链接：https://chatluna.chat/ecosystem/plugin/long-term-memory.html'
+    },
+    pluginCommon: {
+        title: 'ChatLuna Plugin Common',
+        subtitle: 'Agent 模式通用工具集',
+        description:
+            '为 ChatLuna Agent 模式提供网络请求、定时任务、指令执行、文生图、代码沙箱与群管等扩展工具',
+        features: [
+            '网络请求与定时任务工具',
+            'Koishi 指令执行与代码沙箱',
+            '文生图与多媒体相关能力',
+            '群管理等 Agent 可调用工具'
+        ],
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/extension-tools.html'
+    },
+    vectorStoreService: {
+        title: 'ChatLuna Vector Store',
+        subtitle: '向量存储与 RAG 服务',
+        description:
+            '为 ChatLuna 提供向量存储后端与 RAG 能力，支持多种向量库实现',
+        features: [
+            '对接 Faiss、Redis、Milvus 等向量存储',
+            '为记忆与检索类插件提供底层 RAG 服务',
+            '统一向量写入与相似度检索接口',
+            '可按部署环境选择本地或远程存储'
+        ],
+        tip: '文档链接：https://chatluna.chat/guide/configure-chatluna/vector-store.html'
+    },
+    storageService: {
+        title: 'ChatLuna Storage Service',
+        subtitle: '文件中转存储服务',
+        description:
+            '为 ChatLuna 提供本地 / S3 / WebDAV / R2 等中转存储，使模型可访问公网或局域网资源 URL',
+        features: [
+            '支持本地与对象存储后端',
+            '将文件中转为模型可访问的 URL',
+            '可配置服务路径与访问策略',
+            '供多媒体与工具链插件复用'
+        ]
+    },
+    toolbox: {
+        title: 'ChatLuna Toolbox',
+        subtitle: 'OneBot 与 Character 工具扩展',
+        description:
+            '为 ChatLuna 提供原生 OneBot 工具、Character XML 动作与变量扩展（戳一戳、表情、撤回、群管等）',
+        features: [
+            'OneBot 原生动作与群管工具',
+            'Character XML 动作与变量扩展',
+            '戳一戳、表情与消息撤回等能力',
+            '主要面向 onebot 平台场景'
+        ],
+        tip: '文档链接：https://www.npmjs.com/package/koishi-plugin-chatluna-toolbox'
     }
 } satisfies Record<HubModuleId, ModuleDetail>

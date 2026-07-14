@@ -47,6 +47,10 @@ ChatLuna Hub 是一个面向 ChatLuna 生态的 Koishi Console 插件。它在 K
 | Forward Msg | `chatluna-forward-msg` |
 | LLM Web Search | `chatluna-llm-web-search` |
 | Long Memory | `chatluna-long-memory` |
+| Plugin Common | `chatluna-plugin-common` |
+| Vector Store | `chatluna-vector-store-service` |
+| Storage Service | `chatluna-storage-service` |
+| Toolbox | `chatluna-toolbox` |
 
 ## Adapter 管理
 

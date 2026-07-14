@@ -23,6 +23,10 @@ export type HubModuleId =
     | 'forwardMsg'
     | 'llmWebSearch'
     | 'longMemory'
+    | 'pluginCommon'
+    | 'vectorStoreService'
+    | 'storageService'
+    | 'toolbox'
 
 export type HubModuleIconName =
     | 'ChatRound'
@@ -207,6 +211,34 @@ const configModuleDefinitions = [
         icon: 'Collection',
         order: 190,
         pluginName: 'chatluna-long-memory'
+    }),
+    defineConfigModule({
+        id: 'pluginCommon',
+        title: 'Plugin Common',
+        icon: 'Connection',
+        order: 200,
+        pluginName: 'chatluna-plugin-common'
+    }),
+    defineConfigModule({
+        id: 'vectorStoreService',
+        title: 'Vector Store',
+        icon: 'Collection',
+        order: 210,
+        pluginName: 'chatluna-vector-store-service'
+    }),
+    defineConfigModule({
+        id: 'storageService',
+        title: 'Storage Service',
+        icon: 'Picture',
+        order: 220,
+        pluginName: 'chatluna-storage-service'
+    }),
+    defineConfigModule({
+        id: 'toolbox',
+        title: 'Toolbox',
+        icon: 'Link',
+        order: 230,
+        pluginName: 'chatluna-toolbox'
     })
 ]
 

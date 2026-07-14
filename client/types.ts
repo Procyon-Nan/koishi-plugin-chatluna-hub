@@ -16,6 +16,10 @@ export type HubModuleId =
     | 'forwardMsg'
     | 'llmWebSearch'
     | 'longMemory'
+    | 'pluginCommon'
+    | 'vectorStoreService'
+    | 'storageService'
+    | 'toolbox'
 
 export type HubModuleIconName =
     | 'ChatRound'
