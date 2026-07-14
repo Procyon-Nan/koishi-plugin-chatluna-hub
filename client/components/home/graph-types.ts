@@ -15,6 +15,10 @@ export interface GraphEdge {
     id: HubModuleId
     available: boolean
     muted: boolean
+    /** Outer config-ring edge (dim by default until hover/drag). */
+    config: boolean
+    /** Node focused or dragged — raise config-edge emphasis. */
+    emphasized: boolean
     risk: number
     color: string
     path: string

@@ -74,7 +74,9 @@
                             class="graph-edge edge-base"
                             :class="{
                                 disabled: edge.muted,
-                                risky: edge.risk > 0
+                                risky: edge.risk > 0,
+                                config: edge.config,
+                                emphasized: edge.emphasized
                             }"
                             :style="edgeStyle(edge)"
                             :d="edge.path"
@@ -85,7 +87,9 @@
                             class="graph-edge edge-flow"
                             :class="{
                                 disabled: edge.muted,
-                                risky: edge.risk > 0
+                                risky: edge.risk > 0,
+                                config: edge.config,
+                                emphasized: edge.emphasized
                             }"
                             :style="edgeStyle(edge)"
                             :d="edge.path"
@@ -465,14 +469,21 @@ const getEdgeRisk = (node: GraphNode) => {
 const edges = computed<GraphEdge[]>(() => {
     if (!coreNode.value) return []
 
+    // Outer config edges: always drawn faintly; hover/drag raises emphasis.
+    // Inner webui edges keep normal weight.
     return satelliteNodes.value.map((node) => {
         const edge = createEdge(coreNode.value!, node)
         const risk = getEdgeRisk(node)
+        const isConfig = node.ring === 'config'
+        const emphasized =
+            focusedNodeId.value === node.id || draggingId.value === node.id
 
         return {
             id: node.id,
             available: node.available,
             muted: isHubModuleDisabled(node) && draggingId.value !== node.id,
+            config: isConfig,
+            emphasized,
             risk,
             color: getEdgeColor(node, risk),
             path: createEdgePath(edge),

@@ -627,12 +627,54 @@
     animation: edge-flow 2.8s linear infinite;
 }
 
+/* Outer config ring: faint hairlines by default; no flow animation. */
+.edge-base.config {
+    stroke-width: 1;
+    stroke-dasharray: 3 5;
+    opacity: 0.14;
+}
+
+.edge-flow.config {
+    opacity: 0;
+    animation: none;
+}
+
+.animations-enabled .edge-flow.config {
+    opacity: 0;
+    animation: none;
+}
+
+.edge-base.config.emphasized {
+    stroke-dasharray: none;
+    stroke-width: 1.35;
+    opacity: 0.62;
+}
+
+.edge-base.config.emphasized.disabled {
+    opacity: 0.4;
+}
+
+.animations-enabled .edge-flow.config.emphasized {
+    opacity: 0.42;
+    animation: edge-flow 2.8s linear infinite;
+}
+
 .edge-base.risky {
     stroke-width: 1.75;
     opacity: 0.8;
 }
 
+.edge-base.config.risky {
+    stroke-dasharray: none;
+    stroke-width: 1.75;
+    opacity: 0.8;
+}
+
 .animations-enabled .edge-flow.risky {
+    opacity: 0.75;
+}
+
+.animations-enabled .edge-flow.config.risky {
     opacity: 0.75;
 }
 
@@ -646,8 +688,17 @@
     opacity: 0.35;
 }
 
+.edge-base.config.disabled:not(.emphasized) {
+    opacity: 0.1;
+}
+
 .edge-flow.disabled {
     opacity: 0;
+}
+
+.edge-flow.config.disabled {
+    opacity: 0;
+    animation: none;
 }
 
 .graph-node {
