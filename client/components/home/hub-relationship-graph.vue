@@ -6,17 +6,19 @@
     >
         <div class="graph-container-box">
             <header class="graph-header">
+                <span class="graph-kicker">Relationship map</span>
                 <h1>ChatLuna Hub</h1>
-                <p>ChatLuna &#29983;&#24577;&#32593;&#32476;</p>
+                <p>ChatLuna 生态网络</p>
             </header>
 
             <aside class="ecosystem-meter" aria-label="ChatLuna ecosystem plugins">
-                <span>ChatLuna &#29983;&#24577;&#25554;&#20214;</span>
+                <span class="meter-label">生态插件</span>
                 <strong>{{ availableEcosystemCount }} / {{ ecosystemModuleCount }}</strong>
-                <small>&#21487;&#29992; / &#20840;&#37096;</small>
+                <span class="meter-hint">可用 / 全部</span>
             </aside>
 
             <aside class="range-control" aria-label="ChatLuna effective range">
+                <span class="range-control-label">有效范围</span>
                 <div class="range-control-row">
                     <input
                         :value="Math.round(effectiveRangeRadiusPx)"
@@ -24,7 +26,7 @@
                         :min="effectiveRangeMinRadiusPx"
                         :max="Math.round(effectiveRangeMaxRadiusPx)"
                         step="4"
-                        aria-label="&#35843;&#25972; ChatLuna &#26377;&#25928;&#33539;&#22260;"
+                        aria-label="调整 ChatLuna 有效范围"
                         @input="handleRangeControlInput"
                         @pointerdown="handleRangeControlInteractionStart"
                         @pointerup="handleRangeControlInteractionEnd"
@@ -35,7 +37,7 @@
                         type="button"
                         @click="handleResetGraphDefaults"
                     >
-                        &#37325;&#32622;
+                        重置
                     </button>
                 </div>
             </aside>
@@ -56,16 +58,6 @@
                     aria-hidden="true"
                     focusable="false"
                 >
-                    <defs>
-                        <filter id="hub-graph-glow" x="-45%" y="-45%" width="190%" height="190%">
-                            <feGaussianBlur stdDeviation="4" result="blur" />
-                            <feMerge>
-                                <feMergeNode in="blur" />
-                                <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                        </filter>
-                    </defs>
-
                     <ellipse
                         v-if="effectiveRange && effectiveRangePreviewVisible"
                         class="effective-range"

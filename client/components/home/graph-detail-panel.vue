@@ -37,11 +37,11 @@
                             class="detail-status-indicator"
                             :class="{ 'is-active': statusActive }"
                         >
-                            <el-icon :size="15">
-                                <component
-                                    :is="statusActive ? Connection : Collection"
-                                />
-                            </el-icon>
+                                <el-icon :size="14">
+                                    <component
+                                        :is="statusActive ? Connection : Collection"
+                                    />
+                                </el-icon>
                             <span>{{ statusText }}</span>
                         </div>
 
@@ -74,49 +74,34 @@
 
                     <div v-else class="detail-card-default">
                         <div class="default-icon">
-                            <el-icon :size="38">
+                            <el-icon :size="20">
                                 <Guide />
                             </el-icon>
                         </div>
-                        <h3>ChatLuna生态网络图谱</h3>
+                        <h3>生态网络图谱</h3>
                         <p>
-                            ChatLuna 的核心功能、插件 WebUI 与插件配置入口
+                            浏览 Core、WebUI 与配置入口；悬停节点查看说明。
                         </p>
                         <div class="guide-steps">
                             <div class="step-item">
                                 <span class="step-num">1</span>
-                                <p>
-                                    将鼠标悬停在任意节点上，即可在此卡片中显示该节点所属插件的功能与介绍
-                                </p>
+                                <p>悬停节点：右侧卡片显示插件说明与状态</p>
                             </div>
-                            <div class="step-item"></div>
                             <div class="step-item">
                                 <span class="step-num">2</span>
-                                <p>
-                                    按住鼠标左键可以拖动节点。拖动 ChatLuna
-                                    主节点时，各子节点会被间接拖动；拖动子节点时，不会影响其他节点的位置
-                                </p>
+                                <p>拖动节点：主节点带动卫星；卫星可单独定位</p>
                             </div>
-                            <div class="step-item"></div>
                             <div class="step-item">
                                 <span class="step-num">3</span>
-                                <p>
-                                    支持开关控制的生态节点被拖动到距离主节点过远的位置时，该节点所属插件将会被关闭
-                                </p>
+                                <p>拖出有效范围：可切换的生态插件将被关闭</p>
                             </div>
-                            <div class="step-item"></div>
                             <div class="step-item">
                                 <span class="step-num">4</span>
-                                <p>
-                                    未安装、未配置和多配置节点不会触发插件开关操作
-                                </p>
+                                <p>未安装 / 未配置 / 多配置：不触发开关</p>
                             </div>
-                            <div class="step-item"></div>
                             <div class="step-item">
                                 <span class="step-num">5</span>
-                                <p>
-                                    如果节点位置混乱，请活用页面左下角的重置按钮
-                                </p>
+                                <p>布局混乱时，使用左下角「重置」</p>
                             </div>
                         </div>
                     </div>
