@@ -125,6 +125,7 @@ WebUI route paths are defined in `src/webui/modules.ts` and mirrored in
 - `livingMemory` -> `/chatluna-livingmemory`
 - `mediaLuna` -> `/media-luna`
 - `memesLuna` -> `/memesluna/`
+- `affinity` -> `/chatluna-affinity/dashboard`
 
 `client/components/layout/hub-shell.vue` opens `target.routePath`; it should not
 carry a separate route map.
@@ -145,6 +146,7 @@ Koishi console `activity` bail hook. Current hidden ids/paths include:
 - `chatluna-livingmemory` / `/chatluna-livingmemory`
 - `media-luna` / `/media-luna`
 - `memesluna` / `/memesluna` and `/memesluna/`
+- `chatluna-affinity-dashboard` / `/chatluna-affinity/dashboard`
 
 Do not hide Hub's own `/chatluna` activity.
 

@@ -89,12 +89,6 @@ const configFallbackModuleDefinitions = [
         order: 140
     }),
     createConfigFallbackDefinition({
-        id: 'affinity',
-        title: 'Affinity',
-        icon: 'Star',
-        order: 150
-    }),
-    createConfigFallbackDefinition({
         id: 'searchService',
         title: 'Search Service',
         icon: 'Search',
@@ -178,6 +172,18 @@ export const fallbackModules: HubModuleItem[] = [
         toggleable: true,
         activityId: 'memesluna',
         routePath: '/memesluna/'
+    },
+    {
+        id: 'affinity',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'Affinity',
+        icon: 'Star',
+        order: 50,
+        toggleable: true,
+        activityId: 'chatluna-affinity-dashboard',
+        routePath: '/chatluna-affinity/dashboard'
     },
     ...configFallbackModuleDefinitions
 ].map(createFallbackModule)

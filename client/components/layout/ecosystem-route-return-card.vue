@@ -13,7 +13,8 @@ const visible = computed(
         router.currentRoute.value.path === '/chatluna-livingmemory' ||
         router.currentRoute.value.path === '/media-luna' ||
         router.currentRoute.value.path === '/memesluna/' ||
-        router.currentRoute.value.path === '/memesluna'
+        router.currentRoute.value.path === '/memesluna' ||
+        router.currentRoute.value.path === '/chatluna-affinity/dashboard'
 )
 
 const returnHome = () => {

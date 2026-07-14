@@ -8,7 +8,8 @@ const hiddenEcosystemActivities = new Set([
     'chatluna-agent',
     'chatluna-livingmemory',
     'media-luna',
-    'memesluna'
+    'memesluna',
+    'chatluna-affinity-dashboard'
 ])
 
 const hiddenEcosystemActivityPaths = new Set([
@@ -16,7 +17,8 @@ const hiddenEcosystemActivityPaths = new Set([
     '/chatluna-livingmemory',
     '/media-luna',
     '/memesluna',
-    '/memesluna/'
+    '/memesluna/',
+    '/chatluna-affinity/dashboard'
 ])
 
 const dependencyGraphActivityId = 'graph'

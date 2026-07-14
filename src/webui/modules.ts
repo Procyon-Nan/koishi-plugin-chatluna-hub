@@ -181,13 +181,6 @@ const configModuleDefinitions = [
         pluginName: 'chatluna-group-analysis'
     }),
     defineConfigModule({
-        id: 'affinity',
-        title: 'Affinity',
-        icon: 'Star',
-        order: 150,
-        pluginName: 'chatluna-affinity'
-    }),
-    defineConfigModule({
         id: 'searchService',
         title: 'Search Service',
         icon: 'Search',
@@ -278,6 +271,19 @@ export const moduleDefinitions: HubModuleDefinition[] = [
         pluginName: 'memesluna',
         activityId: 'memesluna',
         routePath: '/memesluna/',
+        toggleable: true
+    },
+    {
+        id: 'affinity',
+        group: 'ecosystem',
+        entryType: 'webui',
+        ring: 'webui',
+        title: 'Affinity',
+        icon: 'Star',
+        order: 50,
+        pluginName: 'chatluna-affinity',
+        activityId: 'chatluna-affinity-dashboard',
+        routePath: '/chatluna-affinity/dashboard',
         toggleable: true
     },
     ...configModuleDefinitions

@@ -29,6 +29,7 @@ ChatLuna Hub 是一个面向 ChatLuna 生态的 Koishi Console 插件。它在 K
 | Living Memory | Ecosystem WebUI | `chatluna-livingmemory` | `/chatluna-livingmemory` |
 | media-luna | Ecosystem WebUI | `media-luna` | `/media-luna` |
 | memesluna | Ecosystem WebUI | `memesluna` | `/memesluna/` |
+| Affinity | Ecosystem WebUI | `chatluna-affinity` | `/chatluna-affinity/dashboard` |
 
 生态 WebUI 插件的原始路由不会被移除。Hub 只隐藏重复侧边栏活动入口，并通过全局返回卡片让用户回到 `/chatluna?home=1`。
 
@@ -42,7 +43,6 @@ ChatLuna Hub 是一个面向 ChatLuna 生态的 Koishi Console 插件。它在 K
 | Multimodal Service | `chatluna-multimodal-service` |
 | Usage | `chatluna-usage` |
 | Group Analysis | `chatluna-group-analysis` |
-| Affinity | `chatluna-affinity` |
 | Search Service | `chatluna-search-service` |
 | Forward Msg | `chatluna-forward-msg` |
 | LLM Web Search | `chatluna-llm-web-search` |
