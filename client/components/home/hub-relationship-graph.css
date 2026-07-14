@@ -21,9 +21,9 @@
     --hub-type-lg: 18px;
     --hub-type-xl: 24px;
     --hub-type-display: 28px;
-    --hub-grid: 16px;
     --hub-panel-width: 480px;
     --hub-panel-height: min(760px, calc(100% - 40px));
+    --hub-node-fill: var(--k-card-bg, var(--k-page-bg, #fff));
 
     position: relative;
     width: 100%;
@@ -34,34 +34,6 @@
     background: var(--k-page-bg, transparent);
     font-size: var(--hub-type-base);
     line-height: 1.45;
-}
-
-.relationship-home::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background-image:
-        linear-gradient(
-            color-mix(in srgb, var(--k-color-divider), transparent 35%) 1px,
-            transparent 1px
-        ),
-        linear-gradient(
-            90deg,
-            color-mix(in srgb, var(--k-color-divider), transparent 35%) 1px,
-            transparent 1px
-        );
-    background-size: var(--hub-grid) var(--hub-grid);
-    background-position: 0 0;
-    opacity: 0.45;
-    -webkit-mask-image: linear-gradient(
-        180deg,
-        #000 0%,
-        #000 72%,
-        transparent 100%
-    );
-    mask-image: linear-gradient(180deg, #000 0%, #000 72%, transparent 100%);
 }
 
 .graph-container-box {
@@ -597,6 +569,8 @@
 
 .graph-svg {
     overflow: visible;
+    z-index: 0;
+    pointer-events: none;
 }
 
 .edge-layer {
@@ -680,6 +654,7 @@
     position: absolute;
     left: 0;
     top: 0;
+    z-index: 2;
     width: calc(var(--node-size) + 40px);
     min-height: calc(var(--node-size) + 48px);
     padding: 0;
@@ -693,11 +668,15 @@
     cursor: pointer;
     touch-action: none;
     user-select: none;
+    /* Keep full opacity so discs always occlude edges (enabled or not). */
+    opacity: 1;
     transform:
         translate(var(--node-px, 0px), var(--node-py, 0px))
         translate(-50%, calc(var(--node-size) / -2));
     will-change: transform;
-    transition: opacity var(--hub-duration) var(--hub-ease);
+    transition:
+        color var(--hub-duration) var(--hub-ease),
+        filter var(--hub-duration) var(--hub-ease);
 }
 
 .graph-node:focus-visible {
@@ -706,6 +685,7 @@
 }
 
 .graph-node.dragging {
+    z-index: 3;
     cursor: grabbing;
     transition-duration: 0.01ms;
 }
@@ -715,12 +695,32 @@
     cursor: grab;
 }
 
-.graph-node.disabled {
-    opacity: 0.48;
+.graph-node.disabled .node-disc {
+    color: color-mix(in srgb, var(--node-tone), var(--k-text-light) 42%);
+    border-color: color-mix(in srgb, var(--k-color-divider), var(--node-tone) 28%);
+    background: var(--hub-node-fill);
+    box-shadow: none;
 }
 
-.graph-node.pending {
-    opacity: 0.7;
+.graph-node.disabled .node-title {
+    color: var(--k-text-normal);
+}
+
+.graph-node.disabled .node-status {
+    color: var(--k-text-light);
+}
+
+.graph-node.disabled .node-glow {
+    opacity: 0;
+    animation: none;
+}
+
+.graph-node.pending .node-disc {
+    border-style: dotted;
+}
+
+.graph-node.pending .node-status {
+    color: var(--k-color-warning);
 }
 
 .graph-node.out-of-range .node-status {
@@ -729,6 +729,7 @@
 
 .node-disc {
     position: relative;
+    z-index: 1;
     width: var(--node-size);
     height: var(--node-size);
     border: 1px solid color-mix(in srgb, var(--node-tone), var(--k-color-divider) 30%);
@@ -736,15 +737,27 @@
     display: grid;
     place-items: center;
     color: var(--node-tone);
-    background: color-mix(in srgb, var(--k-card-bg), var(--node-tone) 6%);
+    /* Opaque fill so edge paths never bleed through the disc. */
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 8%),
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 8%)
+        ),
+        var(--hub-node-fill);
     box-shadow: var(--hub-shadow);
     overflow: hidden;
+    isolation: isolate;
 }
 
 .graph-node.core .node-disc {
     border-width: 1.5px;
     border-color: color-mix(in srgb, var(--node-tone), var(--k-color-divider) 15%);
-    background: color-mix(in srgb, var(--k-card-bg), var(--node-tone) 10%);
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 12%),
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 12%)
+        ),
+        var(--hub-node-fill);
     box-shadow:
         var(--hub-shadow),
         0 0 0 3px color-mix(in srgb, var(--node-tone), transparent 90%);
@@ -753,7 +766,12 @@
 .graph-node.configurable .node-disc {
     border-style: dashed;
     border-color: color-mix(in srgb, var(--node-tone), var(--k-color-divider) 20%);
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-hover-bg) 50%);
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--hub-node-fill), var(--k-hover-bg) 35%),
+            color-mix(in srgb, var(--hub-node-fill), var(--k-hover-bg) 35%)
+        ),
+        var(--hub-node-fill);
     box-shadow: none;
 }
 
