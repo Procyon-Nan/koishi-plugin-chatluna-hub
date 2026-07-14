@@ -406,7 +406,7 @@ export const moduleDetails = {
             '文生图与多媒体相关能力',
             '群管理等 Agent 可调用工具'
         ],
-        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/extension-tools.html'
+        tip: '文档链接：https://chatluna.chat/ecosystem/plugin/common.html'
     },
     vectorStoreService: {
         title: 'ChatLuna Vector Store',
@@ -419,7 +419,7 @@ export const moduleDetails = {
             '统一向量写入与相似度检索接口',
             '可按部署环境选择本地或远程存储'
         ],
-        tip: '文档链接：https://chatluna.chat/guide/configure-chatluna/vector-store.html'
+        tip: '文档链接：https://chatluna.chat/guide/configure-vector-database/introduction.html'
     },
     storageService: {
         title: 'ChatLuna Storage Service',
@@ -444,6 +444,6 @@ export const moduleDetails = {
             '戳一戳、表情与消息撤回等能力',
             '主要面向 onebot 平台场景'
         ],
-        tip: '文档链接：https://www.npmjs.com/package/koishi-plugin-chatluna-toolbox'
+        tip: '文档链接：https://github.com/Sor85/koishi-plugin-chatluna-toolbox'
     }
 } satisfies Record<HubModuleId, ModuleDetail>
