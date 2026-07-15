@@ -67,5 +67,5 @@ export const getDetailStatusText = (item: HubModuleItem) => {
     if (item.configStatus === 'multiple') return '存在多份配置'
     if (item.entryType === 'config' && !item.toggleable) return '插件配置入口'
 
-    return item.available ? '已启用 (Ready)' : '未启用 (Disabled)'
+    return item.available ? '已启用' : '未启用'
 }

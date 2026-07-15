@@ -22,6 +22,9 @@
     --hub-type-xl: 24px;
     --hub-panel-width: 500px;
     --hub-panel-height: 280px;
+    /* Detail rail module icon: frame size; glyph tracks at ~58%. */
+    --hub-detail-icon-size: 82px;
+    --hub-detail-icon-glyph: calc(var(--hub-detail-icon-size) * 0.58);
     --hub-node-fill: var(--k-card-bg, var(--k-page-bg, #fff));
 
     position: relative;
@@ -74,7 +77,7 @@
 
 .detail-panel-content {
     box-sizing: border-box;
-    padding: var(--hub-space-6) var(--hub-space-5) var(--hub-space-4);
+    padding: 64px var(--hub-space-5) var(--hub-space-4);
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -99,47 +102,37 @@
     width: 100%;
 }
 
-.detail-icon {
-    width: 40px;
-    height: 40px;
+.detail-icon,
+.default-icon {
+    width: var(--hub-detail-icon-size);
+    height: var(--hub-detail-icon-size);
     border: var(--hub-border);
-    border-radius: var(--hub-radius-sm);
+    border-radius: var(--hub-radius-md);
     display: grid;
     place-items: center;
+}
+
+.detail-icon {
     color: var(--detail-tone);
     background: color-mix(in srgb, var(--detail-tone), transparent 92%);
 }
 
-.detail-icon .chatluna-mark.mini,
-.detail-icon .agent-mark.mini,
-.detail-icon .palette-mark.mini,
-.detail-icon .memesluna-mark.mini,
-.detail-icon .livingmemory-mark.mini {
-    width: 22px;
-    height: 22px;
+/* Detail rail only — graph marks keep `.chatluna-mark` etc. rules below. */
+.detail-icon .chatluna-mark,
+.detail-icon .agent-mark,
+.detail-icon .palette-mark,
+.detail-icon .memesluna-mark,
+.detail-icon .livingmemory-mark {
+    width: var(--hub-detail-icon-glyph);
+    height: var(--hub-detail-icon-glyph);
 }
 
-.detail-tag {
-    font-size: var(--hub-type-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 6px;
-    border-radius: var(--hub-radius-sm);
-    line-height: 1.2;
-    border: var(--hub-border);
-}
-
-.detail-tag.core {
-    color: var(--k-color-primary);
-    background: color-mix(in srgb, var(--k-color-primary), transparent 92%);
-    border-color: color-mix(in srgb, var(--k-color-primary), var(--k-color-divider) 55%);
-}
-
-.detail-tag.ecosystem {
-    color: var(--k-color-success);
-    background: color-mix(in srgb, var(--k-color-success), transparent 92%);
-    border-color: color-mix(in srgb, var(--k-color-success), var(--k-color-divider) 55%);
+/* Override el-icon :size inline from graph-node-mark (graph nodes unchanged). */
+.detail-icon .el-icon,
+.default-icon .el-icon {
+    width: var(--hub-detail-icon-glyph) !important;
+    height: var(--hub-detail-icon-glyph) !important;
+    font-size: var(--hub-detail-icon-glyph) !important;
 }
 
 .detail-heading h3 {
@@ -261,14 +254,8 @@
 }
 
 .default-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--hub-radius-sm);
-    border: var(--hub-border);
     background: color-mix(in srgb, var(--k-color-primary), transparent 94%);
     color: var(--k-color-primary);
-    display: grid;
-    place-items: center;
 }
 
 .guide-steps {
@@ -413,21 +400,11 @@
     bottom: max(var(--hub-space-6), env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
     width: min(248px, calc(100% - 32px));
-    padding: var(--hub-space-3);
+    padding: var(--hub-space-2) var(--hub-space-3);
     border: var(--hub-border);
     border-radius: var(--hub-radius-md);
     background: var(--k-card-bg);
     box-shadow: var(--hub-shadow);
-    display: grid;
-    gap: var(--hub-space-2);
-}
-
-.range-control-label {
-    font-size: var(--hub-type-xs);
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: var(--k-text-light);
 }
 
 .range-control-row {
@@ -804,6 +781,30 @@
     z-index: 1;
 }
 
+/* Core > webui (inner) > config (outer) glyph scale */
+.graph-node.core .chatluna-mark {
+    width: 72px;
+    height: 72px;
+    color: currentColor;
+}
+
+.graph-node.satellite:not(.configurable) .agent-mark,
+.graph-node.satellite:not(.configurable) .palette-mark,
+.graph-node.satellite:not(.configurable) .memesluna-mark,
+.graph-node.satellite:not(.configurable) .livingmemory-mark {
+    /* Override livingMemory inline style from graph-node-mark */
+    width: 52px !important;
+    height: 52px !important;
+    color: currentColor;
+}
+
+.graph-node.satellite:not(.configurable) .node-disc .el-icon {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 40px !important;
+}
+
+/* Config ring (outer): keep smaller fixed marks / el-icon default */
 .chatluna-mark {
     width: 56px;
     height: 56px;
@@ -921,6 +922,25 @@
 
     .font-size-adjuster {
         padding: var(--hub-space-2) var(--hub-space-4);
+    }
+
+    .graph-node.core .chatluna-mark {
+        width: 60px;
+        height: 60px;
+    }
+
+    .graph-node.satellite:not(.configurable) .agent-mark,
+    .graph-node.satellite:not(.configurable) .palette-mark,
+    .graph-node.satellite:not(.configurable) .memesluna-mark,
+    .graph-node.satellite:not(.configurable) .livingmemory-mark {
+        width: 46px;
+        height: 46px;
+    }
+
+    .graph-node.satellite:not(.configurable) .node-disc .el-icon {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 36px !important;
     }
 
     .chatluna-mark {

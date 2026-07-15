@@ -8,7 +8,6 @@
             </aside>
 
             <aside class="range-control" aria-label="ChatLuna effective range">
-                <span class="range-control-label">有效范围</span>
                 <div class="range-control-row">
                     <input
                         :value="Math.round(effectiveRangeRadiusPx)"

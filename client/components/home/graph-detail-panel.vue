@@ -20,12 +20,8 @@
                                 <graph-node-mark
                                     :module-id="module.id"
                                     :icon="module.icon"
-                                    mini
                                 />
                             </div>
-                            <span class="detail-tag" :class="module.group">
-                                {{ module.group === 'core' ? 'Core' : 'Ecosystem' }}
-                            </span>
                             <h3>{{ moduleDetail.title }}</h3>
                             <span class="detail-subtitle">
                                 {{ moduleDetail.subtitle }}
@@ -36,11 +32,6 @@
                             class="detail-status-indicator"
                             :class="{ 'is-active': statusActive }"
                         >
-                            <el-icon :size="14">
-                                <component
-                                    :is="statusActive ? Connection : Collection"
-                                />
-                            </el-icon>
                             <span>{{ statusText }}</span>
                         </div>
 
@@ -74,7 +65,7 @@
                     <div v-else class="detail-body detail-default">
                         <div class="detail-heading">
                             <div class="default-icon">
-                                <el-icon :size="20">
+                                <el-icon>
                                     <Guide />
                                 </el-icon>
                             </div>
@@ -128,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { Collection, Connection, Guide, Operation } from '@element-plus/icons-vue'
+import { Guide, Operation } from '@element-plus/icons-vue'
 import type { ModuleDetail } from '../../module-catalog'
 import type { HubModuleItem } from '../../types'
 import GraphNodeMark from './graph-node-mark.vue'
