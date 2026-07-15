@@ -659,7 +659,7 @@
     color: color-mix(in srgb, var(--node-tone), var(--k-text-light) 42%);
     border-color: color-mix(in srgb, var(--k-color-divider), var(--node-tone) 28%);
     background: var(--hub-node-fill);
-    box-shadow: none;
+    box-shadow: var(--hub-shadow);
 }
 
 .graph-node.disabled .node-title {
@@ -668,11 +668,6 @@
 
 .graph-node.disabled .node-status {
     color: var(--k-text-light);
-}
-
-.graph-node.disabled .node-glow {
-    opacity: 0;
-    animation: none;
 }
 
 .graph-node.pending .node-disc {
@@ -707,23 +702,57 @@
     box-shadow: var(--hub-shadow);
     overflow: hidden;
     isolation: isolate;
+    transition:
+        border-color 180ms ease,
+        box-shadow 180ms ease,
+        background 180ms ease,
+        filter 180ms ease,
+        transform 160ms ease;
 }
 
-.graph-node.core .node-disc {
-    border-width: 1.5px;
-    border-color: color-mix(in srgb, var(--node-tone), var(--k-color-divider) 15%);
+/* Live / running plugins only: outer halo (no internal bloom). */
+.graph-node.live .node-disc {
+    border-color: color-mix(in srgb, var(--node-tone), #ffffff 22%);
     background:
         linear-gradient(
-            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 12%),
-            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 12%)
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 14%),
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 14%)
         ),
         var(--hub-node-fill);
     box-shadow:
-        var(--hub-shadow),
-        0 0 0 3px color-mix(in srgb, var(--node-tone), transparent 90%);
+        0 0 10px color-mix(in srgb, var(--node-tone), transparent 48%),
+        0 0 24px color-mix(in srgb, var(--node-tone), transparent 62%),
+        0 0 42px color-mix(in srgb, var(--node-tone), transparent 78%),
+        var(--hub-shadow);
+    filter: saturate(1.06);
 }
 
-.graph-node.configurable .node-disc {
+.graph-node.core.live .node-disc {
+    border-width: 1.5px;
+    border-color: color-mix(in srgb, var(--node-tone), #ffffff 28%);
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 18%),
+            color-mix(in srgb, var(--hub-node-fill), var(--node-tone) 18%)
+        ),
+        var(--hub-node-fill);
+    box-shadow:
+        0 0 14px color-mix(in srgb, var(--node-tone), transparent 40%),
+        0 0 32px color-mix(in srgb, var(--node-tone), transparent 55%),
+        0 0 56px color-mix(in srgb, var(--node-tone), transparent 72%),
+        var(--hub-shadow);
+}
+
+.graph-node.live.configurable .node-disc {
+    border-style: dashed;
+    box-shadow:
+        0 0 8px color-mix(in srgb, var(--node-tone), transparent 58%),
+        0 0 20px color-mix(in srgb, var(--node-tone), transparent 72%),
+        0 0 34px color-mix(in srgb, var(--node-tone), transparent 84%),
+        var(--hub-shadow);
+}
+
+.graph-node.configurable:not(.live) .node-disc {
     border-style: dashed;
     border-color: color-mix(in srgb, var(--node-tone), var(--k-color-divider) 20%);
     background:
@@ -732,16 +761,44 @@
             color-mix(in srgb, var(--hub-node-fill), var(--k-hover-bg) 35%)
         ),
         var(--hub-node-fill);
-    box-shadow: none;
-}
-
-.graph-node.configurable .node-glow {
-    opacity: 0;
-    animation: none;
+    box-shadow: var(--hub-shadow);
 }
 
 .graph-node.configurable .node-status {
     color: color-mix(in srgb, var(--k-text-light), var(--node-tone) 15%);
+}
+
+.graph-node.live:hover .node-disc,
+.graph-node.live:focus-visible .node-disc {
+    border-color: color-mix(in srgb, var(--node-tone), #ffffff 40%);
+    box-shadow:
+        0 0 14px color-mix(in srgb, var(--node-tone), transparent 35%),
+        0 0 34px color-mix(in srgb, var(--node-tone), transparent 48%),
+        0 0 60px color-mix(in srgb, var(--node-tone), transparent 68%),
+        var(--hub-shadow);
+    filter: saturate(1.12) brightness(1.04);
+}
+
+.graph-node.core.live:hover .node-disc,
+.graph-node.core.live:focus-visible .node-disc {
+    box-shadow:
+        0 0 18px color-mix(in srgb, var(--node-tone), transparent 30%),
+        0 0 42px color-mix(in srgb, var(--node-tone), transparent 45%),
+        0 0 72px color-mix(in srgb, var(--node-tone), transparent 62%),
+        var(--hub-shadow);
+}
+
+.graph-node.live:active .node-disc {
+    transform: translateY(1px) scale(0.985);
+    filter: saturate(1.04) brightness(0.98);
+    box-shadow:
+        0 0 8px color-mix(in srgb, var(--node-tone), transparent 55%),
+        0 0 18px color-mix(in srgb, var(--node-tone), transparent 72%),
+        var(--hub-shadow);
+}
+
+.graph-node.live .node-status {
+    color: color-mix(in srgb, var(--node-tone), var(--k-text-normal) 28%);
 }
 
 .animations-enabled .satellite:not(.dragging) .node-disc {
@@ -757,18 +814,14 @@
     content: none;
 }
 
-.node-glow {
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: color-mix(in srgb, var(--node-tone), transparent 94%);
-    opacity: 0;
-    animation: none;
-    pointer-events: none;
+.animations-enabled .graph-node.core.live .node-disc {
+    animation: core-halo-breathe 3s ease-in-out infinite;
 }
 
-.animations-enabled .node-glow {
-    animation: glow-pulse 3.2s ease-in-out infinite;
+.animations-enabled .graph-node.core.live:hover .node-disc,
+.animations-enabled .graph-node.core.live:focus-visible .node-disc,
+.animations-enabled .graph-node.core.live:active .node-disc {
+    animation-play-state: paused;
 }
 
 .chatluna-mark,
@@ -857,14 +910,22 @@
     }
 }
 
-@keyframes glow-pulse {
+@keyframes core-halo-breathe {
     0%,
     100% {
-        opacity: 0;
+        box-shadow:
+            0 0 12px color-mix(in srgb, var(--node-tone), transparent 45%),
+            0 0 28px color-mix(in srgb, var(--node-tone), transparent 60%),
+            0 0 48px color-mix(in srgb, var(--node-tone), transparent 76%),
+            var(--hub-shadow);
     }
 
     50% {
-        opacity: 0.35;
+        box-shadow:
+            0 0 16px color-mix(in srgb, var(--node-tone), transparent 34%),
+            0 0 38px color-mix(in srgb, var(--node-tone), transparent 48%),
+            0 0 64px color-mix(in srgb, var(--node-tone), transparent 66%),
+            var(--hub-shadow);
     }
 }
 
@@ -963,12 +1024,12 @@
 
 @media (prefers-reduced-motion: reduce) {
     .edge-flow,
-    .node-disc,
-    .node-glow {
+    .node-disc {
         animation: none !important;
     }
 
-    .graph-node {
+    .graph-node,
+    .node-disc {
         transition-duration: 0.01ms !important;
     }
 

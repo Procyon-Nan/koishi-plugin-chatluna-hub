@@ -88,7 +88,7 @@
 
                     <button
                         v-if="coreNode"
-                        class="graph-node core"
+                        class="graph-node core live"
                         :class="{ dragging: draggingId === coreNode.id }"
                         :style="nodeStyle(coreNode)"
                         :title="coreNode.title"
@@ -98,7 +98,6 @@
                         @pointerleave="handleNodePointerLeave(coreNode.id)"
                     >
                         <span class="node-disc">
-                            <span class="node-glow" />
                             <graph-node-mark
                                 :module-id="coreNode.id"
                                 :icon="coreNode.icon"
@@ -113,6 +112,7 @@
                         :key="node.id"
                         class="graph-node satellite"
                         :class="{
+                            live: node.available,
                             disabled: isHubModuleDisabled(node),
                             configurable: node.entryType === 'config',
                             dragging: draggingId === node.id,
@@ -131,7 +131,6 @@
                         @pointerleave="handleNodePointerLeave(node.id)"
                     >
                         <span class="node-disc">
-                            <span class="node-glow" />
                             <graph-node-mark
                                 :module-id="node.id"
                                 :icon="node.icon"
