@@ -683,6 +683,65 @@
     transition-duration: 0.01ms;
 }
 
+.node-config-button {
+    --config-button-scale: 1;
+
+    position: absolute;
+    left: var(--config-button-px);
+    top: var(--config-button-py);
+    z-index: 4;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--node-tone), var(--k-color-divider) 35%);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--node-tone);
+    background: var(--hub-node-fill);
+    box-shadow:
+        0 2px 8px color-mix(in srgb, var(--k-text-dark), transparent 82%),
+        0 0 12px color-mix(in srgb, var(--node-tone), transparent 76%);
+    cursor: pointer;
+    touch-action: manipulation;
+    transform: translate(-50%, -50%) scale(var(--config-button-scale));
+    transition:
+        border-color var(--hub-duration) var(--hub-ease),
+        box-shadow var(--hub-duration) var(--hub-ease),
+        color var(--hub-duration) var(--hub-ease),
+        transform var(--hub-duration) var(--hub-ease);
+}
+
+.node-config-button .el-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+}
+
+.node-config-button:hover,
+.node-config-button:focus-visible {
+    --config-button-scale: 1.08;
+
+    border-color: color-mix(in srgb, var(--node-tone), #ffffff 25%);
+    color: color-mix(in srgb, var(--node-tone), var(--k-text-dark) 18%);
+    box-shadow:
+        0 3px 10px color-mix(in srgb, var(--k-text-dark), transparent 76%),
+        0 0 18px color-mix(in srgb, var(--node-tone), transparent 62%);
+}
+
+.node-config-button:focus-visible {
+    outline: 2px solid var(--node-tone);
+    outline-offset: 2px;
+}
+
+.node-config-button:active {
+    --config-button-scale: 0.94;
+}
+
+.node-config-button.dragging {
+    pointer-events: none;
+}
+
 .graph-node.core,
 .graph-node.satellite {
     cursor: grab;
@@ -1074,7 +1133,8 @@
     }
 
     .graph-node,
-    .node-disc {
+    .node-disc,
+    .node-config-button {
         transition-duration: 0.01ms !important;
     }
 

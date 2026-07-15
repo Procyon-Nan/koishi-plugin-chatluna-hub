@@ -60,6 +60,7 @@ export interface HubModuleItem {
     configStatus: HubModuleConfigStatus
     pluginName?: string
     configPath?: string
+    configRoutePath?: string
     routePath?: string
     reason?: string
     activityId?: string

@@ -121,41 +121,57 @@
                         <span class="node-status">Core</span>
                     </button>
 
-                    <button
-                        v-for="node in satelliteNodes"
-                        :key="node.id"
-                        class="graph-node satellite"
-                        :class="{
-                            live: node.available,
-                            disabled: isHubModuleDisabled(node),
-                            configurable: node.entryType === 'config',
-                            dragging: draggingId === node.id,
-                            pending: isNodePending(node.id),
-                            'out-of-range': isNodeOutOfRange(node)
-                        }"
-                        :style="nodeStyle(node)"
-                        :title="getNodeTitle(node)"
-                        :aria-disabled="
-                            isHubModuleDisabled(node) &&
-                            !canOpenHubModuleMarket(node) &&
-                            !canCreateHubModuleConfig(node)
-                        "
-                        type="button"
-                        @pointerdown="handleNodePointerDown($event, node)"
-                        @pointerenter="focusedNodeId = node.id"
-                        @pointerleave="handleNodePointerLeave(node.id)"
-                    >
-                        <span class="node-disc">
-                            <graph-node-mark
-                                :module-id="node.id"
-                                :icon="node.icon"
-                            />
-                        </span>
-                        <span class="node-title">{{ node.title }}</span>
-                        <span class="node-status">
-                            {{ resolveNodeStatus(node) }}
-                        </span>
-                    </button>
+                    <template v-for="node in satelliteNodes" :key="node.id">
+                        <button
+                            class="graph-node satellite"
+                            :class="{
+                                live: node.available,
+                                disabled: isHubModuleDisabled(node),
+                                configurable: node.entryType === 'config',
+                                dragging: draggingId === node.id,
+                                pending: isNodePending(node.id),
+                                'out-of-range': isNodeOutOfRange(node)
+                            }"
+                            :style="nodeStyle(node)"
+                            :title="getNodeTitle(node)"
+                            :aria-disabled="
+                                isHubModuleDisabled(node) &&
+                                !canOpenHubModuleMarket(node) &&
+                                !canCreateHubModuleConfig(node)
+                            "
+                            type="button"
+                            @pointerdown="handleNodePointerDown($event, node)"
+                            @pointerenter="focusedNodeId = node.id"
+                            @pointerleave="handleNodePointerLeave(node.id)"
+                        >
+                            <span class="node-disc">
+                                <graph-node-mark
+                                    :module-id="node.id"
+                                    :icon="node.icon"
+                                />
+                            </span>
+                            <span class="node-title">{{ node.title }}</span>
+                            <span class="node-status">
+                                {{ resolveNodeStatus(node) }}
+                            </span>
+                        </button>
+
+                        <button
+                            v-if="canOpenHubModuleConfig(node)"
+                            class="node-config-button"
+                            :class="{ dragging: draggingId === node.id }"
+                            :style="nodeConfigButtonStyle(node)"
+                            :title="`打开 ${node.title} 插件配置`"
+                            :aria-label="`打开 ${node.title} 插件配置`"
+                            type="button"
+                            @pointerdown.stop
+                            @pointerenter="focusedNodeId = node.id"
+                            @pointerleave="handleNodePointerLeave(node.id)"
+                            @click.stop="handleOpenModuleConfig(node)"
+                        >
+                            <el-icon><Tools /></el-icon>
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
@@ -183,9 +199,11 @@ import {
     reactive,
     ref
 } from 'vue'
+import { Tools } from '@element-plus/icons-vue'
 import {
     canCreateHubModuleConfig,
     canOpenHubModule,
+    canOpenHubModuleConfig,
     canOpenHubModuleMarket,
     canToggleHubModule,
     isHubModuleDisabled,
@@ -255,6 +273,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
     select: [id: HubModuleId]
+    'open-config': [id: HubModuleId]
 }>()
 
 const focusedNodeId = ref<HubModuleId | null>(null)
@@ -530,6 +549,17 @@ const nodeStyle = (node: GraphNode) => {
     } as Record<string, string>
 }
 
+const nodeConfigButtonStyle = (node: GraphNode) => {
+    const point = toScreenPoint(node, stageSize)
+    const offset = node.radius * Math.SQRT1_2
+
+    return {
+        ...nodeStyle(node),
+        '--config-button-px': `${point.x + offset}px`,
+        '--config-button-py': `${point.y + offset}px`
+    } as Record<string, string>
+}
+
 const edgeStyle = (edge: GraphEdge) =>
     ({
         color: edge.color
@@ -562,6 +592,12 @@ const selectModule = (item: HubModuleItem) => {
         return
     }
     emit('select', item.id)
+}
+
+const handleOpenModuleConfig = (item: HubModuleItem) => {
+    if (!canOpenHubModuleConfig(item)) return
+
+    emit('open-config', item.id)
 }
 
 const handleNodePointerLeave = (id: HubModuleId) => {

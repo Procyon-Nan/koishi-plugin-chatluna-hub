@@ -3,6 +3,7 @@ import { Context, Service } from 'koishi'
 import { coerceReason } from './shared'
 import {
     createHubModules,
+    getHubModuleConfigRoutePath,
     getHubModuleDefinition,
     type HubConsoleData,
     type HubModuleCreateConfigResult,
@@ -332,7 +333,7 @@ export class ChatLunaHubService extends Service {
                 moduleId,
                 status: 'exists',
                 configPath: moduleState.configPath,
-                routePath: moduleState.routePath
+                routePath: moduleState.configRoutePath
             }
         }
 
@@ -376,7 +377,7 @@ export class ChatLunaHubService extends Service {
                 moduleId,
                 status: 'created',
                 configPath,
-                routePath: `/plugins/${configPath}`
+                routePath: getHubModuleConfigRoutePath(configPath)
             }
         } catch (error) {
             return {

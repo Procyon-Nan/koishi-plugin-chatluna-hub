@@ -47,6 +47,7 @@
                     :modules="modules"
                     :animations-enabled="homeGraphAnimationsEnabled"
                     @select="handleSelect"
+                    @open-config="handleOpenConfig"
                 />
             </div>
         </div>
@@ -79,6 +80,7 @@ import MemesLunaIcon from '../../icons/memesluna.vue'
 import {
     canCreateHubModuleConfig,
     canOpenHubModule,
+    canOpenHubModuleConfig,
     canOpenHubModuleMarket
 } from '../../module-access'
 import { fallbackModules } from '../../module-catalog'
@@ -148,6 +150,13 @@ watch(
 
 const openModuleRoute = (routePath: string) => {
     void router.push(routePath)
+}
+
+const handleOpenConfig = (id: HubModuleId) => {
+    const target = modules.value.find((item) => item.id === id)
+    if (!target || !canOpenHubModuleConfig(target)) return
+
+    openModuleRoute(target.configRoutePath)
 }
 
 const handleSelect = async (id: HubModuleId) => {

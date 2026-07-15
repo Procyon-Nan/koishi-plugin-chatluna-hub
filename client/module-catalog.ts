@@ -23,6 +23,7 @@ type FallbackModuleDefinition = Omit<
     HubModuleItem,
     | 'available'
     | 'configPath'
+    | 'configRoutePath'
     | 'configStatus'
     | 'configured'
     | 'installed'

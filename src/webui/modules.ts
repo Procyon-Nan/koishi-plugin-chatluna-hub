@@ -67,6 +67,7 @@ export interface HubModuleItem {
     configStatus: HubModuleConfigStatus
     pluginName?: string
     configPath?: string
+    configRoutePath?: string
     routePath?: string
     reason?: string
     activityId?: string
@@ -118,6 +119,7 @@ export interface HubModuleDefinition extends Omit<
     HubModuleItem,
     | 'available'
     | 'configPath'
+    | 'configRoutePath'
     | 'configStatus'
     | 'configured'
     | 'installed'
@@ -131,6 +133,7 @@ export interface HubModuleRuntimeState {
     configStatus: HubModuleConfigStatus
     matches: PluginConfigMatch[]
     configPath?: string
+    configRoutePath?: string
     routePath?: string
     reason?: string
 }
@@ -468,12 +471,16 @@ const createUnavailableReason = (
     if (!available) return `Enable ${pluginName} to open this module.`
 }
 
+export const getHubModuleConfigRoutePath = (configPath: string) => {
+    return `/plugins/${configPath}`
+}
+
 const getModuleRoutePath = (
     definition: HubModuleDefinition,
-    configPath: string | undefined
+    configRoutePath: string | undefined
 ) => {
-    if (definition.entryType === 'config' && configPath) {
-        return `/plugins/${configPath}`
+    if (definition.entryType === 'config') {
+        return configRoutePath
     }
 
     return definition.routePath
@@ -491,7 +498,10 @@ export const resolveHubModuleState = async (
     const available = pluginName ? isPluginRunning(ctx, pluginName) : true
     const configStatus = getConfigStatus(pluginName, installed, matchCount)
     const configPath = configStatus === 'single' ? matches[0].path : undefined
-    const routePath = getModuleRoutePath(definition, configPath)
+    const configRoutePath = configPath
+        ? getHubModuleConfigRoutePath(configPath)
+        : undefined
+    const routePath = getModuleRoutePath(definition, configRoutePath)
     const reason = createUnavailableReason(pluginName, configStatus, available)
 
     return {
@@ -501,6 +511,7 @@ export const resolveHubModuleState = async (
         configStatus,
         matches,
         configPath,
+        configRoutePath,
         routePath,
         reason
     }
@@ -520,6 +531,7 @@ export const createHubModules = async (
                 available: state.available,
                 configStatus: state.configStatus,
                 configPath: state.configPath,
+                configRoutePath: state.configRoutePath,
                 routePath: state.routePath,
                 reason: state.reason,
                 marketPackageName: definition.pluginName

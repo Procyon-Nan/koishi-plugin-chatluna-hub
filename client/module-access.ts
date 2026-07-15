@@ -23,6 +23,17 @@ export const canOpenHubModuleMarket = (
     )
 }
 
+export const canOpenHubModuleConfig = (
+    item: HubModuleItem
+): item is HubModuleItem & { configRoutePath: string } => {
+    return (
+        item.entryType === 'webui' &&
+        item.installed &&
+        item.configStatus === 'single' &&
+        Boolean(item.configRoutePath)
+    )
+}
+
 /** Installed ecosystem plugin with no loader entry yet — create then open. */
 export const canCreateHubModuleConfig = (item: HubModuleItem) => {
     return (
