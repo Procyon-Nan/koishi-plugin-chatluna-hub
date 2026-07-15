@@ -1,30 +1,44 @@
 import type { HubModuleId, HubModuleItem } from '../../types'
 import type { GraphNode, ToggleDirection } from './graph-types'
 
+/** ChatLuna core — purple family (icon, edge, live halo). */
+export const coreNodeTone =
+    'color-mix(in srgb, #c084fc, #7c3aed 42%)'
+
+/** Outer config-ring satellites — shared light blue. */
+export const configNodeTone = '#7dd3fc'
+
+/**
+ * Inner webui-ring brand colors.
+ * Keep agent / mediaLuna / memesLuna; reassign livingMemory + affinity.
+ */
+const webuiToneById: Partial<Record<HubModuleId, string>> = {
+    agent: 'var(--k-color-success)',
+    mediaLuna: 'var(--k-color-warning)',
+    memesLuna: 'var(--k-color-danger)',
+    livingMemory: '#2563eb',
+    affinity: '#e879f9'
+}
+
+export const getActiveTone = (id: HubModuleId) => {
+    if (id === 'chatluna') return coreNodeTone
+    return webuiToneById[id] ?? configNodeTone
+}
+
 export const getTone = (item: HubModuleItem) => {
     if (!item.installed) return 'var(--k-text-light)'
     if (item.configStatus === 'not-configured') return 'var(--k-text-light)'
     if (item.configStatus === 'multiple') return 'var(--k-color-warning)'
     if (!item.available) return 'var(--k-text-light)'
-    if (item.id === 'agent') return 'var(--k-color-success)'
-    if (item.id === 'livingMemory') return 'var(--k-color-primary)'
-    if (item.id === 'mediaLuna') return 'var(--k-color-warning)'
-    if (item.id === 'memesLuna') return 'var(--k-color-danger)'
-    return 'var(--k-color-primary)'
-}
-
-export const getActiveTone = (id: HubModuleId) => {
-    if (id === 'agent') return 'var(--k-color-success)'
-    if (id === 'livingMemory') return 'var(--k-color-primary)'
-    if (id === 'mediaLuna') return 'var(--k-color-warning)'
-    if (id === 'memesLuna') return 'var(--k-color-danger)'
-    return 'var(--k-color-primary)'
+    if (item.id === 'chatluna') return coreNodeTone
+    if (item.ring === 'config') return configNodeTone
+    return getActiveTone(item.id)
 }
 
 export const getEdgeColor = (node: GraphNode, risk: number) => {
     const base =
         node.entryType === 'config'
-            ? node.tone
+            ? configNodeTone
             : node.available
               ? node.tone
               : getActiveTone(node.id)
@@ -40,6 +54,7 @@ export const getFloatDelay = (id: HubModuleId) => {
     if (id === 'livingMemory') return -2.2
     if (id === 'mediaLuna') return -3.4
     if (id === 'memesLuna') return -4.6
+    if (id === 'affinity') return -5.4
     return 0
 }
 

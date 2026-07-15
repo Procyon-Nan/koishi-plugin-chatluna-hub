@@ -359,40 +359,60 @@
     top: var(--hub-space-6);
     left: var(--hub-space-7);
     min-width: 0;
-    padding: 0;
+    padding: 0 0 0 12px;
     border: 0;
     border-radius: 0;
     display: grid;
-    gap: var(--hub-space-1);
+    gap: 4px;
     color: var(--k-text-dark);
     background: transparent;
     box-shadow: none;
+    border-left: 2px solid color-mix(in srgb, var(--k-color-primary), transparent 35%);
 }
 
-.ecosystem-meter .meter-label,
-.ecosystem-meter small {
+.ecosystem-meter .meter-label {
     color: var(--k-text-light);
-    font-size: var(--hub-type-xs);
+    font-size: 11px;
     line-height: 1.2;
-    font-weight: 600;
+    font-weight: 650;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
 }
 
-.ecosystem-meter strong {
-    font-size: var(--hub-type-xl);
-    line-height: 1.1;
-    font-weight: 700;
+.ecosystem-meter .meter-value {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1;
     font-variant-numeric: tabular-nums;
+}
+
+.ecosystem-meter .meter-available {
+    font-size: 28px;
+    font-weight: 750;
+    letter-spacing: -0.03em;
     color: var(--k-color-primary);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--k-color-primary), transparent 72%);
+}
+
+.ecosystem-meter .meter-sep {
+    font-size: 16px;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--k-text-light), transparent 20%);
+    transform: translateY(-1px);
+}
+
+.ecosystem-meter .meter-total {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--k-text-normal);
 }
 
 .ecosystem-meter .meter-hint {
-    color: var(--k-text-light);
-    font-size: var(--hub-type-sm);
+    color: color-mix(in srgb, var(--k-text-light), transparent 8%);
+    font-size: 11px;
     font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0;
+    letter-spacing: 0.04em;
 }
 
 .range-control {
@@ -489,6 +509,19 @@
         var(--k-text-light),
         var(--k-color-divider) 42%
     );
+}
+
+.config-orbit-ring {
+    fill: none;
+    stroke: color-mix(in srgb, var(--config-orbit-tone, #7dd3fc), transparent 42%);
+    stroke-width: 1.25;
+    opacity: 0.55;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.animations-enabled .config-orbit-ring {
+    animation: config-orbit-breathe 4.2s ease-in-out infinite;
 }
 
 .effective-range {
@@ -929,6 +962,17 @@
     }
 }
 
+@keyframes config-orbit-breathe {
+    0%,
+    100% {
+        opacity: 0.42;
+    }
+
+    50% {
+        opacity: 0.68;
+    }
+}
+
 @media (max-width: 1024px) {
     .relationship-home {
         flex-direction: column;
@@ -1024,7 +1068,8 @@
 
 @media (prefers-reduced-motion: reduce) {
     .edge-flow,
-    .node-disc {
+    .node-disc,
+    .config-orbit-ring {
         animation: none !important;
     }
 

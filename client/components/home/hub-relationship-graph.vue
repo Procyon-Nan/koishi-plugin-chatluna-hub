@@ -3,8 +3,12 @@
         <div ref="stageRef" class="graph-container-box">
             <aside class="ecosystem-meter" aria-label="ChatLuna ecosystem plugins">
                 <span class="meter-label">生态插件</span>
-                <strong>{{ availableEcosystemCount }} / {{ ecosystemModuleCount }}</strong>
-                <span class="meter-hint">可用 / 全部</span>
+                <div class="meter-value" aria-live="polite">
+                    <strong class="meter-available">{{ availableEcosystemCount }}</strong>
+                    <span class="meter-sep" aria-hidden="true">/</span>
+                    <span class="meter-total">{{ ecosystemModuleCount }}</span>
+                </div>
+                <span class="meter-hint">可用 · 全部</span>
             </aside>
 
             <aside class="range-control" aria-label="ChatLuna effective range">
@@ -47,6 +51,16 @@
                         aria-hidden="true"
                         focusable="false"
                     >
+                        <ellipse
+                            v-if="configOrbitRing"
+                            class="config-orbit-ring"
+                            :style="{ '--config-orbit-tone': configNodeTone }"
+                            :cx="configOrbitRing.cx"
+                            :cy="configOrbitRing.cy"
+                            :rx="configOrbitRing.rx"
+                            :ry="configOrbitRing.ry"
+                        />
+
                         <ellipse
                             v-if="effectiveRange && effectiveRangePreviewVisible"
                             class="effective-range"
@@ -204,6 +218,7 @@ import { createGraphRuntime } from './graph-runtime'
 import {
     clampNumber,
     clearRecord,
+    configOrbitRadiusPx,
     coreNodeMetrics,
     defaultDetailFontSizePx,
     effectiveRangeMinRadiusPx,
@@ -214,6 +229,8 @@ import {
     type PhysicsState
 } from './graph-types'
 import {
+    configNodeTone,
+    coreNodeTone,
     getDetailStatusText,
     getEdgeColor,
     getFloatDelay,
@@ -297,10 +314,7 @@ const activeModuleDetail = computed<ModuleDetail | null>(() => {
 })
 
 const activeDetailTone = computed(() => {
-    if (!activeDetailModule.value) return 'var(--k-color-primary)'
-    if (activeDetailModule.value.id === 'chatluna') {
-        return 'var(--k-color-primary)'
-    }
+    if (!activeDetailModule.value) return coreNodeTone
     return getTone(activeDetailModule.value)
 })
 
@@ -324,7 +338,7 @@ const coreNode = computed<GraphNode | null>(() => {
         y: base.y,
         size: coreNodeMetrics.size,
         radius: coreNodeMetrics.radius,
-        tone: 'color-mix(in srgb, var(--k-color-primary), mediumpurple 58%)'
+        tone: coreNodeTone
     }
 })
 
@@ -367,6 +381,18 @@ const effectiveRange = computed(() => {
         ry:
             effectiveRangeRadiusPx.value *
             (graphViewBoxHeight / stageSize.height)
+    }
+})
+
+/** Decorative outer ring at default config orbit; independent of node state. */
+const configOrbitRing = computed(() => {
+    if (!coreNode.value) return null
+
+    return {
+        cx: coreNode.value.x,
+        cy: coreNode.value.y,
+        rx: configOrbitRadiusPx * (graphViewBoxWidth / stageSize.width),
+        ry: configOrbitRadiusPx * (graphViewBoxHeight / stageSize.height)
     }
 })
 
