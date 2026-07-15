@@ -358,23 +358,32 @@ without checking privacy and storage impact.
 Main files:
 
 - `client/components/home/hub-relationship-graph.vue`
+- `client/components/home/graph-types.ts`
+- `client/components/home/graph-detail-panel.vue`
+- `client/components/home/hub-relationship-graph.css`
 - `client/components/home/graph-runtime.ts`
 - `client/components/home/graph-geometry.ts`
 - `client/module-access.ts`
 - `client/module-catalog.ts`
 
-Important adjustable defaults in `hub-relationship-graph.vue`:
+Home layout is a flex split: left graph stage (`graph-container-box`, owns
+`stageRef` for size/pointer metrics) and right detail rail
+(`hub-module-detail-panel`, left divider only, no card chrome). Adjust
+`--hub-panel-width` in `hub-relationship-graph.css` for rail width.
+
+Important adjustable defaults in `graph-types.ts` (unless noted):
 
 - `orbitRadiusPx`: default WebUI satellite distance from the ChatLuna node.
 - `configOrbitRadiusPx`: default config-entry satellite distance from the
   ChatLuna node.
 - `orbitSpeedRad`: default orbit speed.
-- `getDefaultCorePosition()`: default main node position.
+- `getDefaultCorePosition()`: default main node position (viewBox center).
 - `effectiveRangeMinRadiusPx`: minimum effective range slider value.
-- `defaultEffectiveRangeRadiusPx`: computed default effective range.
+- `defaultEffectiveRangeRadiusPx`: computed default effective range
+  (`hub-relationship-graph.vue`).
 - `positionStorageKey`: localStorage key for node positions.
 - `rangeStorageKey`: localStorage key for the effective range.
-- `detailFontSizeStorageKey`: localStorage key for detail card font size.
+- `detailFontSizeStorageKey`: localStorage key for detail rail font size.
 - `graphZoomStorageKey`: localStorage key for relationship graph zoom.
 
 The effective range ellipse is only a temporary preview while the user adjusts

@@ -20,12 +20,14 @@
     --hub-type-base: 14px;
     --hub-type-lg: 18px;
     --hub-type-xl: 24px;
-    --hub-type-display: 28px;
-    --hub-panel-width: 480px;
-    --hub-panel-height: min(760px, calc(100% - 40px));
+    --hub-panel-width: 500px;
+    --hub-panel-height: 280px;
     --hub-node-fill: var(--k-card-bg, var(--k-page-bg, #fff));
 
     position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
     width: 100%;
     height: 100%;
     min-height: 560px;
@@ -36,40 +38,33 @@
     line-height: 1.45;
 }
 
+/* Stage metrics (stageRef) are taken from this box only — not the detail rail. */
 .graph-container-box {
-    position: absolute;
-    inset: 0;
-    width: 100%;
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
     height: 100%;
     overflow: hidden;
     z-index: 1;
 }
 
-/* —— Surface cards —— */
-.hub-surface {
-    border: var(--hub-border);
-    border-radius: var(--hub-radius-md);
-    background: var(--k-card-bg);
-    box-shadow: var(--hub-shadow);
-}
-
+/* —— Detail rail: vertical divider, no card chrome —— */
 .hub-module-detail-panel {
-    position: absolute;
-    bottom: var(--hub-space-6);
-    right: var(--hub-space-7);
+    position: relative;
+    flex: 0 0 var(--hub-panel-width);
     width: var(--hub-panel-width);
-    height: var(--hub-panel-height);
-    border: var(--hub-border);
-    border-radius: var(--hub-radius-md);
-    background: var(--k-card-bg);
-    box-shadow: var(--hub-shadow);
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    border-left: var(--hub-border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     display: flex;
     flex-direction: column;
     z-index: 5;
     overflow: hidden;
-    transition:
-        border-color var(--hub-duration) var(--hub-ease),
-        box-shadow var(--hub-duration) var(--hub-ease);
 }
 
 .detail-panel-scroll {
@@ -79,7 +74,7 @@
 
 .detail-panel-content {
     box-sizing: border-box;
-    padding: var(--hub-space-5) var(--hub-space-4) var(--hub-space-4);
+    padding: var(--hub-space-6) var(--hub-space-5) var(--hub-space-4);
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -87,22 +82,21 @@
     gap: var(--hub-space-4);
 }
 
-.detail-card-inner {
+.detail-body {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    text-align: left;
     gap: var(--hub-space-4);
     width: 100%;
 }
 
-.detail-card-header {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
-    align-items: start;
-    gap: var(--hub-space-3);
+.detail-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--hub-space-2);
     width: 100%;
-    text-align: left;
 }
 
 .detail-icon {
@@ -123,15 +117,6 @@
 .detail-icon .livingmemory-mark.mini {
     width: 22px;
     height: 22px;
-}
-
-.header-titles {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    text-align: left;
-    gap: var(--hub-space-1);
-    min-width: 0;
 }
 
 .detail-tag {
@@ -157,24 +142,29 @@
     border-color: color-mix(in srgb, var(--k-color-success), var(--k-color-divider) 55%);
 }
 
-.header-titles h3 {
+.detail-heading h3 {
     margin: 0;
     font-size: calc(var(--detail-font-size) + 2px);
     font-weight: 700;
     color: var(--k-text-dark);
     line-height: 1.25;
+    text-align: center;
 }
 
 .detail-subtitle {
     font-size: calc(var(--detail-font-size) - 2px);
     color: var(--k-text-normal);
     font-weight: 500;
+    text-align: center;
+    line-height: 1.45;
 }
 
 .detail-status-indicator {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--hub-space-2);
+    margin-inline: auto;
     padding: 4px 8px;
     border-radius: var(--hub-radius-sm);
     font-size: calc(var(--detail-font-size) - 2px);
@@ -266,11 +256,8 @@
     overflow-wrap: anywhere;
 }
 
-.detail-card-default {
-    display: flex;
-    flex-direction: column;
-    gap: var(--hub-space-3);
-    width: 100%;
+.detail-default {
+    gap: var(--hub-space-4);
 }
 
 .default-icon {
@@ -284,28 +271,12 @@
     place-items: center;
 }
 
-.detail-card-default h3 {
-    margin: 0;
-    font-size: calc(var(--detail-font-size) + 2px);
-    font-weight: 700;
-    color: var(--k-text-dark);
-}
-
-.detail-card-default > p {
-    margin: 0;
-    font-size: var(--detail-font-size);
-    line-height: 1.55;
-    color: var(--k-text-normal);
-}
-
 .guide-steps {
     display: flex;
     flex-direction: column;
     gap: 0;
     width: 100%;
-    border: var(--hub-border);
-    border-radius: var(--hub-radius-sm);
-    overflow: hidden;
+    border-top: var(--hub-border);
 }
 
 .step-item {
@@ -313,9 +284,9 @@
     grid-template-columns: 28px minmax(0, 1fr);
     gap: var(--hub-space-3);
     align-items: start;
-    padding: var(--hub-space-3);
+    padding: var(--hub-space-3) 0;
     border-bottom: var(--hub-border);
-    background: var(--k-card-bg);
+    background: transparent;
 }
 
 .step-item:last-child {
@@ -348,9 +319,9 @@
     grid-template-columns: 14px minmax(0, 1fr) 36px;
     align-items: center;
     gap: var(--hub-space-2);
-    padding: var(--hub-space-3) var(--hub-space-4);
+    padding: var(--hub-space-3) var(--hub-space-5);
     border-top: var(--hub-border);
-    background: color-mix(in srgb, var(--k-card-bg), var(--k-hover-bg) 40%);
+    background: transparent;
     font-size: var(--hub-type-xs);
     color: var(--k-text-light);
     user-select: none;
@@ -390,64 +361,25 @@
     transform: translateY(-4px);
 }
 
-/* —— Chrome: header / meter / range —— */
-.graph-header,
+/* —— Chrome: meter / range —— */
 .ecosystem-meter,
 .range-control {
     position: absolute;
     z-index: 4;
 }
 
-.graph-header {
-    top: var(--hub-space-6);
-    left: var(--hub-space-7);
-    max-width: min(360px, calc(100% - 220px));
-    display: grid;
-    gap: var(--hub-space-2);
-}
-
-.graph-header .graph-kicker {
-    display: inline-flex;
-    width: fit-content;
-    padding: 2px 6px;
-    border: var(--hub-border);
-    border-radius: var(--hub-radius-sm);
-    color: var(--k-text-light);
-    background: var(--k-card-bg);
-    font-size: var(--hub-type-xs);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
-.graph-header h1 {
-    margin: 0;
-    font-size: var(--hub-type-display);
-    line-height: 1.15;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--k-text-dark);
-}
-
-.graph-header p {
-    margin: 0;
-    color: var(--k-text-light);
-    font-size: var(--hub-type-md);
-    line-height: 1.4;
-}
-
 .ecosystem-meter {
     top: var(--hub-space-6);
-    right: var(--hub-space-7);
-    min-width: 148px;
-    padding: var(--hub-space-3) var(--hub-space-4);
-    border: var(--hub-border);
-    border-radius: var(--hub-radius-md);
+    left: var(--hub-space-7);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
     display: grid;
     gap: var(--hub-space-1);
     color: var(--k-text-dark);
-    background: var(--k-card-bg);
-    box-shadow: var(--hub-shadow);
+    background: transparent;
+    box-shadow: none;
 }
 
 .ecosystem-meter .meter-label,
@@ -937,17 +869,26 @@
 
 @media (max-width: 1024px) {
     .relationship-home {
+        flex-direction: column;
         --hub-panel-width: auto;
         --hub-panel-height: 280px;
     }
 
+    .graph-container-box {
+        flex: 1 1 auto;
+        width: 100%;
+        height: auto;
+        min-height: 360px;
+    }
+
     .hub-module-detail-panel {
-        left: var(--hub-space-7);
-        right: var(--hub-space-7);
-        bottom: var(--hub-space-6);
-        width: auto;
+        flex: 0 0 auto;
+        width: 100%;
+        min-width: 0;
         height: auto;
         max-height: var(--hub-panel-height);
+        border-left: 0;
+        border-top: var(--hub-border);
     }
 }
 
@@ -957,21 +898,9 @@
         --hub-panel-height: 240px;
     }
 
-    .graph-header {
-        top: var(--hub-space-4);
-        left: var(--hub-space-4);
-        max-width: calc(100% - 170px);
-    }
-
-    .graph-header h1 {
-        font-size: var(--hub-type-xl);
-    }
-
     .ecosystem-meter {
         top: var(--hub-space-4);
-        right: var(--hub-space-4);
-        min-width: 120px;
-        padding: var(--hub-space-2) var(--hub-space-3);
+        left: var(--hub-space-4);
     }
 
     .range-control {
@@ -982,16 +911,16 @@
     }
 
     .hub-module-detail-panel {
-        bottom: max(var(--hub-space-3), env(safe-area-inset-bottom, 0px));
-        right: var(--hub-space-3);
-        left: var(--hub-space-3);
         max-height: var(--hub-panel-height);
-        border-radius: var(--hub-radius-md);
     }
 
     .detail-panel-content {
-        padding: var(--hub-space-3);
+        padding: var(--hub-space-3) var(--hub-space-4);
         gap: var(--hub-space-3);
+    }
+
+    .font-size-adjuster {
+        padding: var(--hub-space-2) var(--hub-space-4);
     }
 
     .chatluna-mark {
@@ -1009,18 +938,6 @@
     .node-title,
     .node-status {
         max-width: 112px;
-    }
-}
-
-@media (max-width: 520px) {
-    .graph-header {
-        max-width: calc(100% - 24px);
-    }
-
-    .ecosystem-meter {
-        top: 88px;
-        left: var(--hub-space-4);
-        right: auto;
     }
 }
 

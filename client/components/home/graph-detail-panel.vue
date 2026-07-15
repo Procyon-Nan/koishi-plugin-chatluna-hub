@@ -1,7 +1,8 @@
 <template>
-    <div
+    <aside
         class="hub-module-detail-panel"
         :style="{ '--detail-font-size': `${fontSizePx}px` }"
+        aria-label="模块说明"
     >
         <el-scrollbar class="detail-panel-scroll">
             <div class="detail-panel-content">
@@ -9,9 +10,9 @@
                     <div
                         v-if="moduleDetail && module"
                         :key="module.id"
-                        class="detail-card-inner"
+                        class="detail-body"
                     >
-                        <div class="detail-card-header">
+                        <div class="detail-heading">
                             <div
                                 class="detail-icon"
                                 :style="{ '--detail-tone': detailTone }"
@@ -22,26 +23,24 @@
                                     mini
                                 />
                             </div>
-                            <div class="header-titles">
-                                <span class="detail-tag" :class="module.group">
-                                    {{ module.group === 'core' ? 'Core' : 'Ecosystem' }}
-                                </span>
-                                <h3>{{ moduleDetail.title }}</h3>
-                                <span class="detail-subtitle">
-                                    {{ moduleDetail.subtitle }}
-                                </span>
-                            </div>
+                            <span class="detail-tag" :class="module.group">
+                                {{ module.group === 'core' ? 'Core' : 'Ecosystem' }}
+                            </span>
+                            <h3>{{ moduleDetail.title }}</h3>
+                            <span class="detail-subtitle">
+                                {{ moduleDetail.subtitle }}
+                            </span>
                         </div>
 
                         <div
                             class="detail-status-indicator"
                             :class="{ 'is-active': statusActive }"
                         >
-                                <el-icon :size="14">
-                                    <component
-                                        :is="statusActive ? Connection : Collection"
-                                    />
-                                </el-icon>
+                            <el-icon :size="14">
+                                <component
+                                    :is="statusActive ? Connection : Collection"
+                                />
+                            </el-icon>
                             <span>{{ statusText }}</span>
                         </div>
 
@@ -72,20 +71,22 @@
                         </div>
                     </div>
 
-                    <div v-else class="detail-card-default">
-                        <div class="default-icon">
-                            <el-icon :size="20">
-                                <Guide />
-                            </el-icon>
+                    <div v-else class="detail-body detail-default">
+                        <div class="detail-heading">
+                            <div class="default-icon">
+                                <el-icon :size="20">
+                                    <Guide />
+                                </el-icon>
+                            </div>
+                            <h3>生态网络图谱</h3>
+                            <span class="detail-subtitle">
+                                浏览 Core、WebUI 与配置入口；悬停节点查看说明。
+                            </span>
                         </div>
-                        <h3>生态网络图谱</h3>
-                        <p>
-                            浏览 Core、WebUI 与配置入口；悬停节点查看说明。
-                        </p>
                         <div class="guide-steps">
                             <div class="step-item">
                                 <span class="step-num">1</span>
-                                <p>悬停节点：右侧卡片显示插件说明与状态</p>
+                                <p>悬停节点：右侧显示插件说明与状态</p>
                             </div>
                             <div class="step-item">
                                 <span class="step-num">2</span>
@@ -117,13 +118,13 @@
                 min="12"
                 max="20"
                 step="1"
-                aria-label="调节卡片字体大小"
+                aria-label="调节说明区字体大小"
                 @input="handleFontSizeInput"
                 @change="handleFontSizeChange"
             />
             <span>{{ fontSizePx }}px</span>
         </div>
-    </div>
+    </aside>
 </template>
 
 <script setup lang="ts">

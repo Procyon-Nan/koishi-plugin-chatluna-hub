@@ -1,5 +1,9 @@
 import type { HubModuleId, HubModuleItem } from '../../types'
-import type { Point } from './graph-geometry'
+import {
+    graphViewBoxHeight,
+    graphViewBoxWidth,
+    type Point
+} from './graph-geometry'
 
 export type { Point }
 
@@ -99,8 +103,8 @@ export const graphZoomMax = 1.5
 export const defaultDetailFontSizePx = 18
 
 export const getDefaultCorePosition = (): Point => ({
-    x: 350,
-    y: 280
+    x: graphViewBoxWidth / 2,
+    y: graphViewBoxHeight / 2
 })
 
 export const clampNumber = (value: number, min: number, max: number) => {

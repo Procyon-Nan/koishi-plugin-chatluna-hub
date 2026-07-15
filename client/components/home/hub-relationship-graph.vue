@@ -1,16 +1,6 @@
 <template>
-    <section
-        ref="stageRef"
-        class="relationship-home"
-        @wheel="handleGraphWheel"
-    >
-        <div class="graph-container-box">
-            <header class="graph-header">
-                <span class="graph-kicker">Relationship map</span>
-                <h1>ChatLuna Hub</h1>
-                <p>ChatLuna 生态网络</p>
-            </header>
-
+    <section class="relationship-home" @wheel="handleGraphWheel">
+        <div ref="stageRef" class="graph-container-box">
             <aside class="ecosystem-meter" aria-label="ChatLuna ecosystem plugins">
                 <span class="meter-label">生态插件</span>
                 <strong>{{ availableEcosystemCount }} / {{ ecosystemModuleCount }}</strong>
@@ -50,108 +40,109 @@
                 }"
             >
                 <div class="graph-viewport" :style="graphViewportStyle">
-                <svg
-                    class="graph-svg"
-                    :viewBox="`0 0 ${graphViewBoxWidth} ${graphViewBoxHeight}`"
-                    overflow="visible"
-                    preserveAspectRatio="none"
-                    aria-hidden="true"
-                    focusable="false"
-                >
-                    <ellipse
-                        v-if="effectiveRange && effectiveRangePreviewVisible"
-                        class="effective-range"
-                        :cx="effectiveRange.cx"
-                        :cy="effectiveRange.cy"
-                        :rx="effectiveRange.rx"
-                        :ry="effectiveRange.ry"
-                    />
+                    <svg
+                        class="graph-svg"
+                        :viewBox="`0 0 ${graphViewBoxWidth} ${graphViewBoxHeight}`"
+                        overflow="visible"
+                        preserveAspectRatio="none"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <ellipse
+                            v-if="effectiveRange && effectiveRangePreviewVisible"
+                            class="effective-range"
+                            :cx="effectiveRange.cx"
+                            :cy="effectiveRange.cy"
+                            :rx="effectiveRange.rx"
+                            :ry="effectiveRange.ry"
+                        />
 
-                    <g v-if="coreNode" class="edge-layer">
-                        <path
-                            v-for="edge in edges"
-                            :key="edge.id"
-                            class="graph-edge edge-base"
-                            :class="{
-                                disabled: edge.muted,
-                                risky: edge.risk > 0,
-                                config: edge.config,
-                                emphasized: edge.emphasized
-                            }"
-                            :style="edgeStyle(edge)"
-                            :d="edge.path"
-                        />
-                        <path
-                            v-for="edge in edges"
-                            :key="`${edge.id}-flow`"
-                            class="graph-edge edge-flow"
-                            :class="{
-                                disabled: edge.muted,
-                                risky: edge.risk > 0,
-                                config: edge.config,
-                                emphasized: edge.emphasized
-                            }"
-                            :style="edgeStyle(edge)"
-                            :d="edge.path"
-                        />
-                    </g>
-                </svg>
+                        <g v-if="coreNode" class="edge-layer">
+                            <path
+                                v-for="edge in edges"
+                                :key="edge.id"
+                                class="graph-edge edge-base"
+                                :class="{
+                                    disabled: edge.muted,
+                                    risky: edge.risk > 0,
+                                    config: edge.config,
+                                    emphasized: edge.emphasized
+                                }"
+                                :style="edgeStyle(edge)"
+                                :d="edge.path"
+                            />
+                            <path
+                                v-for="edge in edges"
+                                :key="`${edge.id}-flow`"
+                                class="graph-edge edge-flow"
+                                :class="{
+                                    disabled: edge.muted,
+                                    risky: edge.risk > 0,
+                                    config: edge.config,
+                                    emphasized: edge.emphasized
+                                }"
+                                :style="edgeStyle(edge)"
+                                :d="edge.path"
+                            />
+                        </g>
+                    </svg>
 
-                <button
-                    v-if="coreNode"
-                    class="graph-node core"
-                    :class="{ dragging: draggingId === coreNode.id }"
-                    :style="nodeStyle(coreNode)"
-                    :title="coreNode.title"
-                    type="button"
-                    @pointerdown="handleNodePointerDown($event, coreNode)"
-                    @pointerenter="focusedNodeId = coreNode.id"
-                    @pointerleave="handleNodePointerLeave(coreNode.id)"
-                >
-                    <span class="node-disc">
-                        <span class="node-glow" />
-                        <graph-node-mark
-                            :module-id="coreNode.id"
-                            :icon="coreNode.icon"
-                        />
-                    </span>
-                    <span class="node-title">{{ coreNode.title }}</span>
-                    <span class="node-status">Core</span>
-                </button>
+                    <button
+                        v-if="coreNode"
+                        class="graph-node core"
+                        :class="{ dragging: draggingId === coreNode.id }"
+                        :style="nodeStyle(coreNode)"
+                        :title="coreNode.title"
+                        type="button"
+                        @pointerdown="handleNodePointerDown($event, coreNode)"
+                        @pointerenter="focusedNodeId = coreNode.id"
+                        @pointerleave="handleNodePointerLeave(coreNode.id)"
+                    >
+                        <span class="node-disc">
+                            <span class="node-glow" />
+                            <graph-node-mark
+                                :module-id="coreNode.id"
+                                :icon="coreNode.icon"
+                            />
+                        </span>
+                        <span class="node-title">{{ coreNode.title }}</span>
+                        <span class="node-status">Core</span>
+                    </button>
 
-                <button
-                    v-for="node in satelliteNodes"
-                    :key="node.id"
-                    class="graph-node satellite"
-                    :class="{
-                        disabled: isHubModuleDisabled(node),
-                        configurable: node.entryType === 'config',
-                        dragging: draggingId === node.id,
-                        pending: isNodePending(node.id),
-                        'out-of-range': isNodeOutOfRange(node)
-                    }"
-                    :style="nodeStyle(node)"
-                    :title="getNodeTitle(node)"
-                    :aria-disabled="
-                        isHubModuleDisabled(node) && !canOpenHubModuleMarket(node)
-                    "
-                    type="button"
-                    @pointerdown="handleNodePointerDown($event, node)"
-                    @pointerenter="focusedNodeId = node.id"
-                    @pointerleave="handleNodePointerLeave(node.id)"
-                >
-                    <span class="node-disc">
-                        <span class="node-glow" />
-                        <graph-node-mark
-                            :module-id="node.id"
-                            :icon="node.icon"
-                        />
-                    </span>
-                    <span class="node-title">{{ node.title }}</span>
-                    <span class="node-status">
-                        {{ resolveNodeStatus(node) }}
-                    </span>
-                </button>
+                    <button
+                        v-for="node in satelliteNodes"
+                        :key="node.id"
+                        class="graph-node satellite"
+                        :class="{
+                            disabled: isHubModuleDisabled(node),
+                            configurable: node.entryType === 'config',
+                            dragging: draggingId === node.id,
+                            pending: isNodePending(node.id),
+                            'out-of-range': isNodeOutOfRange(node)
+                        }"
+                        :style="nodeStyle(node)"
+                        :title="getNodeTitle(node)"
+                        :aria-disabled="
+                            isHubModuleDisabled(node) &&
+                            !canOpenHubModuleMarket(node)
+                        "
+                        type="button"
+                        @pointerdown="handleNodePointerDown($event, node)"
+                        @pointerenter="focusedNodeId = node.id"
+                        @pointerleave="handleNodePointerLeave(node.id)"
+                    >
+                        <span class="node-disc">
+                            <span class="node-glow" />
+                            <graph-node-mark
+                                :module-id="node.id"
+                                :icon="node.icon"
+                            />
+                        </span>
+                        <span class="node-title">{{ node.title }}</span>
+                        <span class="node-status">
+                            {{ resolveNodeStatus(node) }}
+                        </span>
+                    </button>
                 </div>
             </div>
         </div>
