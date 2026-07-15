@@ -5,12 +5,18 @@ import {
     createHubModules,
     getHubModuleDefinition,
     type HubConsoleData,
+    type HubModuleCreateConfigResult,
     type HubModuleId,
     type HubModuleToggleResult,
     isToggleableHubModule,
     resolveHubModuleState
 } from './modules'
-import { getLoader, renameConfigKey } from './loader'
+import {
+    createConfigIdent,
+    getConfigPathFromKey,
+    getLoader,
+    renameConfigKey
+} from './loader'
 import {
     type ChatLunaAdapterDeleteInput,
     type ChatLunaAdapterListResult,
@@ -73,6 +79,10 @@ export type { ChatLunaCreateModelService }
 
 export class ChatLunaHubService extends Service {
     private readonly coreLogStore: ChatLunaCoreLogStore
+    private readonly moduleConfigCreations = new Map<
+        HubModuleId,
+        Promise<HubModuleCreateConfigResult>
+    >()
 
     private disposeRequesterLogProvider?: () => void
 
@@ -252,6 +262,130 @@ export class ChatLunaHubService extends Service {
         reason: string
     ): HubModuleToggleResult {
         return { ok: false, moduleId, enabled, status: 'failed', reason }
+    }
+
+    /**
+     * Create a single empty Koishi loader config entry for a config-ring module
+     * that is installed but not yet present in koishi.yml. Returns the Console
+     * config route so the client can navigate after refresh.
+     */
+    async createModuleConfig(
+        moduleId: HubModuleId
+    ): Promise<HubModuleCreateConfigResult> {
+        const pendingCreation = this.moduleConfigCreations.get(moduleId)
+        if (pendingCreation) return pendingCreation
+
+        const creation = this.createModuleConfigOnce(moduleId)
+        this.moduleConfigCreations.set(moduleId, creation)
+
+        try {
+            return await creation
+        } finally {
+            if (this.moduleConfigCreations.get(moduleId) === creation) {
+                this.moduleConfigCreations.delete(moduleId)
+            }
+        }
+    }
+
+    private async createModuleConfigOnce(
+        moduleId: HubModuleId
+    ): Promise<HubModuleCreateConfigResult> {
+        const definition = getHubModuleDefinition(moduleId)
+
+        if (
+            !definition ||
+            definition.entryType !== 'config' ||
+            !definition.pluginName
+        ) {
+            return {
+                ok: false,
+                moduleId,
+                status: 'failed',
+                reason: 'This Hub module cannot create a config entry.'
+            }
+        }
+
+        const pluginName = definition.pluginName
+        const moduleState = await resolveHubModuleState(this.ctx, definition)
+
+        if (!moduleState.installed) {
+            return {
+                ok: false,
+                moduleId,
+                status: 'not-installed',
+                reason: `${pluginName} is not installed.`
+            }
+        }
+
+        if (moduleState.configStatus === 'multiple') {
+            return {
+                ok: false,
+                moduleId,
+                status: 'ambiguous',
+                reason: `${pluginName} has multiple config entries.`
+            }
+        }
+
+        if (moduleState.configStatus === 'single') {
+            return {
+                ok: true,
+                moduleId,
+                status: 'exists',
+                configPath: moduleState.configPath,
+                routePath: moduleState.routePath
+            }
+        }
+
+        const loader = getLoader(this.ctx)
+        const plugins = loader?.config?.plugins
+
+        if (
+            !loader?.entry ||
+            !plugins ||
+            !loader.reload ||
+            !loader.writeConfig
+        ) {
+            return {
+                ok: false,
+                moduleId,
+                status: 'failed',
+                reason: 'Koishi loader is not available.'
+            }
+        }
+
+        if (loader.writable === false) {
+            return {
+                ok: false,
+                moduleId,
+                status: 'failed',
+                reason: 'Koishi config is not writable.'
+            }
+        }
+
+        const key = `${pluginName}:${createConfigIdent()}`
+        const config: Record<string, unknown> = {}
+
+        try {
+            await loader.reload(loader.entry, key, config)
+            plugins[key] = config
+            await loader.writeConfig()
+
+            const configPath = getConfigPathFromKey(key)
+            return {
+                ok: true,
+                moduleId,
+                status: 'created',
+                configPath,
+                routePath: `/plugins/${configPath}`
+            }
+        } catch (error) {
+            return {
+                ok: false,
+                moduleId,
+                status: 'failed',
+                reason: coerceReason(error)
+            }
+        }
     }
 
     registerRequesterLogProvider(chatluna: ChatLunaCreateModelService) {

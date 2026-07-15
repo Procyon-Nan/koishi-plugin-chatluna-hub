@@ -88,6 +88,22 @@ export interface HubModuleToggleResult {
     reason?: string
 }
 
+export type HubModuleCreateConfigStatus =
+    | 'created'
+    | 'exists'
+    | 'not-installed'
+    | 'ambiguous'
+    | 'failed'
+
+export interface HubModuleCreateConfigResult {
+    ok: boolean
+    moduleId: HubModuleId
+    status: HubModuleCreateConfigStatus
+    configPath?: string
+    routePath?: string
+    reason?: string
+}
+
 export interface HubConsoleData {
     modules: HubModuleItem[]
     config: HubConsoleConfig

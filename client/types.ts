@@ -81,6 +81,22 @@ export interface HubModuleToggleResult {
     reason?: string
 }
 
+export type HubModuleCreateConfigStatus =
+    | 'created'
+    | 'exists'
+    | 'not-installed'
+    | 'ambiguous'
+    | 'failed'
+
+export interface HubModuleCreateConfigResult {
+    ok: boolean
+    moduleId: HubModuleId
+    status: HubModuleCreateConfigStatus
+    configPath?: string
+    routePath?: string
+    reason?: string
+}
+
 export interface HubConsoleData {
     modules: HubModuleItem[]
     config: HubConsoleConfig
@@ -97,6 +113,9 @@ declare module '@koishijs/plugin-console' {
             moduleId: HubModuleId,
             enabled: boolean
         ) => Promise<HubModuleToggleResult>
+        'chatluna-hub/module/create-config': (
+            moduleId: HubModuleId
+        ) => Promise<HubModuleCreateConfigResult>
     }
 }
 

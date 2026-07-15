@@ -23,6 +23,16 @@ export const canOpenHubModuleMarket = (
     )
 }
 
+/** Installed config-ring plugin with no loader entry yet — create then open. */
+export const canCreateHubModuleConfig = (item: HubModuleItem) => {
+    return (
+        item.entryType === 'config' &&
+        item.installed &&
+        item.configStatus === 'not-configured' &&
+        Boolean(item.pluginName)
+    )
+}
+
 export const canToggleHubModule = (item: HubModuleItem) => {
     return item.toggleable && item.installed && item.configStatus === 'single'
 }

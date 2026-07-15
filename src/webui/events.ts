@@ -10,6 +10,7 @@
 import type { DataService } from '@koishijs/plugin-console'
 import type {
     HubConsoleData,
+    HubModuleCreateConfigResult,
     HubModuleId,
     HubModuleToggleResult
 } from './modules'
@@ -53,6 +54,9 @@ export interface HubEvents {
         moduleId: HubModuleId,
         enabled: boolean
     ) => Promise<HubModuleToggleResult>
+    'chatluna-hub/module/create-config': (
+        moduleId: HubModuleId
+    ) => Promise<HubModuleCreateConfigResult>
     'chatluna-hub/core/models/list': () => Promise<ChatLunaCoreModelListResult>
     'chatluna-hub/core/adapters/list': () => Promise<ChatLunaAdapterListResult>
     'chatluna-hub/core/adapters/save': (

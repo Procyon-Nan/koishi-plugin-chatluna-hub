@@ -431,7 +431,8 @@ export const moduleDetails = {
             '将文件中转为模型可访问的 URL',
             '可配置服务路径与访问策略',
             '供多媒体与工具链插件复用'
-        ]
+        ],
+        tip: '文档链接：待补充'
     },
     toolbox: {
         title: 'ChatLuna Toolbox',

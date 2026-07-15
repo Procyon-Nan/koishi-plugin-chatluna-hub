@@ -55,7 +55,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue'
-import { router, store } from '@koishijs/client'
+import { router, send, store } from '@koishijs/client'
+import { ElMessage } from 'element-plus'
 import {
     ChatRound,
     CircleClose,
@@ -76,11 +77,13 @@ import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
 import {
+    canCreateHubModuleConfig,
     canOpenHubModule,
     canOpenHubModuleMarket
 } from '../../module-access'
 import { fallbackModules } from '../../module-catalog'
 import type {
+    HubModuleCreateConfigResult,
     HubModuleIconName,
     HubModuleId,
     HubModuleItem
@@ -105,6 +108,7 @@ const icons = {
 const hubHomePath = '/chatluna'
 /** Only Core (chatluna) embeds inside Hub; ecosystem modules navigate away. */
 const active = ref<HubModuleId | null>(null)
+const pendingConfigCreations = new Set<HubModuleId>()
 const data = computed(() => store.chatluna_hub_webui)
 const homeGraphAnimationsEnabled = computed(
     () => data.value?.config?.enableHomeGraphAnimations !== false
@@ -142,13 +146,17 @@ watch(
     { immediate: true }
 )
 
-const handleSelect = (id: HubModuleId) => {
+const openModuleRoute = (routePath: string) => {
+    void router.push(routePath)
+}
+
+const handleSelect = async (id: HubModuleId) => {
     const target = modules.value.find((item) => item.id === id)
     if (!target) return
 
     if (canOpenHubModule(target)) {
         if (target.routePath) {
-            void router.push(target.routePath)
+            openModuleRoute(target.routePath)
             return
         }
 
@@ -165,6 +173,31 @@ const handleSelect = (id: HubModuleId) => {
             }
         })
         return
+    }
+
+    if (!canCreateHubModuleConfig(target)) return
+    if (pendingConfigCreations.has(id)) return
+
+    pendingConfigCreations.add(id)
+
+    try {
+        const result = (await send(
+            'chatluna-hub/module/create-config',
+            id
+        )) as HubModuleCreateConfigResult | undefined
+
+        if (!result?.ok || !result.routePath) {
+            ElMessage.error(result?.reason ?? '无法创建插件配置')
+            return
+        }
+
+        openModuleRoute(result.routePath)
+    } catch (error) {
+        ElMessage.error(
+            error instanceof Error ? error.message : String(error)
+        )
+    } finally {
+        pendingConfigCreations.delete(id)
     }
 }
 </script>

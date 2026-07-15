@@ -137,7 +137,8 @@
                         :title="getNodeTitle(node)"
                         :aria-disabled="
                             isHubModuleDisabled(node) &&
-                            !canOpenHubModuleMarket(node)
+                            !canOpenHubModuleMarket(node) &&
+                            !canCreateHubModuleConfig(node)
                         "
                         type="button"
                         @pointerdown="handleNodePointerDown($event, node)"
@@ -183,6 +184,7 @@ import {
     ref
 } from 'vue'
 import {
+    canCreateHubModuleConfig,
     canOpenHubModule,
     canOpenHubModuleMarket,
     canToggleHubModule,
@@ -552,7 +554,13 @@ const resolveNodeStatus = (node: GraphNode) => {
 
 const selectModule = (item: HubModuleItem) => {
     if (isNodePending(item.id)) return
-    if (!canOpenHubModule(item) && !canOpenHubModuleMarket(item)) return
+    if (
+        !canOpenHubModule(item) &&
+        !canOpenHubModuleMarket(item) &&
+        !canCreateHubModuleConfig(item)
+    ) {
+        return
+    }
     emit('select', item.id)
 }
 

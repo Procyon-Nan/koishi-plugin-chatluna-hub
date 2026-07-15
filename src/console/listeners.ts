@@ -42,6 +42,12 @@ const listeners = [
             hub.setModuleEnabled(moduleId, enabled)
     }),
     spec({
+        event: 'chatluna-hub/module/create-config',
+        authority: MUTATE,
+        refresh: true,
+        handle: (hub, moduleId) => hub.createModuleConfig(moduleId)
+    }),
+    spec({
         event: 'chatluna-hub/core/models/list',
         authority: READ,
         handle: (hub) => hub.listCoreModels()
