@@ -23,10 +23,10 @@ export const canOpenHubModuleMarket = (
     )
 }
 
-/** Installed config-ring plugin with no loader entry yet — create then open. */
+/** Installed ecosystem plugin with no loader entry yet — create then open. */
 export const canCreateHubModuleConfig = (item: HubModuleItem) => {
     return (
-        item.entryType === 'config' &&
+        item.group === 'ecosystem' &&
         item.installed &&
         item.configStatus === 'not-configured' &&
         Boolean(item.pluginName)

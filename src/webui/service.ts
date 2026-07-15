@@ -265,7 +265,7 @@ export class ChatLunaHubService extends Service {
     }
 
     /**
-     * Create a single empty Koishi loader config entry for a config-ring module
+     * Create a single empty Koishi loader config entry for an ecosystem module
      * that is installed but not yet present in koishi.yml. Returns the Console
      * config route so the client can navigate after refresh.
      */
@@ -294,7 +294,7 @@ export class ChatLunaHubService extends Service {
 
         if (
             !definition ||
-            definition.entryType !== 'config' ||
+            definition.group !== 'ecosystem' ||
             !definition.pluginName
         ) {
             return {
