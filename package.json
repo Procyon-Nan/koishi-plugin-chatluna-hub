@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-chatluna-hub",
   "description": "Do you like long, cluttered sidebars? I don't, so here's my solution.",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
   "typings": "lib/index.d.ts",
