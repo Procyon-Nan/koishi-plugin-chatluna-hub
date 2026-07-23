@@ -63,16 +63,16 @@ export const getNodeStatus = (
     pending: ToggleDirection | undefined,
     hasError: boolean
 ) => {
-    if (pending === 'enable') return 'Enabling...'
-    if (pending === 'disable') return 'Disabling...'
-    if (hasError) return 'Action failed'
-    if (node.id === 'chatluna') return 'Core'
+    if (pending === 'enable') return '开启中...'
+    if (pending === 'disable') return '关闭中...'
+    if (hasError) return '操作失败'
+    if (node.id === 'chatluna') return '核心'
     if (!node.installed) return '未安装'
     if (node.configStatus === 'not-configured') return '未配置'
     if (node.configStatus === 'multiple') return '多配置'
     if (node.entryType === 'config' && !node.toggleable) return '配置'
 
-    return node.available ? 'Ready' : 'Not enabled'
+    return node.available ? '已开启' : '未开启'
 }
 
 export const getDetailStatusText = (item: HubModuleItem) => {

@@ -118,7 +118,7 @@
                             />
                         </span>
                         <span class="node-title">{{ coreNode.title }}</span>
-                        <span class="node-status">Core</span>
+                        <span class="node-status">核心</span>
                     </button>
 
                     <template v-for="node in satelliteNodes" :key="node.id">
