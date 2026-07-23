@@ -69,31 +69,31 @@
                                     <Guide />
                                 </el-icon>
                             </div>
-                            <h3>生态网络图谱</h3>
+                            <h3>ChatLuna 生态网络图谱</h3>
                             <span class="detail-subtitle">
-                                浏览 Core、WebUI 与配置入口；悬停节点查看说明。
+                                ChatLuna 的核心功能、插件 WebUI 与插件配置入口
                             </span>
                         </div>
                         <div class="guide-steps">
                             <div class="step-item">
                                 <span class="step-num">1</span>
-                                <p>悬停节点：右侧显示插件说明与状态</p>
+                                <p>将鼠标悬停在任意节点上，即可在此卡片中显示该节点所属插件的功能与介绍</p>
                             </div>
                             <div class="step-item">
                                 <span class="step-num">2</span>
-                                <p>拖动节点：主节点带动卫星；卫星可单独定位</p>
+                                <p>每个节点都可以通过点击进入该插件的 WebUI / 插件配置页面</p>
                             </div>
                             <div class="step-item">
                                 <span class="step-num">3</span>
-                                <p>拖出有效范围：可切换的生态插件将被关闭</p>
+                                <p>每个节点都可以长按拖动。拖动 ChatLuna 主节点时，各子节点会被间接拖动；拖动子节点时，不会影响其他节点的位置</p>
                             </div>
                             <div class="step-item">
                                 <span class="step-num">4</span>
-                                <p>未安装 / 未配置 / 多配置：不触发开关</p>
+                                <p>插件节点被拖动到距离 ChatLuna 主节点过远的位置时，该插件将会被关闭。将其拉近 ChatLuna 主节点即可重新开启</p>
                             </div>
                             <div class="step-item">
                                 <span class="step-num">5</span>
-                                <p>布局混乱时，使用左下角「重置」</p>
+                                <p>当布局混乱或希望重新显示此页面时，请活用页面左下角的重置按钮</p>
                             </div>
                         </div>
                     </div>
