@@ -79,6 +79,7 @@ export type HubModuleToggleStatus =
     | 'disabled'
     | 'not-configured'
     | 'ambiguous'
+    | 'invalid-config'
     | 'failed'
 
 export interface HubModuleToggleResult {

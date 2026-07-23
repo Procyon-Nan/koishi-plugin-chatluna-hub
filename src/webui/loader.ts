@@ -3,6 +3,10 @@ import { isRecord } from './shared'
 
 const loaderRecord = Symbol.for('koishi.loader.record')
 
+export interface LoaderForkLike {
+    error?: unknown
+}
+
 export interface LoaderLike {
     baseDir?: string
     config?: {
@@ -10,8 +14,13 @@ export interface LoaderLike {
     }
     entry?: Context
     writable?: boolean
+    interpolate?: (source: unknown) => unknown
     resolve?: (name: string) => unknown | Promise<unknown>
-    reload?: (parent: Context, key: string, source: unknown) => Promise<unknown>
+    reload?: (
+        parent: Context,
+        key: string,
+        source: unknown
+    ) => Promise<LoaderForkLike | undefined>
     unload?: (parent: Context, key: string) => void
     writeConfig?: () => Promise<void>
 }
@@ -41,6 +50,53 @@ export const normalizePluginName = (name: string | undefined) => {
 
 export const getActiveConfigKey = (key: string) => {
     return key.startsWith('~') ? key.slice(1) : key
+}
+
+type PluginConfigSchema = (config: unknown) => unknown
+
+interface PluginWithConfigSchema {
+    Config?: PluginConfigSchema
+    schema?: PluginConfigSchema | false
+}
+
+const getPluginConfigSchema = (plugin: unknown) => {
+    if (
+        (typeof plugin !== 'object' || plugin === null) &&
+        typeof plugin !== 'function'
+    ) {
+        return
+    }
+
+    const target = plugin as PluginWithConfigSchema
+    if (target.schema === false) return
+
+    const schema = target.Config ?? target.schema
+    return typeof schema === 'function' ? schema : undefined
+}
+
+const stripLoaderMeta = (source: unknown) => {
+    if (!source || typeof source !== 'object') return {}
+
+    return Object.fromEntries(
+        Object.entries(source).filter(([key]) => !key.startsWith('$'))
+    )
+}
+
+export const assertValidLoaderPluginConfig = async (
+    loader: LoaderLike,
+    key: string,
+    source: unknown
+) => {
+    if (!loader.resolve || !loader.interpolate) {
+        throw new Error('Koishi loader config validation is not available.')
+    }
+
+    const [name] = getActiveConfigKey(key).split(':', 1)
+    const plugin = await loader.resolve(name)
+    const schema = getPluginConfigSchema(plugin)
+    if (!schema) return
+
+    schema(loader.interpolate(stripLoaderMeta(source)))
 }
 
 export const getPluginNameFromConfigKey = (key: string) => {

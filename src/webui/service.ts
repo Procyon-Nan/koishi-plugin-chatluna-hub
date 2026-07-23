@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { Context, Service } from 'koishi'
+import { Context, Schema, Service } from 'koishi'
 import { coerceReason } from './shared'
 import {
     createHubModules,
@@ -13,6 +13,7 @@ import {
     resolveHubModuleState
 } from './modules'
 import {
+    assertValidLoaderPluginConfig,
     createConfigIdent,
     getConfigPathFromKey,
     getLoader,
@@ -182,6 +183,7 @@ export class ChatLunaHubService extends Service {
         if (
             !loader?.entry ||
             !plugins ||
+            (enabled && (!loader.resolve || !loader.interpolate)) ||
             !loader.reload ||
             !loader.unload ||
             !loader.writeConfig
@@ -211,8 +213,12 @@ export class ChatLunaHubService extends Service {
             )
         }
 
-        // Already in the requested state — nothing to change.
-        if (enabled !== match.disabled) {
+        // A configured-but-failed plugin may have an active config key while
+        // its runtime is unavailable. Enabling must retry in that state.
+        if (
+            (!enabled && match.disabled) ||
+            (enabled && !match.disabled && moduleState.available)
+        ) {
             return {
                 ok: true,
                 moduleId,
@@ -223,11 +229,32 @@ export class ChatLunaHubService extends Service {
 
         try {
             if (enabled) {
-                await loader.reload(
+                await assertValidLoaderPluginConfig(
+                    loader,
+                    match.activeKey,
+                    match.config
+                )
+                const fork = await loader.reload(
                     match.parentContext,
                     match.activeKey,
                     match.config
                 )
+
+                if (fork?.error) {
+                    if (Schema.ValidationError.is(fork.error)) {
+                        return this.invalidConfigFailure(
+                            moduleId,
+                            coerceReason(fork.error)
+                        )
+                    }
+
+                    return this.toggleFailure(
+                        moduleId,
+                        enabled,
+                        coerceReason(fork.error)
+                    )
+                }
+
                 renameConfigKey(
                     match.parentConfig,
                     match.key,
@@ -253,7 +280,26 @@ export class ChatLunaHubService extends Service {
                 status: enabled ? 'enabled' : 'disabled'
             }
         } catch (error) {
-            return this.toggleFailure(moduleId, enabled, coerceReason(error))
+            const reason = coerceReason(error)
+
+            if (enabled && Schema.ValidationError.is(error)) {
+                return this.invalidConfigFailure(moduleId, reason)
+            }
+
+            return this.toggleFailure(moduleId, enabled, reason)
+        }
+    }
+
+    private invalidConfigFailure(
+        moduleId: HubModuleId,
+        reason: string
+    ): HubModuleToggleResult {
+        return {
+            ok: false,
+            moduleId,
+            enabled: true,
+            status: 'invalid-config',
+            reason
         }
     }
 
