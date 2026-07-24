@@ -1,0 +1,777 @@
+.chatluna-preset-island {
+    --pei-bg: var(--k-page-bg, #f5f7fa);
+    --pei-card: var(--k-card-bg, #fff);
+    --pei-text: var(--k-text-dark, #1f2329);
+    --pei-muted: var(--k-text-light, #8a919f);
+    --pei-border: var(--k-color-divider, #e5e7eb);
+    --pei-primary: var(--k-color-primary, #409eff);
+    --pei-danger: #f56c6c;
+    --pei-warning: #e6a23c;
+    --pei-radius: 12px;
+    --pei-font: inherit;
+
+    box-sizing: border-box;
+    width: min(1800px, 100%);
+    margin: 0 auto;
+    height: 100%;
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    color: var(--pei-text);
+    font-family: var(--pei-font);
+}
+
+.chatluna-preset-island *,
+.chatluna-preset-island *::before,
+.chatluna-preset-island *::after {
+    box-sizing: border-box;
+}
+
+.chatluna-preset-island .pei-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.chatluna-preset-island .pei-kicker {
+    margin: 0 0 4px;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 650;
+    line-height: 1.3;
+}
+
+.chatluna-preset-island .pei-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chatluna-preset-island .pei-pill {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--pei-border);
+    border-radius: 999px;
+    background: var(--pei-card);
+    font-size: 12px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-pill strong {
+    font-size: 14px;
+    color: var(--pei-text);
+}
+
+.chatluna-preset-island .pei-alert {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--pei-warning), transparent 50%);
+    background: color-mix(in srgb, var(--pei-warning), transparent 90%);
+    color: var(--pei-text);
+    font-size: 13px;
+}
+
+.chatluna-preset-island .pei-alert-error {
+    border-color: color-mix(in srgb, var(--pei-danger), transparent 50%);
+    background: color-mix(in srgb, var(--pei-danger), transparent 92%);
+}
+
+.chatluna-preset-island .pei-workspace {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: 14px;
+}
+
+.chatluna-preset-island .pei-panel {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--pei-border);
+    border-radius: var(--pei-radius);
+    background: var(--pei-card);
+    overflow: hidden;
+}
+
+.chatluna-preset-island .pei-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--pei-border);
+}
+
+.chatluna-preset-island .pei-panel-title {
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.chatluna-preset-island .pei-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--pei-border);
+}
+
+.chatluna-preset-island .pei-search {
+    flex: 1;
+    min-width: 120px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--pei-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--pei-text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.chatluna-preset-island .pei-search:focus {
+    outline: 1px solid var(--pei-primary);
+    border-color: var(--pei-primary);
+}
+
+.chatluna-preset-island .pei-btn {
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--pei-border);
+    border-radius: 8px;
+    background: var(--pei-card);
+    color: var(--pei-text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.chatluna-preset-island .pei-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--pei-primary), transparent 40%);
+}
+
+.chatluna-preset-island .pei-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.chatluna-preset-island .pei-btn-primary {
+    border-color: var(--pei-primary);
+    background: var(--pei-primary);
+    color: #fff;
+}
+
+.chatluna-preset-island .pei-btn-danger {
+    border-color: color-mix(in srgb, var(--pei-danger), transparent 40%);
+    color: var(--pei-danger);
+}
+
+.chatluna-preset-island .pei-menu {
+    position: relative;
+}
+
+.chatluna-preset-island .pei-menu-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    min-width: 140px;
+    padding: 6px;
+    border: 1px solid var(--pei-border);
+    border-radius: 8px;
+    background: var(--pei-card);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.chatluna-preset-island .pei-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--pei-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.chatluna-preset-island .pei-menu-item:hover {
+    background: color-mix(in srgb, var(--pei-primary), transparent 92%);
+}
+
+.chatluna-preset-island .pei-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 10px 12px 14px;
+}
+
+.chatluna-preset-island .pei-list-item {
+    position: relative;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 10px 10px 10px 16px;
+    border: 1px solid var(--pei-border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pei-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.chatluna-preset-island .pei-list-item::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 6px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--pei-primary);
+    opacity: 0.55;
+}
+
+.chatluna-preset-island .pei-list-item[data-source='character']::before {
+    background: #7c5cff;
+}
+
+.chatluna-preset-island .pei-list-item[data-draft='true']::before {
+    background: var(--pei-warning);
+}
+
+.chatluna-preset-island .pei-list-item:hover {
+    border-color: color-mix(in srgb, var(--pei-primary), transparent 40%);
+}
+
+.chatluna-preset-island .pei-list-item.active {
+    border-color: var(--pei-primary);
+    box-shadow: inset 0 0 0 1px var(--pei-primary);
+    background: color-mix(in srgb, var(--pei-primary), transparent 94%);
+}
+
+.chatluna-preset-island .pei-list-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.chatluna-preset-island .pei-list-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.chatluna-preset-island .pei-tag {
+    flex-shrink: 0;
+    padding: 1px 8px;
+    border: 1px solid var(--pei-border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-list-meta {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.chatluna-preset-island .pei-keyword {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--pei-primary), transparent 90%);
+    font-size: 11px;
+    color: var(--pei-text);
+}
+
+.chatluna-preset-island .pei-empty {
+    min-height: 160px;
+    display: grid;
+    place-items: center;
+    color: var(--pei-muted);
+    font-size: 13px;
+    padding: 24px;
+    text-align: center;
+}
+
+.chatluna-preset-island .pei-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--pei-border);
+    flex-wrap: wrap;
+}
+
+.chatluna-preset-island .pei-editor-heading {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chatluna-preset-island .pei-editor-title {
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.chatluna-preset-island .pei-editor-meta {
+    font-size: 12px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.chatluna-preset-island .pei-dirty {
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--pei-warning), transparent 40%);
+    color: var(--pei-warning);
+    font-size: 12px;
+}
+
+.chatluna-preset-island .pei-ai-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--pei-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--pei-primary), transparent 96%);
+}
+
+.chatluna-preset-island .pei-ai-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.chatluna-preset-island .pei-ai-label {
+    font-size: 12px;
+    color: var(--pei-muted);
+    flex-shrink: 0;
+}
+
+.chatluna-preset-island .pei-ai-select {
+    width: auto;
+    min-width: 180px;
+    max-width: min(360px, 100%);
+    flex: 1 1 180px;
+}
+
+.chatluna-preset-island .pei-ai-format {
+    min-width: 120px;
+    max-width: 180px;
+    flex: 0 1 160px;
+}
+
+.chatluna-preset-island .pei-ai-hint {
+    font-size: 12px;
+    color: var(--pei-muted);
+    line-height: 1.4;
+}
+
+.chatluna-preset-island .pei-ai-hint-error {
+    color: var(--pei-danger);
+}
+
+.chatluna-preset-island .pei-ai-log {
+    max-height: 120px;
+    overflow: auto;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--pei-border);
+    background: color-mix(in srgb, var(--pei-bg), transparent 20%);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.chatluna-preset-island .pei-ai-log-line {
+    color: var(--pei-muted);
+    word-break: break-word;
+}
+
+.chatluna-preset-island .pei-ai-log-step {
+    color: var(--pei-text);
+}
+
+.chatluna-preset-island .pei-ai-log-ok {
+    color: #67c23a;
+}
+
+.chatluna-preset-island .pei-ai-log-error {
+    color: var(--pei-danger);
+}
+
+.chatluna-preset-island .pei-ai-log-token {
+    color: color-mix(in srgb, var(--pei-primary), #000 10%);
+    opacity: 0.85;
+}
+
+.chatluna-preset-island .pei-editor-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+}
+
+.chatluna-preset-island .pei-form-row {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    max-width: 480px;
+}
+
+.chatluna-preset-island .pei-form-row label {
+    font-size: 13px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-input {
+    height: 32px;
+    width: 100%;
+    padding: 0 10px;
+    border: 1px solid var(--pei-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--pei-text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.chatluna-preset-island .pei-textarea {
+    flex: 1;
+    min-height: 280px;
+    width: 100%;
+    resize: none;
+    padding: 12px 14px;
+    border: 1px solid var(--pei-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--pei-bg), transparent 30%);
+    color: var(--pei-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.chatluna-preset-island .pei-textarea:focus,
+.chatluna-preset-island .pei-input:focus {
+    outline: 1px solid var(--pei-primary);
+    border-color: var(--pei-primary);
+}
+
+.chatluna-preset-island .pei-status {
+    font-size: 12px;
+    color: var(--pei-muted);
+}
+
+.chatluna-preset-island .pei-status-error {
+    color: var(--pei-danger);
+}
+
+.chatluna-preset-island .pei-status-ok {
+    color: #67c23a;
+}
+
+.chatluna-preset-island .pei-hidden {
+    display: none;
+}
+
+.chatluna-preset-island .pei-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--pei-border);
+}
+
+.chatluna-preset-island .pei-tab {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--pei-muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.chatluna-preset-island .pei-tab:hover {
+    color: var(--pei-text);
+    background: color-mix(in srgb, var(--pei-primary), transparent 92%);
+}
+
+.chatluna-preset-island .pei-tab.active {
+    border-color: color-mix(in srgb, var(--pei-primary), transparent 40%);
+    background: color-mix(in srgb, var(--pei-primary), transparent 90%);
+    color: var(--pei-text);
+    font-weight: 600;
+}
+
+.chatluna-preset-island .pei-form-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.chatluna-preset-island .pei-form-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 8px;
+}
+
+.chatluna-preset-island .pei-card {
+    border: 1px solid var(--pei-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: color-mix(in srgb, var(--pei-bg), transparent 40%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.chatluna-preset-island .pei-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.chatluna-preset-island .pei-card-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.chatluna-preset-island .pei-card-subtitle {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.chatluna-preset-island .pei-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    font-size: 13px;
+}
+
+.chatluna-preset-island .pei-field > span {
+    color: var(--pei-muted);
+    font-size: 12px;
+}
+
+.chatluna-preset-island .pei-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.chatluna-preset-island .pei-field-inline {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.chatluna-preset-island .pei-field-grow {
+    flex: 1;
+}
+
+.chatluna-preset-island .pei-field-role {
+    width: 120px;
+    flex-shrink: 0;
+}
+
+.chatluna-preset-island .pei-select {
+    height: 32px;
+    width: 100%;
+    padding: 0 8px;
+    border: 1px solid var(--pei-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--pei-text);
+    font: inherit;
+    font-size: 13px;
+}
+
+.chatluna-preset-island .pei-select:focus {
+    outline: 1px solid var(--pei-primary);
+    border-color: var(--pei-primary);
+}
+
+.chatluna-preset-island .pei-prompt-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding-top: 8px;
+    border-top: 1px solid var(--pei-border);
+}
+
+.chatluna-preset-island .pei-prompt-row:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.chatluna-preset-island .pei-btn-icon {
+    flex-shrink: 0;
+    width: 32px;
+    padding: 0;
+    margin-top: 22px;
+}
+
+.chatluna-preset-island .pei-lore-card {
+    border: 1px dashed var(--pei-border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chatluna-preset-island .pei-keyword-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.chatluna-preset-island .pei-empty-sm {
+    min-height: 80px;
+    padding: 16px;
+}
+
+.chatluna-preset-island .pei-yaml-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chatluna-preset-island .pei-yaml-pane .pei-textarea {
+    flex: 1;
+    min-height: 320px;
+}
+
+.chatluna-preset-island .pei-textarea-plain {
+    min-height: 180px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.chatluna-preset-island .pei-template-editor {
+    width: 100%;
+}
+
+.chatluna-preset-island .pei-template-editor-frame {
+    position: relative;
+}
+
+.chatluna-preset-island .pei-cm-host {
+    width: 100%;
+}
+
+.chatluna-preset-island .pei-template-escape {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 5;
+    height: 26px;
+    min-width: 28px;
+    padding: 0 6px;
+    border: 1px solid var(--pei-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--pei-card), transparent 10%);
+    color: var(--pei-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.chatluna-preset-island .pei-template-escape:hover {
+    color: var(--pei-text);
+    border-color: var(--pei-primary);
+}
+
+/*
+ * CodeMirror tooltips portal to document.body (outside .chatluna-preset-island).
+ * Scope only z-index/stacking; theme colors still come from EditorView.theme.
+ */
+.cm-tooltip.cm-tooltip-autocomplete {
+    z-index: 50;
+}
+
+@media (max-width: 980px) {
+    .chatluna-preset-island .pei-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .chatluna-preset-island .pei-list {
+        max-height: 280px;
+    }
+
+    .chatluna-preset-island .pei-prompt-row {
+        flex-direction: column;
+    }
+
+    .chatluna-preset-island .pei-field-role {
+        width: 100%;
+    }
+
+    .chatluna-preset-island .pei-btn-icon {
+        margin-top: 0;
+        align-self: flex-end;
+    }
+}

@@ -37,6 +37,7 @@ import {
     batchUpdateChatLunaConversationUsage,
     type BatchUpdateChatLunaConversationUsageInput,
     type BatchUpdateChatLunaConversationUsageResult,
+    cancelChatLunaCorePresetGenerate,
     type ChatLunaConversationListItem,
     type ChatLunaConversationListQuery,
     type ChatLunaConversationOptions,
@@ -50,6 +51,10 @@ import {
     type ChatLunaCorePresetCreateInput,
     type ChatLunaCorePresetDeleteInput,
     type ChatLunaCorePresetDetail,
+    type ChatLunaCorePresetGenerateCancelInput,
+    type ChatLunaCorePresetGenerateCancelResult,
+    type ChatLunaCorePresetGenerateStartInput,
+    type ChatLunaCorePresetGenerateStartResult,
     type ChatLunaCorePresetGetInput,
     type ChatLunaCorePresetListResult,
     type ChatLunaCorePresetUpdateInput,
@@ -66,6 +71,7 @@ import {
     listChatLunaCoreModels,
     listChatLunaCorePresets,
     type PageResult,
+    startChatLunaCorePresetGenerate,
     updateChatLunaConversationUsage,
     type UpdateChatLunaConversationUsageInput,
     updateChatLunaCorePreset,
@@ -582,5 +588,17 @@ export class ChatLunaHubService extends Service {
         input: ChatLunaCorePresetDeleteInput
     ): Promise<{ success: true }> {
         return deleteChatLunaCorePreset(this.ctx, input)
+    }
+
+    startCorePresetGenerate(
+        input: ChatLunaCorePresetGenerateStartInput
+    ): ChatLunaCorePresetGenerateStartResult {
+        return startChatLunaCorePresetGenerate(this.ctx, input)
+    }
+
+    cancelCorePresetGenerate(
+        input: ChatLunaCorePresetGenerateCancelInput
+    ): ChatLunaCorePresetGenerateCancelResult {
+        return cancelChatLunaCorePresetGenerate(input)
     }
 }

@@ -92,6 +92,25 @@ interface ChatLunaLikeService {
     preset?: ChatLunaPresetServiceLike
     conversation?: ChatLunaConversationServiceLike
     clearCache?: (conversation: ConversationRecord) => Promise<void>
+    createAgent?: (options: {
+        id?: string
+        name?: string
+        description?: string
+        model: string
+        tools?: unknown[]
+        mode?: 'tool-calling' | 'react'
+        system?: string
+        maxSteps?: number
+        handleParsingErrors?: boolean
+    }) => Promise<{
+        stream: (input: {
+            prompt: string
+            signal?: AbortSignal
+            requestId?: string
+            onToken?: (token: string) => void | Promise<void>
+            onStep?: (event: unknown) => void | Promise<void>
+        }) => Promise<{ result: Promise<unknown> }>
+    }>
 }
 
 interface ChatLunaCharacterPresetServiceLike {
