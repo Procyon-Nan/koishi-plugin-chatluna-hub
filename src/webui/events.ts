@@ -38,6 +38,10 @@ import type {
     ChatLunaCorePresetCreateInput,
     ChatLunaCorePresetDeleteInput,
     ChatLunaCorePresetDetail,
+    ChatLunaCorePresetGenerateCancelInput,
+    ChatLunaCorePresetGenerateCancelResult,
+    ChatLunaCorePresetGenerateStartInput,
+    ChatLunaCorePresetGenerateStartResult,
     ChatLunaCorePresetGetInput,
     ChatLunaCorePresetListResult,
     ChatLunaCorePresetUpdateInput,
@@ -108,6 +112,13 @@ export interface HubEvents {
     'chatluna-hub/core/presets/delete': (
         input: ChatLunaCorePresetDeleteInput
     ) => Promise<{ success: true }>
+    /** Returns immediately; progress via console.broadcast event. */
+    'chatluna-hub/core/presets/generate/start': (
+        input: ChatLunaCorePresetGenerateStartInput
+    ) => Promise<ChatLunaCorePresetGenerateStartResult>
+    'chatluna-hub/core/presets/generate/cancel': (
+        input: ChatLunaCorePresetGenerateCancelInput
+    ) => Promise<ChatLunaCorePresetGenerateCancelResult>
 }
 
 /** The Hub's console DataService, declared once for both console packages. */

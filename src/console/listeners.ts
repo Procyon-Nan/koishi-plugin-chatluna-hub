@@ -154,6 +154,16 @@ const listeners = [
         event: 'chatluna-hub/core/presets/delete',
         authority: MUTATE,
         handle: (hub, input) => hub.deleteCorePreset(input)
+    }),
+    spec({
+        event: 'chatluna-hub/core/presets/generate/start',
+        authority: MUTATE,
+        handle: (hub, input) => hub.startCorePresetGenerate(input)
+    }),
+    spec({
+        event: 'chatluna-hub/core/presets/generate/cancel',
+        authority: MUTATE,
+        handle: (hub, input) => hub.cancelCorePresetGenerate(input)
     })
 ] as const
 
