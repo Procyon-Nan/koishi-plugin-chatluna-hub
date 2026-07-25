@@ -90,6 +90,7 @@ export function MainWorldLoresForm({
                                         >
                                             <input
                                                 className="pei-input"
+                                                aria-label={`世界书条目 ${index + 1} 触发关键词 ${kidx + 1}`}
                                                 value={kw}
                                                 onChange={(e) => {
                                                     const next = [...keywords]
@@ -100,6 +101,7 @@ export function MainWorldLoresForm({
                                             <button
                                                 type="button"
                                                 className="pei-btn pei-btn-icon"
+                                                aria-label={`删除世界书条目 ${index + 1} 的关键词 ${kidx + 1}`}
                                                 onClick={() => {
                                                     const next = [...keywords]
                                                     next.splice(kidx, 1)
@@ -113,6 +115,7 @@ export function MainWorldLoresForm({
                                     <button
                                         type="button"
                                         className="pei-btn"
+                                        aria-label={`为世界书条目 ${index + 1} 添加关键词`}
                                         onClick={() =>
                                             updateKeywords(index, [
                                                 ...keywords,
@@ -192,17 +195,18 @@ export function MainWorldLoresForm({
                                         <span>插入位置</span>
                                         <select
                                             className="pei-select"
-                                            value={
-                                                lore.insertPosition ??
-                                                'before_char_defs'
-                                            }
+                                            value={lore.insertPosition ?? ''}
                                             onChange={(e) =>
                                                 updateLore(index, {
-                                                    insertPosition: e.target
-                                                        .value as WorldLoreInsertPosition
+                                                    insertPosition:
+                                                        (e.target.value ||
+                                                            undefined) as
+                                                            | WorldLoreInsertPosition
+                                                            | undefined
                                                 })
                                             }
                                         >
+                                            <option value="">默认</option>
                                             {INSERT_OPTIONS.map((opt) => (
                                                 <option
                                                     key={opt.value}

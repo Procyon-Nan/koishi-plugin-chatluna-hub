@@ -5,7 +5,7 @@
 import { randomUUID } from 'crypto'
 import type { Context } from 'koishi'
 import { coerceReason, isRecord } from '../shared'
-import { getChatLuna } from './chatluna-service'
+import { type ChatLunaAgentServiceLike, getChatLuna } from './chatluna-service'
 import type { ChatLunaCorePresetSource } from './preset-files'
 import {
     createDraftBuffer,
@@ -24,38 +24,19 @@ import type {
     PresetGenerateMainFormat
 } from './preset-generate-types'
 
-interface ChatLunaAgentLike {
-    stream: (input: {
-        prompt: string
-        signal?: AbortSignal
-        requestId?: string
-        onToken?: (token: string) => void | Promise<void>
-        onStep?: (event: unknown) => void | Promise<void>
-    }) => Promise<{
-        result: Promise<unknown>
-    }>
-}
-
-interface ChatLunaAgentServiceLike {
-    createAgent?: (options: {
-        id?: string
-        name?: string
-        description?: string
-        model: string
-        tools?: unknown[]
-        mode?: 'tool-calling' | 'react'
-        system?: string
-        maxSteps?: number
-        handleParsingErrors?: boolean
-    }) => Promise<ChatLunaAgentLike>
-}
-
 interface ActiveGenerateJob {
     requestId: string
     controller: AbortController
+    timedOut: boolean
+    disposed: boolean
+    timeoutId: ReturnType<typeof setTimeout>
+    timeoutPromise: Promise<never>
 }
 
 const activeJobs = new Map<string, ActiveGenerateJob>()
+const contextJobs = new WeakMap<Context, Set<string>>()
+const MAX_ACTIVE_GENERATE_JOBS = 2
+const GENERATE_TIMEOUT_MS = 5 * 60 * 1000
 
 const MAIN_FORMATS = new Set<PresetGenerateMainFormat>(['markdown', 'koishi'])
 const CHARACTER_FORMATS = new Set<PresetGenerateCharacterFormat>([
@@ -184,13 +165,13 @@ const buildUserPrompt = (
             format,
             currentKeywords: keywords,
             roleDraft: {
-                description: limitText(buffer.data.description),
-                personality: limitText(buffer.data.personality),
-                hobbies: limitText(buffer.data.hobbies),
-                dialogue_examples: limitText(buffer.data.dialogue_examples),
-                chat_style: limitText(buffer.data.chat_style),
-                chat_behavior: limitText(buffer.data.chat_behavior),
-                relationship: limitText(buffer.data.relationship)
+                prompts: limitText(JSON.stringify(buffer.data.prompts)),
+                format_user_prompt: limitText(buffer.data.format_user_prompt),
+                world_lores: limitText(JSON.stringify(buffer.data.world_lores)),
+                authors_note: limitText(
+                    JSON.stringify(buffer.data.authors_note)
+                ),
+                knowledge: limitText(JSON.stringify(buffer.data.knowledge))
             }
         }
         return `Call replaceGeneratedMainPreset once with complete structured fields.
@@ -394,12 +375,27 @@ const runGenerateJob = async (
 const isAbortError = (error: unknown): boolean => {
     if (!error) return false
     if (typeof error === 'object' && error !== null) {
-        const name = (error as { name?: unknown }).name
-        if (name === 'AbortError') return true
-        const message = coerceReason(error).toLowerCase()
-        if (message.includes('abort')) return true
+        return (error as { name?: unknown }).name === 'AbortError'
     }
     return false
+}
+
+const registerContextDispose = (ctx: Context) => {
+    const jobs = contextJobs.get(ctx)
+    if (jobs) return jobs
+
+    const next = new Set<string>()
+    contextJobs.set(ctx, next)
+    ctx.on('dispose', () => {
+        for (const requestId of next) {
+            const job = activeJobs.get(requestId)
+            if (!job) continue
+            job.disposed = true
+            job.controller.abort()
+        }
+        next.clear()
+    })
+    return next
 }
 
 /**
@@ -416,6 +412,10 @@ export const startChatLunaCorePresetGenerate = (
         throw new Error(`Generate request already active: ${requestId}`)
     }
 
+    if (activeJobs.size >= MAX_ACTIVE_GENERATE_JOBS) {
+        throw new Error('生成任务已达到并发上限，请稍后重试。')
+    }
+
     // Fail fast before spawning when ChatLuna/agent is missing.
     getAgentService(ctx)
 
@@ -429,13 +429,41 @@ export const startChatLunaCorePresetGenerate = (
     )
 
     const controller = new AbortController()
-    activeJobs.set(requestId, { requestId, controller })
+    let rejectTimeout: (reason?: unknown) => void = () => undefined
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        rejectTimeout = reject
+    })
+    const job: ActiveGenerateJob = {
+        requestId,
+        controller,
+        timedOut: false,
+        disposed: false,
+        timeoutId: setTimeout(() => {
+            job.timedOut = true
+            controller.abort()
+            rejectTimeout(new Error('Preset generation timed out.'))
+        }, GENERATE_TIMEOUT_MS),
+        timeoutPromise
+    }
+    activeJobs.set(requestId, job)
+    registerContextDispose(ctx).add(requestId)
 
     const run = async () => {
         try {
-            await runGenerateJob(ctx, input, requestId, controller)
+            await Promise.race([
+                runGenerateJob(ctx, input, requestId, controller),
+                job.timeoutPromise
+            ])
         } catch (error) {
-            if (controller.signal.aborted || isAbortError(error)) {
+            if (job.disposed) return
+            if (job.timedOut) {
+                broadcastEvent(ctx, {
+                    requestId,
+                    kind: 'error',
+                    error: '生成超时，请检查模型服务后重试。'
+                })
+                return
+            } else if (controller.signal.aborted || isAbortError(error)) {
                 broadcastEvent(ctx, { requestId, kind: 'aborted' })
                 return
             }
@@ -445,7 +473,9 @@ export const startChatLunaCorePresetGenerate = (
                 error: coerceReason(error)
             })
         } finally {
+            clearTimeout(job.timeoutId)
             activeJobs.delete(requestId)
+            contextJobs.get(ctx)?.delete(requestId)
         }
     }
 

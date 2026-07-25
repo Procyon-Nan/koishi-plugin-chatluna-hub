@@ -1,5 +1,5 @@
-import { splitCommaList } from '../../lib/form-utils'
 import type { CharacterPresetTemplate } from '../../lib/preset-types'
+import { CommaListInput } from '../comma-list-input'
 
 export interface CharacterBasicFormProps {
     preset: CharacterPresetTemplate
@@ -26,29 +26,21 @@ export function CharacterBasicForm({
                     </label>
                     <label className="pei-field">
                         <span>触发昵称（逗号分隔）</span>
-                        <input
+                        <CommaListInput
                             className="pei-input"
-                            value={(preset.nick_name ?? []).join(', ')}
+                            value={preset.nick_name ?? []}
                             placeholder="触发昵称"
-                            onChange={(e) =>
-                                onChange(
-                                    'nick_name',
-                                    splitCommaList(e.target.value)
-                                )
-                            }
+                            onChange={(value) => onChange('nick_name', value)}
                         />
                     </label>
                     <label className="pei-field">
                         <span>禁言词（逗号分隔）</span>
-                        <input
+                        <CommaListInput
                             className="pei-input"
-                            value={(preset.mute_keyword ?? []).join(', ')}
+                            value={preset.mute_keyword ?? []}
                             placeholder="禁言词"
-                            onChange={(e) =>
-                                onChange(
-                                    'mute_keyword',
-                                    splitCommaList(e.target.value)
-                                )
+                            onChange={(value) =>
+                                onChange('mute_keyword', value)
                             }
                         />
                     </label>

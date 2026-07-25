@@ -64,15 +64,18 @@ export function MainAuthorNoteForm({
                         <span>插入位置</span>
                         <select
                             className="pei-select"
-                            value={note.insertPosition ?? 'in_chat'}
+                            value={note.insertPosition ?? ''}
                             onChange={(e) =>
                                 patch({
-                                    insertPosition: e.target.value as
+                                    insertPosition: (e.target.value ||
+                                        undefined) as
                                         | 'after_char_defs'
                                         | 'in_chat'
+                                        | undefined
                                 })
                             }
                         >
+                            <option value="">默认</option>
                             <option value="after_char_defs">角色定义后</option>
                             <option value="in_chat">聊天末尾</option>
                         </select>

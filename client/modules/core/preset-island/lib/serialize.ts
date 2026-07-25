@@ -24,6 +24,8 @@ const asObject = (value: unknown): Record<string, unknown> | null => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return null
     }
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) return null
     return value as Record<string, unknown>
 }
 
@@ -225,6 +227,13 @@ export const parsePresetYaml = (
         }
     }
 
+    if (!asObject(loaded)) {
+        return {
+            ok: false,
+            error: 'YAML 根节点必须是键值映射，不能是标量或数组'
+        }
+    }
+
     if (source === 'character') {
         return { ok: true, data: normalizeCharacterPreset(loaded) }
     }
@@ -236,8 +245,12 @@ export const parsePresetYaml = (
 const forYaml = (value: unknown): unknown => {
     if (value == null) return value
     if (value instanceof RegExp) return value.source
+    if (value instanceof Date) return value
     if (Array.isArray(value)) return value.map(forYaml)
     if (typeof value !== 'object') return value
+
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) return value
 
     const out: Record<string, unknown> = {}
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {

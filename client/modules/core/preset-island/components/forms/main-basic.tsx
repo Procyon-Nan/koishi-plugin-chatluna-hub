@@ -1,5 +1,5 @@
-import { splitCommaList } from '../../lib/form-utils'
 import type { RawPreset } from '../../lib/preset-types'
+import { CommaListInput } from '../comma-list-input'
 import { TemplateEditor } from '../template-editor'
 
 export interface MainBasicFormProps {
@@ -15,16 +15,11 @@ export function MainBasicForm({ preset, onChange }: MainBasicFormProps) {
                 <div className="pei-field-grid">
                     <label className="pei-field">
                         <span>关键词（逗号分隔）</span>
-                        <input
+                        <CommaListInput
                             className="pei-input"
-                            value={preset.keywords.join(', ')}
+                            value={preset.keywords}
                             placeholder="预设关键词"
-                            onChange={(e) =>
-                                onChange(
-                                    'keywords',
-                                    splitCommaList(e.target.value)
-                                )
-                            }
+                            onChange={(value) => onChange('keywords', value)}
                         />
                     </label>
                     <label className="pei-field">
@@ -102,14 +97,11 @@ export function MainBasicForm({ preset, onChange }: MainBasicFormProps) {
                 <h3 className="pei-card-title">知识库</h3>
                 <label className="pei-field">
                     <span>知识库列表（逗号分隔）</span>
-                    <input
+                    <CommaListInput
                         className="pei-input"
-                        value={knowledgeText(preset.knowledge?.knowledge)}
-                        onChange={(e) =>
-                            onChange(
-                                'knowledge.knowledge',
-                                splitCommaList(e.target.value)
-                            )
+                        value={knowledgeList(preset.knowledge?.knowledge)}
+                        onChange={(value) =>
+                            onChange('knowledge.knowledge', value)
                         }
                     />
                 </label>
@@ -201,7 +193,5 @@ export function MainBasicForm({ preset, onChange }: MainBasicFormProps) {
     )
 }
 
-const knowledgeText = (value: string | string[] | undefined): string => {
-    if (value == null) return ''
-    return Array.isArray(value) ? value.join(', ') : value
-}
+const knowledgeList = (value: string | string[] | undefined): string[] =>
+    value == null ? [] : Array.isArray(value) ? value : [value]

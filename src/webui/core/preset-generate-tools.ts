@@ -28,7 +28,7 @@ export interface GenerateToolBundle {
 
 interface ChatLunaToolLike {
     name: string
-    description?: string
+    description: string
     createTool: (params: { embeddings?: unknown }) => unknown
     selector: () => boolean
 }
@@ -312,6 +312,13 @@ const toolResult = (payload: Record<string, unknown>): string => {
     return JSON.stringify(payload)
 }
 
+const describeTool = (tool: DynamicStructuredTool): ChatLunaToolLike => ({
+    name: tool.name,
+    description: tool.description,
+    createTool: () => tool,
+    selector: () => true
+})
+
 export const createGenerateTools = (options: {
     buffer: DraftBuffer
     mainFormat?: PresetGenerateMainFormat
@@ -476,7 +483,7 @@ export const createGenerateTools = (options: {
                     ...input,
                     mute_keyword: Array.isArray(input.mute_keyword)
                         ? input.mute_keyword
-                        : [],
+                        : buffer.data.mute_keyword,
                     path: buffer.data.path
                 }
                 validateCharacterCore(next, options.characterFormat)
@@ -504,34 +511,12 @@ export const createGenerateTools = (options: {
         }
     })
 
-    const tools: ChatLunaToolLike[] = [
-        {
-            name: 'readGeneratedDraft',
-            description:
-                'Read the current in-memory draft buffer. Use source=current for full YAML or source=summary for a short overview.',
-            createTool: () => readDraftTool,
-            selector: () => true
-        }
-    ]
+    const tools: ChatLunaToolLike[] = [describeTool(readDraftTool)]
 
     if (buffer.source === 'core') {
-        tools.push({
-            name: 'replaceGeneratedMainPreset',
-            description:
-                'Replace core main-preset fields: keywords, prompts, ' +
-                'format_user_prompt. Preserves world_lores, authors_note, ' +
-                'knowledge, config, version. Call exactly once.',
-            createTool: () => replaceMainTool,
-            selector: () => true
-        })
+        tools.push(describeTool(replaceMainTool))
     } else {
-        tools.push({
-            name: 'replaceGeneratedCharacterPreset',
-            description:
-                'Replace character disguise fields in the in-memory draft. Always preserves path. Call exactly once.',
-            createTool: () => replaceCharacterTool,
-            selector: () => true
-        })
+        tools.push(describeTool(replaceCharacterTool))
     }
 
     return { tools, buffer }

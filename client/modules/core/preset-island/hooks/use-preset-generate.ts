@@ -93,11 +93,13 @@ export function usePresetGenerate(options: {
     const onApplyRef = useRef(onApplyRawText)
     const tokenBufRef = useRef('')
 
-    requestIdRef.current = requestId
-    optionsSessionIdRef.current = session?.id ?? null
-    optionsSessionRawTextRef.current = session?.rawText ?? null
-    generatingRef.current = generating
-    onApplyRef.current = onApplyRawText
+    useEffect(() => {
+        requestIdRef.current = requestId
+        optionsSessionIdRef.current = session?.id ?? null
+        optionsSessionRawTextRef.current = session?.rawText ?? null
+        generatingRef.current = generating
+        onApplyRef.current = onApplyRawText
+    }, [generating, onApplyRawText, requestId, session?.id, session?.rawText])
 
     const pushLog = useCallback(
         (text: string, kind: GenerateLogLine['kind'] = 'info') => {

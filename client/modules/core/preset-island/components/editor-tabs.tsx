@@ -36,7 +36,7 @@ export const tabsForSource = (source: PresetSource) =>
     source === 'character' ? CHARACTER_TABS : CORE_TABS
 
 export const defaultTabForSource = (source: PresetSource): EditorTabId =>
-    'basic'
+    tabsForSource(source)[0]?.id ?? 'basic'
 
 export interface EditorTabsBarProps {
     source: PresetSource
@@ -52,9 +52,11 @@ export function EditorTabsBar({ source, active, onChange }: EditorTabsBarProps) 
             {tabs.map((tab) => (
                 <button
                     key={tab.id}
+                    id={`pei-tab-${tab.id}`}
                     type="button"
                     role="tab"
                     aria-selected={active === tab.id}
+                    aria-controls={`pei-tabpanel-${tab.id}`}
                     className={
                         active === tab.id ? 'pei-tab active' : 'pei-tab'
                     }
@@ -100,6 +102,7 @@ export function EditorFormBody({
                 )}
                 <textarea
                     className="pei-textarea"
+                    aria-label="YAML 预设内容"
                     value={rawText}
                     spellCheck={false}
                     onChange={(e) => onRawTextChange(e.target.value)}

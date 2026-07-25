@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ChatLunaCoreModelItem, PresetGenerateFormat } from '../../types'
 import type { GenerateLogLine } from '../hooks/use-preset-generate'
 
@@ -36,6 +37,13 @@ export function GeneratePanel({
     onStart,
     onStop
 }: GeneratePanelProps) {
+    const logRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const element = logRef.current
+        if (element) element.scrollTop = element.scrollHeight
+    }, [generating, logLines, tokenPreview])
+
     return (
         <div className="pei-ai-panel">
             <div className="pei-ai-row">
@@ -120,7 +128,13 @@ export function GeneratePanel({
             )}
 
             {generating || logLines.length > 0 || tokenPreview ? (
-                <div className="pei-ai-log">
+                <div
+                    ref={logRef}
+                    className="pei-ai-log"
+                    role="log"
+                    aria-live="polite"
+                    aria-relevant="additions text"
+                >
                     {logLines.map((line) => (
                         <div
                             key={line.id}

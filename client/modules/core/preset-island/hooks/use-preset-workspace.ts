@@ -149,6 +149,7 @@ export function usePresetWorkspace(api: PresetHubApi) {
 
     const startCreate = useCallback(
         (source: PresetSource) => {
+            setNewMenuOpen(false)
             if (!confirmDiscard()) return
 
             openGenRef.current += 1
@@ -156,7 +157,6 @@ export function usePresetWorkspace(api: PresetHubApi) {
             setDrafts((prev) => [draft, ...prev.filter((d) => d.id !== draft.id)])
             setSession(draft)
             setEditorTab(defaultTabForSource(source))
-            setNewMenuOpen(false)
             setStatus('')
             setError('')
             setDetailLoading(false)
@@ -265,7 +265,9 @@ export function usePresetWorkspace(api: PresetHubApi) {
                 setDrafts((prev) => prev.filter((d) => d.id !== current.id))
             }
 
-            setSession(sessionFromDetail(detail))
+            const savedSession = sessionFromDetail(detail)
+            sessionRef.current = savedSession
+            setSession(savedSession)
             await fetchList()
             setStatus('已保存')
         } catch (err) {
@@ -399,8 +401,15 @@ export function usePresetWorkspace(api: PresetHubApi) {
         if (!newMenuOpen) return
 
         const onDocClick = () => setNewMenuOpen(false)
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setNewMenuOpen(false)
+        }
         document.addEventListener('click', onDocClick)
-        return () => document.removeEventListener('click', onDocClick)
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+            document.removeEventListener('click', onDocClick)
+            document.removeEventListener('keydown', onKeyDown)
+        }
     }, [newMenuOpen])
 
     const editorTitle = session
