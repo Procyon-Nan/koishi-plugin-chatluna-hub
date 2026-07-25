@@ -84,13 +84,18 @@ export function usePresetGenerate(options: {
 
     const requestIdRef = useRef<string | null>(null)
     const jobSessionIdRef = useRef<string | null>(null)
+    const jobSessionRawTextRef = useRef<string | null>(null)
     const optionsSessionIdRef = useRef<string | null>(session?.id ?? null)
+    const optionsSessionRawTextRef = useRef<string | null>(
+        session?.rawText ?? null
+    )
     const generatingRef = useRef(false)
     const onApplyRef = useRef(onApplyRawText)
     const tokenBufRef = useRef('')
 
     requestIdRef.current = requestId
     optionsSessionIdRef.current = session?.id ?? null
+    optionsSessionRawTextRef.current = session?.rawText ?? null
     generatingRef.current = generating
     onApplyRef.current = onApplyRawText
 
@@ -188,8 +193,11 @@ export function usePresetGenerate(options: {
                         !!targetSessionId &&
                         targetSessionId ===
                             (optionsSessionIdRef.current ?? null)
+                    const draftWasNotEdited =
+                        jobSessionRawTextRef.current ===
+                        optionsSessionRawTextRef.current
 
-                    if (stillSameSession) {
+                    if (stillSameSession && draftWasNotEdited) {
                         onApplyRef.current(event.rawText)
                         if (event.warnings?.length) {
                             pushLog(
@@ -202,15 +210,21 @@ export function usePresetGenerate(options: {
                                 'ok'
                             )
                         }
-                    } else {
+                    } else if (!stillSameSession) {
                         pushLog(
                             '生成完成，但当前已切换预设，结果已丢弃',
+                            'info'
+                        )
+                    } else {
+                        pushLog(
+                            '生成完成，但当前草稿已在生成期间修改，结果已丢弃',
                             'info'
                         )
                     }
                     setTokenPreview('')
                     tokenBufRef.current = ''
                     jobSessionIdRef.current = null
+                    jobSessionRawTextRef.current = null
                     finishJob(event.requestId)
                     return
                 }
@@ -220,6 +234,7 @@ export function usePresetGenerate(options: {
                     setTokenPreview('')
                     tokenBufRef.current = ''
                     jobSessionIdRef.current = null
+                    jobSessionRawTextRef.current = null
                     finishJob(event.requestId)
                     return
                 }
@@ -229,6 +244,7 @@ export function usePresetGenerate(options: {
                     setTokenPreview('')
                     tokenBufRef.current = ''
                     jobSessionIdRef.current = null
+                    jobSessionRawTextRef.current = null
                     finishJob(event.requestId)
                 }
             }
@@ -261,6 +277,7 @@ export function usePresetGenerate(options: {
         setTokenPreview('')
         tokenBufRef.current = ''
         jobSessionIdRef.current = current.id
+        jobSessionRawTextRef.current = current.rawText
         setRequestId(nextRequestId)
         requestIdRef.current = nextRequestId
         setGenerating(true)
@@ -287,6 +304,7 @@ export function usePresetGenerate(options: {
             setRequestId(null)
             requestIdRef.current = null
             jobSessionIdRef.current = null
+            jobSessionRawTextRef.current = null
         }
     }, [api, format, model, pushLog, session])
 
@@ -299,6 +317,7 @@ export function usePresetGenerate(options: {
         // completion cannot overwrite the user's draft after Stop.
         finishJob(id)
         jobSessionIdRef.current = null
+        jobSessionRawTextRef.current = null
         setTokenPreview('')
         tokenBufRef.current = ''
 
@@ -319,6 +338,7 @@ export function usePresetGenerate(options: {
             }
             requestIdRef.current = null
             jobSessionIdRef.current = null
+            jobSessionRawTextRef.current = null
             generatingRef.current = false
             setGenerating(false)
             setRequestId(null)
@@ -352,4 +372,3 @@ export function usePresetGenerate(options: {
             llmModels.length > 0
     }
 }
-

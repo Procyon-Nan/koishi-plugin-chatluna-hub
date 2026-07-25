@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { PresetHubApi } from '../lib/hub-api'
 import { isDraftId } from '../lib/id'
 import { presetSourceOptions } from '../lib/templates'
@@ -12,9 +13,10 @@ import { GeneratePanel } from './generate-panel'
 
 export interface PresetShellProps {
     api: PresetHubApi
+    onDirtyChange: (dirty: boolean) => void
 }
 
-export function PresetShell({ api }: PresetShellProps) {
+export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
     const {
         presets,
         listReason,
@@ -54,6 +56,11 @@ export function PresetShell({ api }: PresetShellProps) {
         exportSession,
         generate
     } = usePresetWorkspace(api)
+
+    useEffect(() => {
+        onDirtyChange(dirty)
+        return () => onDirtyChange(false)
+    }, [dirty, onDirtyChange])
 
     return (
         <div className="chatluna-preset-island">

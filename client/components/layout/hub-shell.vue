@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import { router, send, store } from '@koishijs/client'
 import { ElMessage } from 'element-plus'
 import {
@@ -76,6 +76,7 @@ import {
 import HubRelationshipGraph from '../home/hub-relationship-graph.vue'
 import HubReturnButton from './hub-return-button.vue'
 import CorePage from '../../modules/core/page.vue'
+import { confirmPresetIslandDiscard } from '../../modules/core/preset-island'
 import MemesLunaIcon from '../../icons/memesluna.vue'
 import {
     canCreateHubModuleConfig,
@@ -134,15 +135,23 @@ const moduleDescription = computed(() => {
 
 const resolveIcon = (icon: HubModuleIconName) => icons[icon]
 const showHome = () => {
+    if (!confirmPresetIslandDiscard()) return
     active.value = null
 }
+
+const removeRouteGuard = router.beforeEach((to, from) => {
+    if (from.path !== hubHomePath || to.fullPath === from.fullPath) return true
+    return confirmPresetIslandDiscard()
+})
+
+onBeforeUnmount(removeRouteGuard)
 
 watch(
     () => router.currentRoute.value.fullPath,
     () => {
         const route = router.currentRoute.value
         if (route.path === hubHomePath && route.query.home === '1') {
-            showHome()
+            active.value = null
         }
     },
     { immediate: true }

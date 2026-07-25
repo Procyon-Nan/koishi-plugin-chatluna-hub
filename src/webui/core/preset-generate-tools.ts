@@ -2,9 +2,9 @@
  * In-memory DraftBuffer + ChatLuna StructuredTool factories for one-click
  * preset generation. Tools never touch the filesystem.
  */
-import { createRequire } from 'module'
-import path from 'path'
+import { DynamicStructuredTool } from '@langchain/core/tools'
 import { dump, load } from 'js-yaml'
+import { z } from 'zod'
 import { isRecord } from '../shared'
 import type { ChatLunaCorePresetSource } from './preset-files'
 import type {
@@ -65,24 +65,6 @@ const createWriteGuard = () => {
             return succeeded
         }
     }
-}
-
-const loadLangChainTool = (baseDir: string) => {
-    const requireFromBase = createRequire(path.join(baseDir, 'package.json'))
-    const tools = requireFromBase('@langchain/core/tools') as {
-        DynamicStructuredTool: new (fields: {
-            name: string
-            description: string
-            schema: unknown
-            func: (input: Record<string, unknown>) => Promise<string>
-        }) => unknown
-    }
-    return tools.DynamicStructuredTool
-}
-
-const loadZod = (baseDir: string) => {
-    const requireFromBase = createRequire(path.join(baseDir, 'package.json'))
-    return requireFromBase('zod') as typeof import('zod')
 }
 
 const asObject = (value: unknown): YamlValue => {
@@ -331,13 +313,10 @@ const toolResult = (payload: Record<string, unknown>): string => {
 }
 
 export const createGenerateTools = (options: {
-    baseDir: string
     buffer: DraftBuffer
     mainFormat?: PresetGenerateMainFormat
     characterFormat?: PresetGenerateCharacterFormat
 }): GenerateToolBundle => {
-    const DynamicStructuredTool = loadLangChainTool(options.baseDir)
-    const z = loadZod(options.baseDir)
     const buffer = options.buffer
     const writeGuard = createWriteGuard()
 

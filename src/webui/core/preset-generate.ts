@@ -320,7 +320,6 @@ const runGenerateJob = async (
     const format = resolveFormat(source, input.format)
     const buffer = createDraftBuffer(source, input.rawText ?? '')
     const { tools } = createGenerateTools({
-        baseDir: ctx.baseDir,
         buffer,
         mainFormat:
             source === 'core'

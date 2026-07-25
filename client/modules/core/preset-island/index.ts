@@ -7,6 +7,24 @@ import './styles.css'
 
 let root: Root | null = null
 let mountedEl: HTMLElement | null = null
+let isDirty = false
+
+const discardMessage =
+    '当前预设有未保存修改，继续操作会丢失这些修改。是否继续？'
+
+const setDirty = (dirty: boolean) => {
+    isDirty = dirty
+}
+
+const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (!isDirty) return
+    event.preventDefault()
+    event.returnValue = ''
+}
+
+export function confirmPresetIslandDiscard(): boolean {
+    return !isDirty || window.confirm(discardMessage)
+}
 
 export function mountPresetIsland(
     el: HTMLElement,
@@ -26,7 +44,8 @@ export function mountPresetIsland(
     const api = createPresetHubApi(invoke)
     root = createRoot(el)
     mountedEl = el
-    root.render(createElement(PresetIslandApp, { api }))
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    root.render(createElement(PresetIslandApp, { api, onDirtyChange: setDirty }))
 }
 
 export function unmountPresetIsland(): void {
@@ -34,6 +53,8 @@ export function unmountPresetIsland(): void {
     root.unmount()
     root = null
     mountedEl = null
+    isDirty = false
+    window.removeEventListener('beforeunload', handleBeforeUnload)
 }
 
 export type { PresetIslandOptions }
