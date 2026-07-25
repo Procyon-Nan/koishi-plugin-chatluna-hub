@@ -104,6 +104,9 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             <button
                                 type="button"
                                 className="pei-btn pei-btn-primary"
+                                aria-haspopup="menu"
+                                aria-expanded={newMenuOpen}
+                                aria-controls="pei-new-preset-menu"
                                 onClick={(e) => {
                                     e.stopPropagation()
                                     setNewMenuOpen((open) => !open)
@@ -113,7 +116,9 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             </button>
                             {newMenuOpen ? (
                                 <div
+                                    id="pei-new-preset-menu"
                                     className="pei-menu-panel"
+                                    role="menu"
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     {presetSourceOptions.map((option) => (
@@ -121,6 +126,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                             key={option.value}
                                             type="button"
                                             className="pei-menu-item"
+                                            role="menuitem"
                                             onClick={() => startCreate(option.value)}
                                         >
                                             {option.label}
@@ -310,7 +316,12 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             {detailLoading ? (
                                 <div className="pei-empty">加载中…</div>
                             ) : (
-                                <div className="pei-form-scroll">
+                                <div
+                                    id={`pei-tabpanel-${editorTab}`}
+                                    className="pei-form-scroll"
+                                    role="tabpanel"
+                                    aria-labelledby={`pei-tab-${editorTab}`}
+                                >
                                     <EditorFormBody
                                         source={session.source}
                                         tab={editorTab}
@@ -331,13 +342,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             )}
 
                             {status ? (
-                                <div
-                                    className={
-                                        status.includes('失败')
-                                            ? 'pei-status pei-status-error'
-                                            : 'pei-status pei-status-ok'
-                                    }
-                                >
+                                <div className="pei-status pei-status-ok">
                                     {status}
                                 </div>
                             ) : null}

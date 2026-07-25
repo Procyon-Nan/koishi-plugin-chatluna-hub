@@ -432,7 +432,7 @@
 
 .chatluna-preset-island .pei-ai-log-line {
     color: var(--pei-muted);
-    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 
 .chatluna-preset-island .pei-ai-log-step {

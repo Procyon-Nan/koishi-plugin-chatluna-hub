@@ -83,7 +83,39 @@ interface ChatLunaConversationServiceLike {
     removeAcl?: (conversationId: string) => Promise<void>
 }
 
-interface ChatLunaLikeService {
+export interface ChatLunaAgentStreamLike {
+    result: Promise<unknown>
+}
+
+export interface ChatLunaAgentLike {
+    stream: (input: {
+        prompt: string
+        signal?: AbortSignal
+        requestId?: string
+        onToken?: (token: string) => void | Promise<void>
+        onStep?: (event: unknown) => void | Promise<void>
+    }) => Promise<ChatLunaAgentStreamLike>
+}
+
+export interface ChatLunaAgentCreateOptions {
+    id?: string
+    name?: string
+    description?: string
+    model: string
+    tools?: unknown[]
+    mode?: 'tool-calling' | 'react'
+    system?: string
+    maxSteps?: number
+    handleParsingErrors?: boolean
+}
+
+export interface ChatLunaAgentServiceLike {
+    createAgent?: (
+        options: ChatLunaAgentCreateOptions
+    ) => Promise<ChatLunaAgentLike>
+}
+
+interface ChatLunaLikeService extends ChatLunaAgentServiceLike {
     platform?: {
         listAllModels?: (type: number) => {
             value?: unknown
@@ -92,25 +124,6 @@ interface ChatLunaLikeService {
     preset?: ChatLunaPresetServiceLike
     conversation?: ChatLunaConversationServiceLike
     clearCache?: (conversation: ConversationRecord) => Promise<void>
-    createAgent?: (options: {
-        id?: string
-        name?: string
-        description?: string
-        model: string
-        tools?: unknown[]
-        mode?: 'tool-calling' | 'react'
-        system?: string
-        maxSteps?: number
-        handleParsingErrors?: boolean
-    }) => Promise<{
-        stream: (input: {
-            prompt: string
-            signal?: AbortSignal
-            requestId?: string
-            onToken?: (token: string) => void | Promise<void>
-            onStep?: (event: unknown) => void | Promise<void>
-        }) => Promise<{ result: Promise<unknown> }>
-    }>
 }
 
 interface ChatLunaCharacterPresetServiceLike {
