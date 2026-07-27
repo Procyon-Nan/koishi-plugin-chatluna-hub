@@ -13,7 +13,11 @@ export const detectPresetSource = (rawText: string): PresetSource => {
     return 'core'
 }
 
-/** Pull keywords / name for list display without a full YAML dependency path. */
+/**
+ * Degraded list hints scraped from raw text: only for a document that failed to
+ * parse. Whenever a parsed structure exists, read the hints from it instead —
+ * these regexes cannot see scalar shapes such as `keywords: 猫娘`.
+ */
 export const extractListHints = (
     rawText: string,
     source: PresetSource

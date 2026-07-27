@@ -1,85 +1,92 @@
-import { numOrUndef } from '../../lib/form-utils'
-import type { AuthorsNote, RawPreset } from '../../lib/preset-types'
-import { TemplateEditor } from '../template-editor'
+import type { RawPreset } from '../../lib/preset-types'
+import {
+    FieldShapeNotice,
+    NumberInputField,
+    readObject,
+    SelectField,
+    TemplateField
+} from './field-guards'
 
 export interface MainAuthorNoteFormProps {
     preset: RawPreset
     onChange: (path: string, value: unknown) => void
+    disabled?: boolean
 }
+
+const INSERT_POSITION_OPTIONS = [
+    { value: 'after_char_defs', label: '角色定义后' },
+    { value: 'in_chat', label: '聊天末尾' }
+] as const
 
 export function MainAuthorNoteForm({
     preset,
-    onChange
+    onChange,
+    disabled = false
 }: MainAuthorNoteFormProps) {
-    const note: AuthorsNote = preset.authors_note ?? { content: '' }
+    const note = readObject(preset.authors_note)
 
-    const patch = (partial: Partial<AuthorsNote>) => {
+    if (note === null) {
+        return (
+            <div className="pei-form-stack">
+                <section className="pei-card">
+                    <h3 className="pei-card-title">作者注释</h3>
+                    <FieldShapeNotice
+                        label="作者注释 authors_note"
+                        value={preset.authors_note}
+                    />
+                </section>
+            </div>
+        )
+    }
+
+    // Patching the whole node keeps the keys this form does not render.
+    const patch = (partial: Record<string, unknown>) => {
         onChange('authors_note', { ...note, ...partial })
+    }
+    const updateGuardedField = (path: string, value: unknown) => {
+        patch({ [path]: value })
     }
 
     return (
         <div className="pei-form-stack">
             <section className="pei-card">
                 <h3 className="pei-card-title">作者注释</h3>
-                <label className="pei-field">
-                    <span>注释内容</span>
-                    <TemplateEditor
-                        id="authors-note-content"
-                        context="author-note"
-                        minRows={5}
-                        placeholder="注释的内容"
-                        ariaLabel="作者注释内容"
-                        value={note.content}
-                        onChange={(value) => patch({ content: value })}
-                    />
-                </label>
+                <TemplateField
+                    label="注释内容"
+                    value={note.content}
+                    path="content"
+                    id="authors-note-content"
+                    context="author-note"
+                    minRows={5}
+                    placeholder="注释的内容"
+                    ariaLabel="作者注释内容"
+                    disabled={disabled}
+                    onChange={updateGuardedField}
+                />
                 <div className="pei-field-grid">
-                    <label className="pei-field">
-                        <span>插入频率</span>
-                        <input
-                            className="pei-input"
-                            type="number"
-                            value={note.insertFrequency ?? ''}
-                            onChange={(e) =>
-                                patch({
-                                    insertFrequency: numOrUndef(e.target.value)
-                                })
-                            }
-                        />
-                    </label>
-                    <label className="pei-field">
-                        <span>插入深度</span>
-                        <input
-                            className="pei-input"
-                            type="number"
-                            value={note.insertDepth ?? ''}
-                            onChange={(e) =>
-                                patch({
-                                    insertDepth: numOrUndef(e.target.value)
-                                })
-                            }
-                        />
-                    </label>
-                    <label className="pei-field">
-                        <span>插入位置</span>
-                        <select
-                            className="pei-select"
-                            value={note.insertPosition ?? ''}
-                            onChange={(e) =>
-                                patch({
-                                    insertPosition: (e.target.value ||
-                                        undefined) as
-                                        | 'after_char_defs'
-                                        | 'in_chat'
-                                        | undefined
-                                })
-                            }
-                        >
-                            <option value="">默认</option>
-                            <option value="after_char_defs">角色定义后</option>
-                            <option value="in_chat">聊天末尾</option>
-                        </select>
-                    </label>
+                    <NumberInputField
+                        label="插入频率"
+                        value={note.insertFrequency}
+                        path="insertFrequency"
+                        disabled={disabled}
+                        onChange={updateGuardedField}
+                    />
+                    <NumberInputField
+                        label="插入深度"
+                        value={note.insertDepth}
+                        path="insertDepth"
+                        disabled={disabled}
+                        onChange={updateGuardedField}
+                    />
+                    <SelectField
+                        label="插入位置"
+                        value={note.insertPosition}
+                        path="insertPosition"
+                        options={INSERT_POSITION_OPTIONS}
+                        emptyLabel="默认"
+                        disabled={disabled}
+                        onChange={updateGuardedField}
+                    />
                 </div>
             </section>
         </div>

@@ -14,7 +14,13 @@ export type PresetGenerateEventKind =
     | 'aborted'
 
 export interface ChatLunaCorePresetGenerateStartInput {
-    /** Client may supply one; server generates when omitted. */
+    /**
+     * Ignored by the server, which always allocates its own id and returns it
+     * in {@link ChatLunaCorePresetGenerateStartResult}. That keeps the cancel
+     * handle unguessable and collision-free, but it does not isolate clients
+     * from each other: the id is broadcast with every progress event and cancel
+     * does not check the caller. See `startChatLunaCorePresetGenerate`.
+     */
     requestId?: string
     /** Model fullName, e.g. `openai/gpt-4o`. */
     model: string

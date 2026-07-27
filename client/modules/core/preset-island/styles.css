@@ -2,7 +2,20 @@
     --pei-bg: var(--k-page-bg, #f5f7fa);
     --pei-card: var(--k-card-bg, #fff);
     --pei-text: var(--k-text-dark, #1f2329);
-    --pei-muted: var(--k-text-light, #8a919f);
+    /*
+     * Secondary text derives from --k-text-normal (--fg2), not the --k-text-light
+     * (--fg3) that Koishi uses for the same role. --fg3 composites to #a9a9ab on
+     * the light card and #7c7c7b on the dark one, i.e. 2.35:1 and 3.66:1 against
+     * their own backgrounds — both under the 4.5:1 that WCAG 2.1 SC 1.4.3 asks of
+     * body text. --fg2 reaches 5.51:1 and 6.38:1.
+     *
+     * No single literal can clear 4.5:1 on both themes: the light card demands a
+     * relative luminance <= 0.183 and the dark card >= 0.260. It has to be a token
+     * that flips with the theme, and the only accessible one is --k-text-normal.
+     * Redefining --fg3 globally would reach the whole console, so the override
+     * stays on this element and inherits no further than the island.
+     */
+    --pei-muted: var(--k-text-normal, #5c6370);
     --pei-border: var(--k-color-divider, #e5e7eb);
     --pei-primary: var(--k-color-primary, #409eff);
     --pei-danger: #f56c6c;
@@ -422,7 +435,8 @@
     border-radius: 8px;
     border: 1px solid var(--pei-border);
     background: color-mix(in srgb, var(--pei-bg), transparent 20%);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 11px;
     line-height: 1.45;
     display: flex;
@@ -496,7 +510,8 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--pei-bg), transparent 30%);
     color: var(--pei-text);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 13px;
     line-height: 1.55;
 }

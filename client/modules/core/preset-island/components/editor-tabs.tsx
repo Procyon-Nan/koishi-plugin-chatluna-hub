@@ -44,7 +44,11 @@ export interface EditorTabsBarProps {
     onChange: (tab: EditorTabId) => void
 }
 
-export function EditorTabsBar({ source, active, onChange }: EditorTabsBarProps) {
+export function EditorTabsBar({
+    source,
+    active,
+    onChange
+}: EditorTabsBarProps) {
     const tabs = tabsForSource(source)
 
     return (
@@ -57,9 +61,7 @@ export function EditorTabsBar({ source, active, onChange }: EditorTabsBarProps) 
                     role="tab"
                     aria-selected={active === tab.id}
                     aria-controls={`pei-tabpanel-${tab.id}`}
-                    className={
-                        active === tab.id ? 'pei-tab active' : 'pei-tab'
-                    }
+                    className={active === tab.id ? 'pei-tab active' : 'pei-tab'}
                     onClick={() => onChange(tab.id)}
                 >
                     {tab.label}
@@ -78,6 +80,11 @@ export interface EditorFormBodyProps {
     rawText: string
     parseError: string
     onRawTextChange: (value: string) => void
+    /**
+     * Set while YAML parsing or a structured write-back failed. The workspace
+     * refuses further patches until the YAML tab restores a safe state.
+     */
+    structuredEditingBlocked?: boolean
 }
 
 export function EditorFormBody({
@@ -88,16 +95,20 @@ export function EditorFormBody({
     onChange,
     rawText,
     parseError,
-    onRawTextChange
+    onRawTextChange,
+    structuredEditingBlocked = false
 }: EditorFormBodyProps) {
     if (tab === 'yaml') {
         return (
             <div className="pei-yaml-pane">
                 {parseError ? (
-                    <div className="pei-alert pei-alert-error">{parseError}</div>
+                    <div className="pei-alert pei-alert-error">
+                        {parseError}
+                    </div>
                 ) : (
                     <div className="pei-status pei-status-ok">
-                        高级 YAML：修改成功解析后会回写表单；解析失败保留上一份合法草稿
+                        高级
+                        YAML：修改成功解析后会回写表单；解析失败保留上一份合法草稿
                     </div>
                 )}
                 <textarea
@@ -111,44 +122,123 @@ export function EditorFormBody({
         )
     }
 
+    const form = renderForm({
+        source,
+        tab,
+        core,
+        character,
+        onChange,
+        disabled: structuredEditingBlocked
+    })
+
+    if (!form) {
+        return (
+            <div className="pei-empty">
+                {parseError
+                    ? `结构化草稿不可用：${parseError}`
+                    : '当前 Tab 无可用表单'}
+            </div>
+        )
+    }
+
+    if (!structuredEditingBlocked) return form
+
+    return (
+        <>
+            <div className="pei-alert pei-alert-error" role="status">
+                结构化表单已锁定为只读，当前内容无法安全写回 YAML。 请切换到
+                YAML 页签处理后继续编辑：{parseError}
+            </div>
+            {form}
+        </>
+    )
+}
+
+interface RenderFormOptions {
+    source: PresetSource
+    tab: EditorTabId
+    core: RawPreset | null
+    character: CharacterPresetTemplate | null
+    onChange: (path: string, value: unknown) => void
+    disabled: boolean
+}
+
+function renderForm({
+    source,
+    tab,
+    core,
+    character,
+    onChange,
+    disabled
+}: RenderFormOptions) {
     if (source === 'core' && core) {
         if (tab === 'basic') {
-            return <MainBasicForm preset={core} onChange={onChange} />
+            return (
+                <MainBasicForm
+                    preset={core}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            )
         }
         if (tab === 'messages') {
-            return <MainMessagesForm preset={core} onChange={onChange} />
+            return (
+                <MainMessagesForm
+                    preset={core}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            )
         }
         if (tab === 'world_lores') {
-            return <MainWorldLoresForm preset={core} onChange={onChange} />
+            return (
+                <MainWorldLoresForm
+                    preset={core}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            )
         }
         if (tab === 'author_note') {
-            return <MainAuthorNoteForm preset={core} onChange={onChange} />
+            return (
+                <MainAuthorNoteForm
+                    preset={core}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            )
         }
     }
 
     if (source === 'character' && character) {
         if (tab === 'basic') {
             return (
-                <CharacterBasicForm preset={character} onChange={onChange} />
+                <CharacterBasicForm
+                    preset={character}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
             )
         }
         if (tab === 'system') {
             return (
-                <CharacterSystemForm preset={character} onChange={onChange} />
+                <CharacterSystemForm
+                    preset={character}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
             )
         }
         if (tab === 'input') {
             return (
-                <CharacterInputForm preset={character} onChange={onChange} />
+                <CharacterInputForm
+                    preset={character}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
             )
         }
     }
 
-    return (
-        <div className="pei-empty">
-            {parseError
-                ? `结构化草稿不可用：${parseError}`
-                : '当前 Tab 无可用表单'}
-        </div>
-    )
+    return null
 }

@@ -1,11 +1,32 @@
 /**
- * Generic, domain-agnostic helpers shared across the server webui modules.
+ * Generic helpers shared across the server webui modules.
  *
- * Everything here is pure and free of Koishi/ChatLuna domain types so it can be
- * imported by any server module without creating dependency cycles. Domain
- * helpers (ChatLuna service access, model normalization, etc.) live next to the
- * feature that owns them, not here.
+ * Everything here is pure and imports nothing, so any server module can pull it
+ * in freely. The Console authority levels below are the one concession: they
+ * are a Koishi Console concept rather than a generic helper, but they are bare
+ * numbers with no imports attached and both layers gate on them, so they belong
+ * to the shared surface too. Domain helpers (ChatLuna service access, model
+ * normalization, etc.) live next to the feature that owns them, not here.
  */
+
+/**
+ * Koishi Console authority levels used to gate the Hub surface. The RPC
+ * listener table, the console DataService and the preset generation broadcast
+ * all gate on these, so they live here rather than in
+ * `src/console/listeners.ts`: `src/console/**` is the transport layer and
+ * depends on the `src/webui/**` domain layer, so importing back the other way
+ * would invert that direction.
+ *
+ * Note that it would not have formed a cycle — listeners.ts reaches
+ * `../webui/service` and `../webui/events` through `import type` only, which is
+ * erased at compile time and leaves no runtime edge. Layering, not cycle
+ * avoidance, is the reason these constants sit here.
+ *
+ * Anything that reads config/data requires READ; anything that mutates state or
+ * carries generated preset content requires MUTATE.
+ */
+export const CONSOLE_AUTHORITY_READ = 3
+export const CONSOLE_AUTHORITY_MUTATE = 4
 
 /** Turn an unknown thrown value into a human-readable reason string. */
 export const coerceReason = (error: unknown): string => {

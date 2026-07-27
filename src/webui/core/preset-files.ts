@@ -152,14 +152,38 @@ const toStringArray = (value: unknown): string[] => {
         .filter(Boolean)
 }
 
-const validPromptRoles = new Set([
+/**
+ * Prompt roles accepted by the upstream main-preset parser, mirroring the
+ * switch in `chatluna/packages/core/src/llm-core/prompt/preset_prompt_parse.ts`.
+ *
+ * This tuple is the single source of truth for every role check on the server:
+ * preset parsing validates against it, and the one-click generation tool
+ * derives its zod enum from it, so the two cannot drift apart and reject a
+ * preset the runtime would happily load. `as const` keeps the literal tuple
+ * type `z.enum` requires.
+ */
+export const PROMPT_ROLES = [
     'assistant',
     'ai',
     'model',
     'user',
     'human',
     'system'
-])
+] as const
+
+export type PromptRole = (typeof PROMPT_ROLES)[number]
+
+export const PROMPT_ROLE_SET: ReadonlySet<string> = new Set(PROMPT_ROLES)
+
+/**
+ * The subset upstream turns into an AIMessage. Anything looking for "an
+ * assistant example" has to accept all three, not just the literal 'assistant'.
+ */
+export const AI_PROMPT_ROLES: ReadonlySet<string> = new Set([
+    'assistant',
+    'ai',
+    'model'
+] satisfies PromptRole[])
 
 const parseCorePreset = (preset: unknown): ChatLunaCorePresetSummary => {
     if (!isRecord(preset)) {
@@ -184,9 +208,12 @@ const parseCorePreset = (preset: unknown): ChatLunaCorePresetSummary => {
 
         if (
             typeof prompt.role !== 'string' ||
-            !validPromptRoles.has(prompt.role)
+            !PROMPT_ROLE_SET.has(prompt.role)
         ) {
-            throw new Error(`Prompt #${index + 1} has an invalid role.`)
+            throw new Error(
+                `Prompt #${index + 1} has an invalid role. ` +
+                    `Allowed roles: ${PROMPT_ROLES.join(', ')}.`
+            )
         }
 
         if (prompt.content == null) {

@@ -6,7 +6,12 @@ import { DynamicStructuredTool } from '@langchain/core/tools'
 import { dump, load } from 'js-yaml'
 import { z } from 'zod'
 import { isRecord } from '../shared'
-import type { ChatLunaCorePresetSource } from './preset-files'
+import {
+    AI_PROMPT_ROLES,
+    type ChatLunaCorePresetSource,
+    PROMPT_ROLE_SET,
+    PROMPT_ROLES
+} from './preset-files'
 import type {
     PresetGenerateCharacterFormat,
     PresetGenerateMainFormat
@@ -37,6 +42,101 @@ type YamlValue = Record<string, unknown>
 
 const SENSITIVE_KEY =
     /^(api[_-]?key|api[_-]?token|api[_-]?url|token|password|secret)$/i
+
+/** Character budget for any draft text handed to the model. */
+export const GENERATE_TEXT_LIMIT = 4000
+
+/**
+ * Hard ceiling on the draft YAML accepted by a generation request. YAML aliases
+ * expand multiplicatively once the draft is dumped with `noRefs: true`, so the
+ * raw input has to be bounded before it is parsed.
+ */
+const MAX_RAW_TEXT_LENGTH = 512 * 1024
+
+/**
+ * Ceiling on the alias-expanded node count of a parsed draft. `load()` keeps
+ * aliases as shared references (cheap), while `dump(..., { noRefs: true })`
+ * materializes every reference — so MAX_RAW_TEXT_LENGTH alone does not bound
+ * the output, because each extra alias level multiplies the expansion.
+ */
+const MAX_DRAFT_NODES = 200_000
+
+/** Ceiling on draft nesting, so the walk below cannot exhaust the JS stack. */
+const MAX_DRAFT_DEPTH = 64
+
+/**
+ * UTF-16 code-unit budget for expanded string values and object keys. This is
+ * mirrored by MAX_PRESET_EXPANDED_CONTENT_LENGTH in the client serializer.
+ */
+const MAX_DRAFT_EXPANDED_CONTENT_LENGTH = 8 * 1024 * 1024
+
+/** Hard ceiling on serialized YAML returned to the client. */
+const MAX_DRAFT_OUTPUT_LENGTH = 8 * 1024 * 1024
+
+/** Truncate a string to `max` characters, marking it when it was cut. */
+export const limitText = (
+    value: unknown,
+    max = GENERATE_TEXT_LIMIT
+): string => {
+    if (typeof value !== 'string' || !value) return ''
+    return value.length > max ? `${value.slice(0, max)}…` : value
+}
+
+/**
+ * Count the nodes a parsed draft expands to once aliases are materialized,
+ * aborting as soon as the cap is passed. Shared references are deliberately NOT
+ * memoized: counting them once would miss exactly the amplification this
+ * guards against.
+ */
+const assertDraftWithinLimits = (value: unknown) => {
+    let remaining = MAX_DRAFT_NODES
+    let remainingContent = MAX_DRAFT_EXPANDED_CONTENT_LENGTH
+
+    const consumeContent = (length: number) => {
+        if (length > remainingContent) {
+            throw new Error(
+                `预设草稿展开后内容过大（超过 ${
+                    MAX_DRAFT_EXPANDED_CONTENT_LENGTH / 1024 / 1024
+                } MiB，可能包含 YAML 别名放大），请精简后重试。`
+            )
+        }
+        remainingContent -= length
+    }
+
+    const walk = (node: unknown, depth: number) => {
+        if (depth > MAX_DRAFT_DEPTH) {
+            throw new Error('预设草稿嵌套层级过深，请精简后重试。')
+        }
+        if (remaining <= 0) {
+            throw new Error(
+                '预设草稿展开后结构过大（可能包含 YAML 别名放大），请精简后重试。'
+            )
+        }
+        remaining -= 1
+
+        if (typeof node === 'string') {
+            consumeContent(node.length)
+            return
+        }
+        if (node instanceof RegExp) {
+            consumeContent(node.source.length)
+            return
+        }
+        if (!node || typeof node !== 'object' || node instanceof Date) return
+        if (Array.isArray(node)) {
+            for (const item of node) walk(item, depth + 1)
+            return
+        }
+        for (const [key, child] of Object.entries(
+            node as Record<string, unknown>
+        )) {
+            consumeContent(key.length)
+            walk(child, depth + 1)
+        }
+    }
+
+    walk(value, 0)
+}
 
 const createWriteGuard = () => {
     let claimed = false
@@ -78,12 +178,19 @@ export const createDraftBuffer = (
     source: ChatLunaCorePresetSource,
     rawText: string
 ): DraftBuffer => {
+    if (rawText.length > MAX_RAW_TEXT_LENGTH) {
+        throw new Error(
+            `预设草稿过大（超过 ${MAX_RAW_TEXT_LENGTH / 1024} KB），请精简后重试。`
+        )
+    }
+
     const text = rawText.trim()
     let data: YamlValue = {}
 
     if (text) {
         const loaded = load(rawText)
         data = asObject(loaded)
+        assertDraftWithinLimits(data)
     }
 
     return {
@@ -95,14 +202,33 @@ export const createDraftBuffer = (
     }
 }
 
+/**
+ * `noRefs: true` is load-bearing here, not boilerplate. This dumps the parsed
+ * object graph as-is, so shared references coming out of `load()` would
+ * otherwise be re-emitted as YAML anchors/aliases and the draft handed back to
+ * the user would carry the amplification with it. It is also what makes the
+ * expanded node and content budgets necessary: with `noRefs` every alias is
+ * materialized, so neither input length nor node count alone bounds the output.
+ * (The client's `serialize.ts#forYaml` rebuilds every object before dumping,
+ * so the `noRefs` over there really is redundant — this one is not.)
+ */
 export const serializeDraftBuffer = (buffer: DraftBuffer): string => {
-    return (
+    assertDraftWithinLimits(buffer.data)
+    const output =
         dump(buffer.data, {
             lineWidth: -1,
             noRefs: true,
             sortKeys: false
         }).trimEnd() + '\n'
-    )
+
+    if (output.length > MAX_DRAFT_OUTPUT_LENGTH) {
+        throw new Error(
+            `预设草稿序列化结果过大（超过 ${
+                MAX_DRAFT_OUTPUT_LENGTH / 1024 / 1024
+            } MiB），请精简后重试。`
+        )
+    }
+    return output
 }
 
 const assertNoSensitiveKeys = (value: unknown, pathLabel = 'root') => {
@@ -149,17 +275,19 @@ const validateMainCore = (preset: YamlValue, requireFormatPrompt: boolean) => {
             throw new Error(`prompts[${index}] 必须是对象`)
         }
         const role = prompt.role
-        if (
-            role !== 'system' &&
-            role !== 'user' &&
-            role !== 'assistant' &&
-            role !== 'human' &&
-            role !== 'ai' &&
-            role !== 'model'
-        ) {
-            throw new Error(`prompts[${index}] 的 role 无效`)
+        if (typeof role !== 'string' || !PROMPT_ROLE_SET.has(role)) {
+            throw new Error(
+                `prompts[${index}] 的 role 无效，可选值：${PROMPT_ROLES.join('、')}`
+            )
         }
         if (role === 'system') hasSystem = true
+        // Content is required to be a plain string here, unlike the preset
+        // parser which also accepts LangChain complex-content arrays: this
+        // validator only ever sees `replaceGeneratedMainPreset` output, whose
+        // schema is string-only, and that tool replaces `prompts` wholesale.
+        // A seeded draft's complex content is therefore discarded by a
+        // successful generation — widening this check alone would not preserve
+        // it, the tool schema would have to carry it through first.
         if (typeof prompt.content !== 'string' || !prompt.content.trim()) {
             throw new Error(`prompts[${index}] 缺少有效 content`)
         }
@@ -188,6 +316,58 @@ const validateMainCore = (preset: YamlValue, requireFormatPrompt: boolean) => {
     return keywords
 }
 
+/**
+ * A soft check on the generated system prompt. The generation instructions are
+ * written in English, so hints match on notation the model reproduces verbatim
+ * instead of on localized wording, and each carries a full readable sentence —
+ * warnings are surfaced to the user as-is.
+ */
+interface SystemPromptHint {
+    pattern: RegExp
+    warning: string
+}
+
+const MARKDOWN_SYSTEM_HINTS: SystemPromptHint[] = [
+    {
+        pattern: /!\[/,
+        warning: 'system prompt 未说明 Markdown 图片写法 ![desc](https://url)'
+    },
+    {
+        pattern: /(?<!!)\[[^\]\n]*\]\([^)\n]*\)/,
+        warning:
+            'system prompt 未说明 Markdown 文件链接写法 [name](https://url)'
+    },
+    {
+        pattern: /@\S/,
+        warning: 'system prompt 未说明 @昵称 形式的提及写法'
+    },
+    {
+        pattern: /---/,
+        warning: 'system prompt 未说明使用 --- 或空行分隔多段内容'
+    }
+]
+
+/**
+ * Resource elements the Koishi instructions list as available but never
+ * require, so a missing mention is a warning rather than a hard failure.
+ */
+const KOISHI_RESOURCE_TAGS = ['<img', '<at', '<file']
+
+const KOISHI_INLINE_TAGS = [
+    '<b>',
+    '<strong>',
+    '<i>',
+    '<em>',
+    '<u>',
+    '<ins>',
+    '<s>',
+    '<del>',
+    '<code>',
+    '<sup>',
+    '<sub>',
+    '<p>'
+]
+
 const isMessageElementSequence = (content: string) => {
     const messagePattern = /<message(?:\s[^>]*)?>[\s\S]*?<\/message>/gi
     const messages = content.match(messagePattern) || []
@@ -203,8 +383,14 @@ const validateMainFormat = (
         .filter((item) => isRecord(item) && item.role === 'system')
         .map((item) => String((item as YamlValue).content ?? ''))
         .join('\n')
+    // 'ai' and 'model' are assistant examples too — upstream maps all three to
+    // an AIMessage, so matching only 'assistant' would reject a preset whose
+    // examples the runtime reads as assistant turns.
     const assistant = prompts.filter(
-        (item) => isRecord(item) && item.role === 'assistant'
+        (item) =>
+            isRecord(item) &&
+            typeof item.role === 'string' &&
+            AI_PROMPT_ROLES.has(item.role)
     ) as YamlValue[]
 
     if (format === 'markdown') {
@@ -223,17 +409,16 @@ const validateMainFormat = (
         ) {
             throw new Error('Markdown assistant 示例不能混入 Koishi 消息元素')
         }
-        return ['![', '[文件名]', '@昵称', '---'].filter(
-            (rule) => !system.includes(rule)
-        )
+        return MARKDOWN_SYSTEM_HINTS.filter(
+            (hint) => !hint.pattern.test(system)
+        ).map((hint) => hint.warning)
     }
 
-    const coreTags = ['<message', '<img', '<at', '<file']
-    const missingCoreTags = coreTags.filter((tag) => !system.includes(tag))
-    if (missingCoreTags.length > 0) {
-        throw new Error(
-            `Koishi 核心元素规则不完整：${missingCoreTags.join(', ')}`
-        )
+    // Only <message> is mandated by the Koishi instructions; the resource and
+    // inline tags are merely listed as available, so their absence degrades to
+    // a warning instead of burning one of the few retry steps on a hard reject.
+    if (!system.includes('<message')) {
+        throw new Error('Koishi 格式要求 system prompt 明确约束 <message> 元素')
     }
     if (assistant.length < 2) {
         throw new Error('Koishi 格式至少需要两条 assistant 示例')
@@ -246,20 +431,24 @@ const validateMainFormat = (
     ) {
         throw new Error('Koishi assistant 示例必须完全由 message 标签构成')
     }
-    return [
-        '<b>',
-        '<strong>',
-        '<i>',
-        '<em>',
-        '<u>',
-        '<ins>',
-        '<s>',
-        '<del>',
-        '<code>',
-        '<sup>',
-        '<sub>',
-        '<p>'
-    ].filter((tag) => !system.includes(tag))
+
+    const warnings: string[] = []
+    const missingResourceTags = KOISHI_RESOURCE_TAGS.filter(
+        (tag) => !system.includes(tag)
+    )
+    if (missingResourceTags.length > 0) {
+        warnings.push(
+            `system prompt 未说明可选的资源元素：${missingResourceTags
+                .map((tag) => `${tag}>`)
+                .join('、')}`
+        )
+    }
+    if (!KOISHI_INLINE_TAGS.some((tag) => system.includes(tag))) {
+        warnings.push(
+            'system prompt 未列出可用的行内样式标签（b/strong/i/em/u/ins/s/del/code/sup/sub/p）'
+        )
+    }
+    return warnings
 }
 
 const validateCharacterCore = (
@@ -328,7 +517,7 @@ export const createGenerateTools = (options: {
     const writeGuard = createWriteGuard()
 
     const baseMessageSchema = z.object({
-        role: z.enum(['system', 'user', 'assistant']),
+        role: z.enum(PROMPT_ROLES),
         type: z
             .enum(['personality', 'description', 'first_message', 'scenario'])
             .optional(),
@@ -399,7 +588,7 @@ export const createGenerateTools = (options: {
             return toolResult({
                 ok: true,
                 source: buffer.source,
-                rawText: serializeDraftBuffer(buffer)
+                rawText: limitText(serializeDraftBuffer(buffer))
             })
         }
     })
@@ -438,7 +627,6 @@ export const createGenerateTools = (options: {
                 validateMainCore(next, true)
                 const warnings = validateMainFormat(next, options.mainFormat)
                 buffer.data = next
-                buffer.rawText = serializeDraftBuffer(buffer)
                 buffer.writeSucceeded = true
                 buffer.warnings = warnings
                 writeGuard.markSuccess()
@@ -472,9 +660,6 @@ export const createGenerateTools = (options: {
                     '当前不是伪装预设，无法调用 replaceGeneratedCharacterPreset'
                 )
             }
-            if ('path' in input) {
-                throw new Error('不允许修改 path')
-            }
 
             writeGuard.claim()
             try {
@@ -488,7 +673,6 @@ export const createGenerateTools = (options: {
                 }
                 validateCharacterCore(next, options.characterFormat)
                 buffer.data = next
-                buffer.rawText = serializeDraftBuffer(buffer)
                 buffer.writeSucceeded = true
                 buffer.warnings = []
                 writeGuard.markSuccess()

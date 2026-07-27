@@ -2,6 +2,13 @@ import { useEffect, useRef } from 'react'
 import type { ChatLunaCoreModelItem, PresetGenerateFormat } from '../../types'
 import type { GenerateLogLine } from '../hooks/use-preset-generate'
 
+/**
+ * Rounding, zoom levels and fractional line heights all keep
+ * `scrollTop + clientHeight` a hair short of `scrollHeight`, so "at the bottom"
+ * needs a tolerance rather than an equality test.
+ */
+const BOTTOM_TOLERANCE_PX = 16
+
 export interface GeneratePanelProps {
     model: string
     onModelChange: (fullName: string) => void
@@ -38,11 +45,31 @@ export function GeneratePanel({
     onStop
 }: GeneratePanelProps) {
     const logRef = useRef<HTMLDivElement>(null)
+    const stickToBottomRef = useRef(true)
+    const wasGeneratingRef = useRef(generating)
 
     useEffect(() => {
+        // A new run starts at the bottom again, even if the user had scrolled up
+        // to read the previous one.
+        const started = generating && !wasGeneratingRef.current
+        wasGeneratingRef.current = generating
+        if (started) stickToBottomRef.current = true
+
+        // Scrolling up is a deliberate act of reading back; pulling the view
+        // down on the next line would undo it mid-sentence.
+        if (!stickToBottomRef.current) return
+
         const element = logRef.current
         if (element) element.scrollTop = element.scrollHeight
     }, [generating, logLines, tokenPreview])
+
+    const onLogScroll = () => {
+        const element = logRef.current
+        if (!element) return
+        const distanceFromBottom =
+            element.scrollHeight - element.scrollTop - element.clientHeight
+        stickToBottomRef.current = distanceFromBottom <= BOTTOM_TOLERANCE_PX
+    }
 
     return (
         <div className="pei-ai-panel">
@@ -54,7 +81,9 @@ export function GeneratePanel({
                     id="pei-ai-model"
                     className="pei-select pei-ai-select"
                     value={model}
-                    disabled={generating || modelsLoading || llmModels.length === 0}
+                    disabled={
+                        generating || modelsLoading || llmModels.length === 0
+                    }
                     onChange={(e) => onModelChange(e.target.value)}
                 >
                     {llmModels.length === 0 ? (
@@ -120,10 +149,13 @@ export function GeneratePanel({
             </div>
 
             {modelsError ? (
-                <div className="pei-ai-hint pei-ai-hint-error">{modelsError}</div>
+                <div className="pei-ai-hint pei-ai-hint-error">
+                    {modelsError}
+                </div>
             ) : (
                 <div className="pei-ai-hint">
-                    使用 ChatLuna Agent 生成核心字段，结果写入当前草稿，不会自动保存。
+                    使用 ChatLuna Agent
+                    生成核心字段，结果写入当前草稿，不会自动保存。
                 </div>
             )}
 
@@ -134,6 +166,7 @@ export function GeneratePanel({
                     role="log"
                     aria-live="polite"
                     aria-relevant="additions text"
+                    onScroll={onLogScroll}
                 >
                     {logLines.map((line) => (
                         <div

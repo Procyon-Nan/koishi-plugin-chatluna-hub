@@ -25,9 +25,7 @@ const dependencyGraphActivityId = 'graph'
 const dependencyGraphActivityPath = '/graph'
 
 const shouldHideDependencyGraphEntry = () => {
-    return (
-        store.chatluna_hub_webui?.config?.hideDependencyGraphEntry === true
-    )
+    return store.chatluna_hub_webui?.config?.hideDependencyGraphEntry === true
 }
 
 export default (ctx: Context) => {
@@ -44,6 +42,8 @@ export default (ctx: Context) => {
 
         if (hiddenEcosystemActivities.has(activity.id)) return true
         if (hiddenEcosystemActivityPaths.has(activity.path)) return true
+
+        return false
     })
 
     ctx.slot({

@@ -114,4 +114,4 @@ yarn build
 1. ChatLuna Hub 的目标是提供统一 WebUI 入口，而不是替代 ChatLuna 生态插件本身。各插件仍保留自己的 WebUI 路由和 RPC 合约。
 2. Hub 的生态集成以路由跳转、状态识别、配置入口和侧边栏整理为主，不要求生态插件为 Hub 重写自身页面。
 3. 模块状态以当前源码中的 `src/webui/modules.ts`、`client/types.ts` 和 `client/module-catalog.ts` 为准；新增或移除模块时需要同步服务端定义、客户端类型、fallback 元数据和详情文案。
-4. Core RPC 合约以 `src/webui/events.ts` 和 `src/console/listeners.ts` 为准，客户端调用封装在 `client/modules/core/api.ts`。
+4. Core RPC 合约以 `src/webui/events.ts` 和 `src/console/listeners.ts` 为准；客户端调用封装在 `client/modules/core/api.ts`，预设相关调用则封装在 `client/modules/core/preset-island/lib/hub-api.ts`。

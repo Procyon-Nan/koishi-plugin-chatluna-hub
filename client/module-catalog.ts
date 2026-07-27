@@ -139,7 +139,7 @@ const configFallbackModuleDefinitions = [
     })
 ]
 
-export const fallbackModules: HubModuleItem[] = [
+const fallbackModuleDefinitions: FallbackModuleDefinition[] = [
     {
         id: 'chatluna',
         group: 'core',
@@ -211,7 +211,10 @@ export const fallbackModules: HubModuleItem[] = [
         routePath: '/chatluna-affinity/dashboard'
     },
     ...configFallbackModuleDefinitions
-].map(createFallbackModule)
+]
+
+export const fallbackModules: HubModuleItem[] =
+    fallbackModuleDefinitions.map(createFallbackModule)
 
 export const moduleDetails = {
     chatluna: {
@@ -270,7 +273,8 @@ export const moduleDetails = {
     memesLuna: {
         title: 'MemesLuna',
         subtitle: ' Koishi 表情路由工具',
-        description: '为 Chatluna 主插件和 character 插件提供变量形式的表情包图片注入',
+        description:
+            '为 Chatluna 主插件和 character 插件提供变量形式的表情包图片注入',
         features: [
             '兼顾本地图片和外链的表情合集管理',
             '图床端点管理',

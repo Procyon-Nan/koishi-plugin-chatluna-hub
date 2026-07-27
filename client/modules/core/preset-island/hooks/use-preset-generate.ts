@@ -1,10 +1,5 @@
 import { receive } from '@koishijs/client'
-import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState
-} from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
     ChatLunaCoreModelItem,
     ChatLunaCorePresetGenerateEvent,
@@ -18,6 +13,9 @@ import type { DraftSession, PresetSource } from '../lib/types'
 
 const MODEL_STORAGE_KEY = 'chatluna-hub-preset-generate-model'
 const MAX_LOG_LINES = 80
+const GENERATE_EVENT = 'chatluna-hub/core/presets/generate/event'
+/** Cap on events held while the server-assigned requestId is still unknown. */
+const MAX_PENDING_EVENTS = 400
 
 export type GenerateLogLine = {
     id: number
@@ -43,8 +41,7 @@ export const formatsForSource = (source: PresetSource) =>
 
 export const defaultFormatForSource = (
     source: PresetSource
-): PresetGenerateFormat =>
-    source === 'character' ? 'tool-call' : 'markdown'
+): PresetGenerateFormat => (source === 'character' ? 'tool-call' : 'markdown')
 
 const readStoredModel = (): string => {
     try {
@@ -60,6 +57,46 @@ const writeStoredModel = (fullName: string) => {
     } catch {
         // ignore quota / private mode
     }
+}
+
+type GenerateEventHandler = (event: ChatLunaCorePresetGenerateEvent) => void
+
+const generateEventHandlers = new Set<GenerateEventHandler>()
+let generateEventBound = false
+
+/**
+ * `receive` keeps a single listener per event name in a module-global map and
+ * exposes no way to remove it, so registering per hook instance both outlives
+ * the component and silently unsubscribes every earlier instance. Bind once and
+ * fan out to the handlers that are still mounted.
+ */
+const subscribeGenerateEvents = (handler: GenerateEventHandler) => {
+    if (!generateEventBound) {
+        generateEventBound = true
+        receive<ChatLunaCorePresetGenerateEvent>(GENERATE_EVENT, (event) => {
+            for (const current of [...generateEventHandlers]) current(event)
+        })
+    }
+
+    generateEventHandlers.add(handler)
+    return () => {
+        generateEventHandlers.delete(handler)
+    }
+}
+
+const bufferPendingEvent = (
+    buffer: ChatLunaCorePresetGenerateEvent[],
+    event: ChatLunaCorePresetGenerateEvent
+) => {
+    if (buffer.length >= MAX_PENDING_EVENTS) {
+        // Only tokens can realistically overflow this buffer, and they feed a
+        // preview that keeps just the tail, so the oldest token is the safe
+        // drop — step/done/error carry state the replay must not lose.
+        const index = buffer.findIndex((item) => item.kind === 'token')
+        buffer.splice(index >= 0 ? index : 0, 1)
+    }
+
+    buffer.push(event)
 }
 
 let logSeq = 0
@@ -78,11 +115,20 @@ export function usePresetGenerate(options: {
         defaultFormatForSource(session?.source ?? 'core')
     )
     const [generating, setGenerating] = useState(false)
-    const [requestId, setRequestId] = useState<string | null>(null)
     const [logLines, setLogLines] = useState<GenerateLogLine[]>([])
     const [tokenPreview, setTokenPreview] = useState('')
 
+    /**
+     * Server-assigned job id, null while the start RPC is in flight: the server
+     * ignores any client-supplied id and only reveals its own in the reply.
+     */
     const requestIdRef = useRef<string | null>(null)
+    /**
+     * Local job identity, assigned before the RPC. A reply or a late event from
+     * an older generation belongs to a job the user already replaced.
+     */
+    const jobGenRef = useRef(0)
+    const pendingEventsRef = useRef<ChatLunaCorePresetGenerateEvent[]>([])
     const jobSessionIdRef = useRef<string | null>(null)
     const jobSessionRawTextRef = useRef<string | null>(null)
     const optionsSessionIdRef = useRef<string | null>(session?.id ?? null)
@@ -91,23 +137,34 @@ export function usePresetGenerate(options: {
     )
     const generatingRef = useRef(false)
     const onApplyRef = useRef(onApplyRawText)
+    const apiRef = useRef(api)
     const tokenBufRef = useRef('')
 
+    /**
+     * Mirrored during render rather than from an effect: the `done` handler
+     * compares these against the snapshot taken when the job started to decide
+     * whether the draft was edited meanwhile. A passive effect can still be
+     * pending when a `done` event arrives, and the stale value would then read
+     * as "not edited" and overwrite the keystroke the user just committed.
+     *
+     * requestIdRef / generatingRef are deliberately not mirrored here: they are
+     * owned by the job lifecycle below, and deriving them from render state
+     * would resurrect the id of a job that was just cancelled.
+     */
+    optionsSessionIdRef.current = session?.id ?? null
+    optionsSessionRawTextRef.current = session?.rawText ?? null
+
     useEffect(() => {
-        requestIdRef.current = requestId
-        optionsSessionIdRef.current = session?.id ?? null
-        optionsSessionRawTextRef.current = session?.rawText ?? null
-        generatingRef.current = generating
+        // Callbacks are only read from event handlers, long after the commit
+        // that changed them, so mirroring them during render buys nothing.
+        apiRef.current = api
         onApplyRef.current = onApplyRawText
-    }, [generating, onApplyRawText, requestId, session?.id, session?.rawText])
+    }, [api, onApplyRawText])
 
     const pushLog = useCallback(
         (text: string, kind: GenerateLogLine['kind'] = 'info') => {
             setLogLines((prev) => {
-                const next = [
-                    ...prev,
-                    { id: ++logSeq, text, kind }
-                ]
+                const next = [...prev, { id: ++logSeq, text, kind }]
                 return next.length > MAX_LOG_LINES
                     ? next.slice(next.length - MAX_LOG_LINES)
                     : next
@@ -116,13 +173,127 @@ export function usePresetGenerate(options: {
         []
     )
 
-    const finishJob = useCallback((activeRequestId: string) => {
-        if (requestIdRef.current !== activeRequestId) return
-        setGenerating(false)
-        setRequestId(null)
+    /**
+     * Ends the current job locally. Bumping the generation is what makes a
+     * still-pending start reply, and every event arriving afterwards, belong to
+     * nobody — a finished or cancelled job can then never write state again.
+     */
+    const resetJobState = useCallback(() => {
+        jobGenRef.current += 1
         requestIdRef.current = null
+        pendingEventsRef.current = []
+        jobSessionIdRef.current = null
+        jobSessionRawTextRef.current = null
         generatingRef.current = false
+        tokenBufRef.current = ''
+        setGenerating(false)
+        setTokenPreview('')
     }, [])
+
+    const applyEvent = useCallback(
+        (event: ChatLunaCorePresetGenerateEvent) => {
+            if (event.kind === 'token') {
+                tokenBufRef.current += event.token
+                if (tokenBufRef.current.length > 240) {
+                    tokenBufRef.current = tokenBufRef.current.slice(-240)
+                }
+                setTokenPreview(tokenBufRef.current)
+                return
+            }
+
+            if (event.kind === 'step') {
+                pushLog(event.summary || event.stepType, 'step')
+                return
+            }
+
+            if (event.kind === 'done') {
+                const targetSessionId = jobSessionIdRef.current
+                const stillSameSession =
+                    !!targetSessionId &&
+                    targetSessionId === (optionsSessionIdRef.current ?? null)
+                const draftWasNotEdited =
+                    jobSessionRawTextRef.current ===
+                    optionsSessionRawTextRef.current
+
+                if (stillSameSession && draftWasNotEdited) {
+                    onApplyRef.current(event.rawText)
+                    if (event.warnings?.length) {
+                        pushLog(
+                            `完成（警告：${event.warnings.join('；')}）`,
+                            'ok'
+                        )
+                    } else {
+                        pushLog(
+                            '生成完成，已写入当前草稿（未保存到磁盘）',
+                            'ok'
+                        )
+                    }
+                } else if (!stillSameSession) {
+                    pushLog('生成完成，但当前已切换预设，结果已丢弃', 'info')
+                } else {
+                    pushLog(
+                        '生成完成，但当前草稿已在生成期间修改，结果已丢弃',
+                        'info'
+                    )
+                }
+                resetJobState()
+                return
+            }
+
+            if (event.kind === 'error') {
+                pushLog(event.error || '生成失败', 'error')
+                resetJobState()
+                return
+            }
+
+            if (event.kind === 'aborted') {
+                pushLog('已取消生成', 'info')
+                resetJobState()
+            }
+        },
+        [pushLog, resetJobState]
+    )
+
+    const flushPendingEvents = useCallback(
+        (activeRequestId: string) => {
+            const buffered = pendingEventsRef.current
+            pendingEventsRef.current = []
+            for (const event of buffered) {
+                // A replayed done/error/aborted already ended the job; anything
+                // queued behind it would write into a job that no longer exists.
+                if (!generatingRef.current) break
+                // Other clients' jobs share this broadcast, so the replay keeps
+                // only what the server attributed to this job.
+                if (event.requestId === activeRequestId) applyEvent(event)
+            }
+        },
+        [applyEvent]
+    )
+
+    const handleGenerateEvent = useCallback(
+        (event: ChatLunaCorePresetGenerateEvent) => {
+            if (!event?.requestId) return
+            if (!generatingRef.current) return
+
+            if (requestIdRef.current === null) {
+                // The id exists only in the start reply, so events broadcast
+                // before it lands cannot be matched yet. Dropping them would
+                // blank the first seconds of output, so they wait here and are
+                // replayed — filtered by requestId — once the reply arrives.
+                bufferPendingEvent(pendingEventsRef.current, event)
+                return
+            }
+
+            if (requestIdRef.current !== event.requestId) return
+            applyEvent(event)
+        },
+        [applyEvent]
+    )
+
+    useEffect(
+        () => subscribeGenerateEvents(handleGenerateEvent),
+        [handleGenerateEvent]
+    )
 
     const loadModels = useCallback(async () => {
         setModelsLoading(true)
@@ -153,7 +324,7 @@ export function usePresetGenerate(options: {
     }, [api])
 
     useEffect(() => {
-        void loadModels()
+        loadModels().catch(() => undefined)
     }, [loadModels])
 
     useEffect(() => {
@@ -165,98 +336,6 @@ export function usePresetGenerate(options: {
         })
     }, [session?.source, session?.id])
 
-    useEffect(() => {
-        let active = true
-
-        receive<ChatLunaCorePresetGenerateEvent>(
-            'chatluna-hub/core/presets/generate/event',
-            (event) => {
-                if (!active) return
-                if (!event?.requestId) return
-                if (requestIdRef.current !== event.requestId) return
-
-                if (event.kind === 'token') {
-                    tokenBufRef.current += event.token
-                    if (tokenBufRef.current.length > 240) {
-                        tokenBufRef.current = tokenBufRef.current.slice(-240)
-                    }
-                    setTokenPreview(tokenBufRef.current)
-                    return
-                }
-
-                if (event.kind === 'step') {
-                    pushLog(event.summary || event.stepType, 'step')
-                    return
-                }
-
-                if (event.kind === 'done') {
-                    const targetSessionId = jobSessionIdRef.current
-                    const stillSameSession =
-                        !!targetSessionId &&
-                        targetSessionId ===
-                            (optionsSessionIdRef.current ?? null)
-                    const draftWasNotEdited =
-                        jobSessionRawTextRef.current ===
-                        optionsSessionRawTextRef.current
-
-                    if (stillSameSession && draftWasNotEdited) {
-                        onApplyRef.current(event.rawText)
-                        if (event.warnings?.length) {
-                            pushLog(
-                                `完成（警告：${event.warnings.join('；')}）`,
-                                'ok'
-                            )
-                        } else {
-                            pushLog(
-                                '生成完成，已写入当前草稿（未保存到磁盘）',
-                                'ok'
-                            )
-                        }
-                    } else if (!stillSameSession) {
-                        pushLog(
-                            '生成完成，但当前已切换预设，结果已丢弃',
-                            'info'
-                        )
-                    } else {
-                        pushLog(
-                            '生成完成，但当前草稿已在生成期间修改，结果已丢弃',
-                            'info'
-                        )
-                    }
-                    setTokenPreview('')
-                    tokenBufRef.current = ''
-                    jobSessionIdRef.current = null
-                    jobSessionRawTextRef.current = null
-                    finishJob(event.requestId)
-                    return
-                }
-
-                if (event.kind === 'error') {
-                    pushLog(event.error || '生成失败', 'error')
-                    setTokenPreview('')
-                    tokenBufRef.current = ''
-                    jobSessionIdRef.current = null
-                    jobSessionRawTextRef.current = null
-                    finishJob(event.requestId)
-                    return
-                }
-
-                if (event.kind === 'aborted') {
-                    pushLog('已取消生成', 'info')
-                    setTokenPreview('')
-                    tokenBufRef.current = ''
-                    jobSessionIdRef.current = null
-                    jobSessionRawTextRef.current = null
-                    finishJob(event.requestId)
-                }
-            }
-        )
-
-        return () => {
-            active = false
-        }
-    }, [finishJob, pushLog])
-
     const startGenerate = useCallback(async () => {
         const current = session
         if (!current || generatingRef.current) return
@@ -267,61 +346,75 @@ export function usePresetGenerate(options: {
             return
         }
 
-        // Allocate requestId before the RPC returns so early broadcast events
-        // (token/step) are not dropped by the requestIdRef filter.
-        const nextRequestId =
-            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-                ? crypto.randomUUID()
-                : `gen-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+        const gen = ++jobGenRef.current
 
         writeStoredModel(selectedModel)
         setLogLines([])
         setTokenPreview('')
         tokenBufRef.current = ''
+        pendingEventsRef.current = []
+        requestIdRef.current = null
         jobSessionIdRef.current = current.id
         jobSessionRawTextRef.current = current.rawText
-        setRequestId(nextRequestId)
-        requestIdRef.current = nextRequestId
-        setGenerating(true)
         generatingRef.current = true
+        setGenerating(true)
         pushLog(`开始生成 · ${selectedModel} · ${format}`, 'info')
 
         try {
+            // No requestId is sent: the server always allocates its own, so that
+            // a client cannot cancel a job started by someone else.
             const result = await api.startGenerate({
-                requestId: nextRequestId,
                 model: selectedModel,
                 source: current.source,
                 format,
                 rawText: current.rawText
             })
-            if (requestIdRef.current === nextRequestId) {
-                setRequestId(result.requestId)
-                requestIdRef.current = result.requestId
+
+            if (jobGenRef.current !== gen) {
+                // Stop was pressed, or another job started, while this reply was
+                // in flight. Its id is the only handle on the server job, so
+                // this is the last chance to stop the orphan.
+                apiRef.current
+                    .cancelGenerate({ requestId: result.requestId })
+                    .catch(() => undefined)
+                return
             }
+
+            requestIdRef.current = result.requestId
             pushLog(`任务已提交：${result.requestId.slice(0, 8)}…`, 'info')
+            flushPendingEvents(result.requestId)
         } catch (err) {
+            // A superseded job must not report its failure over the job that
+            // replaced it, nor stop that job's spinner.
+            if (jobGenRef.current !== gen) return
             pushLog(errorMessage(err, '启动生成失败'), 'error')
-            setGenerating(false)
-            generatingRef.current = false
-            setRequestId(null)
-            requestIdRef.current = null
-            jobSessionIdRef.current = null
-            jobSessionRawTextRef.current = null
+            resetJobState()
         }
-    }, [api, format, model, pushLog, session])
+    }, [
+        api,
+        format,
+        flushPendingEvents,
+        model,
+        pushLog,
+        resetJobState,
+        session
+    ])
 
     const cancelGenerate = useCallback(async () => {
+        if (!generatingRef.current) return
         const id = requestIdRef.current
-        if (!id) return
 
         pushLog('正在取消…', 'info')
-        // Drop late done/error/aborted for this id immediately so a racing
+        // Drop late done/error/aborted for this job immediately so a racing
         // completion cannot overwrite the user's draft after Stop.
-        finishJob(id)
-        jobSessionIdRef.current = null
-        jobSessionRawTextRef.current = null
-        setTokenPreview('')
-        tokenBufRef.current = ''
+        resetJobState()
+
+        if (!id) {
+            // The start reply has not landed yet; it cancels the server job
+            // itself as soon as it can see the id.
+            pushLog('已取消生成', 'info')
+            return
+        }
 
         try {
             await api.cancelGenerate({ requestId: id })
@@ -329,25 +422,25 @@ export function usePresetGenerate(options: {
         } catch (err) {
             pushLog(errorMessage(err, '取消请求失败'), 'error')
         }
-    }, [api, finishJob, pushLog])
+    }, [api, pushLog, resetJobState])
 
-    // Abort in-flight job when leaving the session / unmounting.
+    // Abort the in-flight job on unmount only. Keying this on session?.id used
+    // to cancel a healthy job on every preset switch; the done handler already
+    // discards a result whose session changed, and `api` is read through a ref
+    // so a new api identity cannot re-run the teardown either.
     useEffect(() => {
         return () => {
             const id = requestIdRef.current
-            if (id) {
-                void api.cancelGenerate({ requestId: id }).catch(() => undefined)
-            }
+            jobGenRef.current += 1
             requestIdRef.current = null
-            jobSessionIdRef.current = null
-            jobSessionRawTextRef.current = null
+            pendingEventsRef.current = []
             generatingRef.current = false
-            setGenerating(false)
-            setRequestId(null)
-            setTokenPreview('')
-            tokenBufRef.current = ''
+            if (!id) return
+            apiRef.current
+                .cancelGenerate({ requestId: id })
+                .catch(() => undefined)
         }
-    }, [api, session?.id])
+    }, [])
 
     return {
         llmModels,
@@ -368,9 +461,6 @@ export function usePresetGenerate(options: {
         startGenerate,
         cancelGenerate,
         canStart:
-            !!session &&
-            !generating &&
-            !!model.trim() &&
-            llmModels.length > 0
+            !!session && !generating && !!model.trim() && llmModels.length > 0
     }
 }

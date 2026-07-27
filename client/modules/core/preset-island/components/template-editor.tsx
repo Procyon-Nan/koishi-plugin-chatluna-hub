@@ -159,6 +159,13 @@ export function TemplateEditor({
         if (!view || value === valueRef.current) return
 
         valueRef.current = value
+        // Patching the document rather than rebuilding the state keeps the undo
+        // history, the selection and the scroll position alive. The edit does
+        // land on the undo stack, which `Transaction.addToHistory.of(false)`
+        // would suppress — but that annotation cannot be typed here while two
+        // copies of `@codemirror/state` are installed, so the editor is instead
+        // remounted per preset (see `EditorFormBody`'s key in `preset-shell`),
+        // which is where a leaked history would actually do damage.
         view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: value }
         })
@@ -175,7 +182,10 @@ export function TemplateEditor({
                 selection: { anchor: selection.from + 2 }
             })
         } else {
-            const selectedText = view.state.sliceDoc(selection.from, selection.to)
+            const selectedText = view.state.sliceDoc(
+                selection.from,
+                selection.to
+            )
             const escaped = escapeTemplateBraces(selectedText)
             view.dispatch({
                 changes: {
@@ -190,7 +200,13 @@ export function TemplateEditor({
     }
 
     return (
-        <div className={className ? `pei-template-editor ${className}` : 'pei-template-editor'}>
+        <div
+            className={
+                className
+                    ? `pei-template-editor ${className}`
+                    : 'pei-template-editor'
+            }
+        >
             <div className="pei-template-editor-frame">
                 <div ref={containerRef} className="pei-cm-host" />
                 {!readOnly ? (
@@ -225,9 +241,12 @@ function createTemplateExtensions(
             ],
             activateOnTyping: true
         }),
-        linter((view) => createDiagnostics(view.state.doc.toString(), context), {
-            delay: 200
-        })
+        linter(
+            (view) => createDiagnostics(view.state.doc.toString(), context),
+            {
+                delay: 200
+            }
+        )
     ]
 }
 
@@ -316,7 +335,10 @@ function getCompletions(
             }
 
             if (definition.snippet) {
-                const snippet = snippetCompletion(definition.snippet, completion)
+                const snippet = snippetCompletion(
+                    definition.snippet,
+                    completion
+                )
                 const applySnippet = snippet.apply
                 return {
                     ...snippet,
@@ -441,13 +463,47 @@ function createEditorTheme(minRows: number, maxRows?: number) {
         '.cm-template-unknown': {
             color: '#a16207',
             textDecoration: 'underline wavy',
-            textDecorationColor: '#ca8a04',
+            // Inherits the token colour, which is measured against both themes
+            // below. The previous explicit #ca8a04 reached only 2.94:1 on the
+            // light card and so missed even the 3:1 bar for non-text contrast.
             textUnderlineOffset: '3px'
         },
         '.cm-template-error': {
             textDecoration: 'underline dotted',
             textDecorationColor: 'var(--pei-muted, #8a919f)',
             textUnderlineOffset: '3px'
-        }
+        },
+        ...darkTokenColors()
     })
+}
+
+/**
+ * Dark-theme token colours.
+ *
+ * The editor background is transparent, so tokens are read against the card the
+ * form sits on: `--pei-card` → `--k-card-bg` → `--bg2`, which Koishi sets to
+ * `#252529` under `html.dark` (`@koishijs/client/app/styles/index.scss`). The
+ * light values above pass WCAG 2.1 AA on `#ffffff` (4.92–6.29:1) but every one
+ * of them fails on `#252529` — measured against each token's own translucent
+ * chip background:
+ *
+ *   expression #0369a1 → 2.22:1   control #6d28d9 → 1.92:1
+ *   escaped    #15803d → 3.04:1   unknown #a16207 → 3.10:1
+ *
+ * The replacements are the Tailwind 400 shades of the same hues, which clear the
+ * 4.5:1 body-text threshold with margin while keeping the original colour
+ * coding: 6.15:1, 5.02:1, 8.76:1 and 9.15:1 respectively.
+ *
+ * These have to be flat selectors: `EditorView.theme` runs the spec through
+ * style-mod, which rejects a nested object under a non-at-rule key, and `&`
+ * expands to the generated theme class — so `html.dark &` yields
+ * `html.dark .cm-theme-x`, one specificity step above the base rule.
+ */
+function darkTokenColors() {
+    return {
+        'html.dark & .cm-template-expression': { color: '#38bdf8' },
+        'html.dark & .cm-template-control': { color: '#a78bfa' },
+        'html.dark & .cm-template-escaped': { color: '#4ade80' },
+        'html.dark & .cm-template-unknown': { color: '#fbbf24' }
+    }
 }

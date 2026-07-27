@@ -4,13 +4,21 @@ import {
     emptyCorePreset,
     isCharacterPresetTemplate,
     isRawPreset,
+    isRenderableList,
+    isRenderableText,
+    newCharacterPresetDraft,
+    newCorePresetDraft,
     type CharacterPresetTemplate,
     type RawPreset,
     type StructuredPreset
 } from './preset-types'
 import { parsePresetYaml, serializePresetData, setAtPath } from './serialize'
-import { createStructuredTemplate } from './templates'
-import type { DraftSession, PresetDetail, PresetListItem, PresetSource } from './types'
+import type {
+    DraftSession,
+    PresetDetail,
+    PresetListItem,
+    PresetSource
+} from './types'
 import { extractListHints } from './yaml'
 
 export const buildSessionFields = (
@@ -50,7 +58,12 @@ export const createDraftSession = (
         }
     }
 
-    const structured = createStructuredTemplate(source)
+    // Placeholder content belongs to this entry only: an existing document must
+    // never gain sample keywords or prompts just by being opened.
+    const structured =
+        source === 'character'
+            ? newCharacterPresetDraft()
+            : newCorePresetDraft()
     const text = serializePresetData(structured, source)
     return {
         id: createDraftId(source),
@@ -84,25 +97,48 @@ export const isSessionDirty = (session: DraftSession | null): boolean => {
     return false
 }
 
+/**
+ * True while YAML parsing or a structured write-back failed. The form tabs then
+ * render state that cannot safely be written to `rawText`, so they are read-only.
+ */
+export const isStructuredEditingBlocked = (
+    session: DraftSession | null
+): boolean => !!session && session.parseError.length > 0
+
 export const applyStructuredPatch = (
     session: DraftSession,
     path: string,
     value: unknown
 ): DraftSession => {
+    // Re-serializing the stale structure here would overwrite the raw text the
+    // user is still fixing, so a patch on unparseable YAML is a no-op.
+    if (isStructuredEditingBlocked(session)) return session
+
     const base =
         session.structured ??
         (session.source === 'character'
             ? emptyCharacterPreset()
             : emptyCorePreset())
 
-    const structured = setAtPath(base, path, value) as StructuredPreset
-    const rawText = serializePresetData(structured, session.source)
+    try {
+        const structured = setAtPath(base, path, value) as StructuredPreset
+        const rawText = serializePresetData(structured, session.source)
 
-    return {
-        ...session,
-        structured,
-        rawText,
-        parseError: ''
+        return {
+            ...session,
+            structured,
+            rawText,
+            parseError: ''
+        }
+    } catch (error) {
+        const detail =
+            error instanceof Error && error.message
+                ? error.message
+                : '无法序列化结构化草稿'
+        return {
+            ...session,
+            parseError: `结构化写回失败：${detail}`
+        }
     }
 }
 
@@ -155,8 +191,57 @@ export const asCharacterPreset = (
     return null
 }
 
+const CHARACTER_SECTION_KEYS = ['input', 'system', 'output', 'mute_keyword']
+
+/**
+ * Parsing always writes `input` / `system`, so key presence alone would count a
+ * section the user never filled in.
+ */
+const hasSectionContent = (value: unknown): boolean => {
+    if (value == null || value === '') return false
+    return !(Array.isArray(value) && value.length === 0)
+}
+
+/**
+ * List hints read from the parsed structure. A value may hold a preserved
+ * malformed shape, so anything that is not text or a list counts as empty: the
+ * list row only displays these.
+ */
+const structuredListHints = (
+    structured: StructuredPreset,
+    source: PresetSource
+): { keywords: string[]; promptCount: number } => {
+    if (source === 'character') {
+        const name = asCharacterPreset(structured, source)?.name
+        const label = isRenderableText(name) ? name.trim() : ''
+        return {
+            keywords: label ? [label] : [],
+            promptCount: Object.entries(structured).filter(
+                ([key, value]) =>
+                    CHARACTER_SECTION_KEYS.includes(key) &&
+                    hasSectionContent(value)
+            ).length
+        }
+    }
+
+    const core = asCorePreset(structured, source)
+    const keywords = core?.keywords
+    const prompts = core?.prompts
+
+    return {
+        keywords: isRenderableList(keywords)
+            ? keywords.filter(isRenderableText)
+            : [],
+        promptCount: isRenderableList(prompts) ? prompts.length : 0
+    }
+}
+
 export const draftAsListItem = (session: DraftSession): PresetListItem => {
-    const hints = extractListHints(session.rawText, session.source)
+    // The parsed structure is the source of truth; the raw-text scraper is only
+    // a fallback for a document that has no structure because it failed to parse.
+    const hints = session.structured
+        ? structuredListHints(session.structured, session.source)
+        : extractListHints(session.rawText, session.source)
 
     return {
         id: session.id,

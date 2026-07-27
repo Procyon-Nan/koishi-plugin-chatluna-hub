@@ -1,9 +1,4 @@
-import {
-    useEffect,
-    useRef,
-    useState,
-    type InputHTMLAttributes
-} from 'react'
+import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react'
 import { splitCommaList } from '../lib/form-utils'
 
 export interface CommaListInputProps extends Omit<
@@ -25,6 +20,8 @@ export function CommaListInput({
     const [text, setText] = useState(formattedValue)
     const focusedRef = useRef(false)
 
+    // Rewriting the box while it has focus would fight the caret, so an external
+    // value that lands mid-edit is deferred to blur instead of applied here.
     useEffect(() => {
         if (!focusedRef.current) setText(formattedValue)
     }, [formattedValue])
@@ -44,7 +41,12 @@ export function CommaListInput({
             }}
             onBlur={(event) => {
                 focusedRef.current = false
-                setText(splitCommaList(event.currentTarget.value).join(', '))
+                // Resync from the value, not from the box: every keystroke was
+                // already pushed upstream, so `formattedValue` holds the user's
+                // own text — plus anything that arrived while they were typing,
+                // which the effect above skipped and which would otherwise stay
+                // invisible until the next unrelated change.
+                setText(formattedValue)
                 onBlur?.(event)
             }}
         />

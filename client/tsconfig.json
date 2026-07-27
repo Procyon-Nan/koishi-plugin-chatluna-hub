@@ -1,18 +1,77 @@
 {
-  "compilerOptions": {
-    "target": "es2022",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "types": []
-  },
-  "include": ["./**/*.ts", "./**/*.tsx", "./**/*.vue"]
+    "compilerOptions": {
+        "target": "es2022",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "strict": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "types": [],
+
+        // CodeMirror types are nominal, so a duplicated copy of a package makes the
+        // same class from two paths mutually unassignable. `scripts/client-vite-config.cjs`
+        // collapses the copies at bundle time via resolve.dedupe, but tsc does not read
+        // vite config, so the same set must be pinned here to keep type-checking and
+        // bundling on one instance. Candidates follow node resolution order: this
+        // package's own node_modules first (standalone clone), then the monorepo hoist
+        // root (workspace install). Unresolvable entries fall back to normal lookup.
+        // react/react-dom are deliberately absent: their types come from @types/*, and
+        // mapping the runtime packages here would drop those declarations.
+        "baseUrl": ".",
+        "paths": {
+            "codemirror": [
+                "../node_modules/codemirror",
+                "../../../node_modules/codemirror"
+            ],
+            "@codemirror/autocomplete": [
+                "../node_modules/@codemirror/autocomplete",
+                "../../../node_modules/@codemirror/autocomplete"
+            ],
+            "@codemirror/commands": [
+                "../node_modules/@codemirror/commands",
+                "../../../node_modules/@codemirror/commands"
+            ],
+            "@codemirror/language": [
+                "../node_modules/@codemirror/language",
+                "../../../node_modules/@codemirror/language"
+            ],
+            "@codemirror/lint": [
+                "../node_modules/@codemirror/lint",
+                "../../../node_modules/@codemirror/lint"
+            ],
+            "@codemirror/search": [
+                "../node_modules/@codemirror/search",
+                "../../../node_modules/@codemirror/search"
+            ],
+            "@codemirror/state": [
+                "../node_modules/@codemirror/state",
+                "../../../node_modules/@codemirror/state"
+            ],
+            "@codemirror/view": [
+                "../node_modules/@codemirror/view",
+                "../../../node_modules/@codemirror/view"
+            ],
+            "@lezer/common": [
+                "../node_modules/@lezer/common",
+                "../../../node_modules/@lezer/common"
+            ],
+            "@lezer/highlight": [
+                "../node_modules/@lezer/highlight",
+                "../../../node_modules/@lezer/highlight"
+            ]
+        }
+    },
+    "include": [
+        "./**/*.ts",
+        "./**/*.tsx",
+        "./**/*.vue",
+        "../typings/**/*.d.ts"
+    ],
+    "exclude": ["**/node_modules"]
 }

@@ -20,15 +20,24 @@ export type HubInvoke = <T = unknown>(
     payload?: unknown
 ) => Promise<T>
 
+export const HUB_DISCONNECTED_MESSAGE = '与后端的连接已断开，请刷新页面后重试'
+
 const defaultInvoke: HubInvoke = async (event, payload) => {
     const invoke = send as (
         type: string,
         ...args: unknown[]
     ) => Promise<unknown>
-    return (await invoke(
+    const result = await invoke(
         event,
         ...(payload === undefined ? [] : [payload])
-    )) as never
+    )
+
+    // `send` resolves with undefined instead of rejecting when the console
+    // socket is closed. Every Hub listener answers with an object, so undefined
+    // can only mean the call was never delivered.
+    if (result === undefined) throw new Error(HUB_DISCONNECTED_MESSAGE)
+
+    return result as never
 }
 
 export interface PresetHubApi {

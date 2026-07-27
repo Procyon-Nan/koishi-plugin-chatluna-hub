@@ -1,12 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PresetHubApi } from '../lib/hub-api'
 import { isDraftId } from '../lib/id'
 import { presetSourceOptions } from '../lib/templates'
-import type { PresetListItem } from '../lib/types'
-import {
-    asCharacterPreset,
-    asCorePreset
-} from '../lib/draft-store'
+import type { PresetListItem, PresetSource } from '../lib/types'
+import { asCharacterPreset, asCorePreset } from '../lib/draft-store'
 import { usePresetWorkspace } from '../hooks/use-preset-workspace'
 import { EditorFormBody, EditorTabsBar } from './editor-tabs'
 import { GeneratePanel } from './generate-panel'
@@ -16,10 +13,18 @@ export interface PresetShellProps {
     onDirtyChange: (dirty: boolean) => void
 }
 
+/** Where focus goes after an action replaces the controls that had it. */
+type FocusTarget = 'editor' | 'filename'
+
+const runInBackground = (promise: Promise<unknown>) => {
+    promise.catch(() => undefined)
+}
+
 export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
     const {
         presets,
         listReason,
+        listError,
         listLoading,
         detailLoading,
         saving,
@@ -34,6 +39,8 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
         setNewMenuOpen,
         fileInputRef,
         dirty,
+        hasUnsavedWork,
+        structuredEditingBlocked,
         filtered,
         coreCount,
         characterCount,
@@ -50,6 +57,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
         resetEditor,
         saveSession,
         deleteSession,
+        discardDraft,
         refresh,
         onImportClick,
         onImportFile,
@@ -57,10 +65,103 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
         generate
     } = usePresetWorkspace(api)
 
+    const menuRef = useRef<HTMLDivElement>(null)
+    const newButtonRef = useRef<HTMLButtonElement>(null)
+    const editorHeadingRef = useRef<HTMLDivElement>(null)
+    const filenameInputRef = useRef<HTMLInputElement>(null)
+
+    const sessionId = session?.id
+    const currentSessionIdRef = useRef(sessionId)
+    currentSessionIdRef.current = sessionId
+
+    const focusRequestRef = useRef<{
+        target: FocusTarget
+        fromId: string | undefined
+    } | null>(null)
+    const [focusTick, setFocusTick] = useState(0)
+
+    /**
+     * The host page guards navigation with this, so it has to cover the drafts
+     * that are not on screen as well — `dirty` only describes the open session.
+     */
     useEffect(() => {
-        onDirtyChange(dirty)
+        onDirtyChange(hasUnsavedWork)
         return () => onDirtyChange(false)
-    }, [dirty, onDirtyChange])
+    }, [hasUnsavedWork, onDirtyChange])
+
+    /**
+     * Creating, deleting and discarding all unmount the control that was just
+     * used, or leave it pointing at a different preset. Without this the caret
+     * lands on `<body>` and keyboard users lose their place in the page.
+     */
+    useEffect(() => {
+        const request = focusRequestRef.current
+        if (!request) return
+        focusRequestRef.current = null
+
+        // A declined confirm dialog leaves the editor exactly as it was, so
+        // there is nothing to move towards.
+        if (request.fromId === currentSessionIdRef.current) return
+
+        const node =
+            request.target === 'filename'
+                ? filenameInputRef.current
+                : editorHeadingRef.current
+        node?.focus()
+    }, [focusTick])
+
+    // The menu has no dismissal of its own; without this it stays open over the
+    // list until another preset is created.
+    useEffect(() => {
+        if (!newMenuOpen) return
+
+        const closeOnOutsideClick = (event: MouseEvent) => {
+            if (menuRef.current?.contains(event.target as Node)) return
+            setNewMenuOpen(false)
+        }
+
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return
+            setNewMenuOpen(false)
+            newButtonRef.current?.focus()
+        }
+
+        document.addEventListener('click', closeOnOutsideClick)
+        document.addEventListener('keydown', closeOnEscape)
+        return () => {
+            document.removeEventListener('click', closeOnOutsideClick)
+            document.removeEventListener('keydown', closeOnEscape)
+        }
+    }, [newMenuOpen, setNewMenuOpen])
+
+    const refreshList = () => {
+        runInBackground(refresh())
+    }
+
+    const requestFocus = (target: FocusTarget, fromId: string | undefined) => {
+        focusRequestRef.current = { target, fromId }
+        setFocusTick((tick) => tick + 1)
+    }
+
+    const createPreset = (source: PresetSource) => {
+        const fromId = sessionId
+        startCreate(source)
+        // The filename is the one field a new draft cannot be saved without.
+        requestFocus('filename', fromId)
+    }
+
+    const deletePreset = async () => {
+        const fromId = sessionId
+        await deleteSession()
+        requestFocus('editor', fromId)
+    }
+
+    const discardCurrentDraft = () => {
+        const fromId = sessionId
+        // `discardDraft` confirms on its own for a dirty draft.
+        discardDraft()
+        requestFocus('editor', fromId)
+    }
 
     return (
         <div className="chatluna-preset-island">
@@ -100,17 +201,15 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                 <aside className="pei-panel">
                     <div className="pei-panel-header">
                         <span className="pei-panel-title">预设文件</span>
-                        <div className="pei-menu">
+                        <div className="pei-menu" ref={menuRef}>
                             <button
+                                ref={newButtonRef}
                                 type="button"
                                 className="pei-btn pei-btn-primary"
                                 aria-haspopup="menu"
                                 aria-expanded={newMenuOpen}
                                 aria-controls="pei-new-preset-menu"
-                                onClick={(e) => {
-                                    e.stopPropagation()
-                                    setNewMenuOpen((open) => !open)
-                                }}
+                                onClick={() => setNewMenuOpen((open) => !open)}
                             >
                                 新建
                             </button>
@@ -119,7 +218,6 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                     id="pei-new-preset-menu"
                                     className="pei-menu-panel"
                                     role="menu"
-                                    onClick={(e) => e.stopPropagation()}
                                 >
                                     {presetSourceOptions.map((option) => (
                                         <button
@@ -127,7 +225,9 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                             type="button"
                                             className="pei-menu-item"
                                             role="menuitem"
-                                            onClick={() => startCreate(option.value)}
+                                            onClick={() =>
+                                                createPreset(option.value)
+                                            }
                                         >
                                             {option.label}
                                         </button>
@@ -141,6 +241,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                         <input
                             className="pei-search"
                             value={keyword}
+                            aria-label="搜索预设文件名或关键词"
                             placeholder="搜索文件名或关键词"
                             onChange={(e) => setKeyword(e.target.value)}
                         />
@@ -155,7 +256,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             type="button"
                             className="pei-btn"
                             disabled={listLoading}
-                            onClick={() => void refresh()}
+                            onClick={refreshList}
                         >
                             {listLoading ? '…' : '刷新'}
                         </button>
@@ -164,13 +265,17 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                             className="pei-hidden"
                             type="file"
                             accept=".yml,.yaml,.txt,text/yaml,text/plain"
-                            onChange={(e) => void onImportFile(e)}
+                            onChange={(e) => runInBackground(onImportFile(e))}
                         />
                     </div>
 
                     <div className="pei-list">
                         {filtered.length === 0 ? (
-                            <div className="pei-empty">暂无预设</div>
+                            <ListPlaceholder
+                                listError={listError}
+                                listLoading={listLoading}
+                                onRetry={refreshList}
+                            />
                         ) : (
                             filtered.map((item) => (
                                 <button
@@ -182,8 +287,13 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                             : 'pei-list-item'
                                     }
                                     data-source={item.source}
-                                    data-draft={isDraftId(item.id) ? 'true' : 'false'}
-                                    onClick={() => void openPreset(item.id)}
+                                    data-draft={
+                                        isDraftId(item.id) ? 'true' : 'false'
+                                    }
+                                    aria-current={session?.id === item.id}
+                                    onClick={() =>
+                                        runInBackground(openPreset(item.id))
+                                    }
                                 >
                                     <span className="pei-list-title-row">
                                         <span className="pei-list-title">
@@ -203,11 +313,16 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                     </div>
                                     {item.keywords.length > 0 ? (
                                         <div className="pei-keywords">
-                                            {item.keywords.slice(0, 6).map((kw) => (
-                                                <span key={kw} className="pei-keyword">
-                                                    {kw}
-                                                </span>
-                                            ))}
+                                            {item.keywords
+                                                .slice(0, 6)
+                                                .map((kw) => (
+                                                    <span
+                                                        key={kw}
+                                                        className="pei-keyword"
+                                                    >
+                                                        {kw}
+                                                    </span>
+                                                ))}
                                         </div>
                                     ) : null}
                                 </button>
@@ -218,12 +333,22 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
 
                 <section className="pei-panel">
                     <div className="pei-editor-header">
-                        <div className="pei-editor-heading">
-                            <span className="pei-editor-title">{editorTitle}</span>
-                            <span className="pei-editor-meta">{editorMeta}</span>
+                        <div
+                            className="pei-editor-heading"
+                            ref={editorHeadingRef}
+                            tabIndex={-1}
+                        >
+                            <span className="pei-editor-title">
+                                {editorTitle}
+                            </span>
+                            <span className="pei-editor-meta">
+                                {editorMeta}
+                            </span>
                         </div>
                         <div className="pei-editor-actions">
-                            {dirty ? <span className="pei-dirty">未保存</span> : null}
+                            {dirty ? (
+                                <span className="pei-dirty">未保存</span>
+                            ) : null}
                             {session ? (
                                 <button
                                     type="button"
@@ -233,12 +358,23 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                     导出
                                 </button>
                             ) : null}
+                            {session?.isDraft ? (
+                                <button
+                                    type="button"
+                                    className="pei-btn pei-btn-danger"
+                                    onClick={discardCurrentDraft}
+                                >
+                                    丢弃草稿
+                                </button>
+                            ) : null}
                             {session && !session.isDraft ? (
                                 <button
                                     type="button"
                                     className="pei-btn pei-btn-danger"
                                     disabled={deleting}
-                                    onClick={() => void deleteSession()}
+                                    onClick={() =>
+                                        runInBackground(deletePreset())
+                                    }
                                 >
                                     {deleting ? '删除中…' : '删除'}
                                 </button>
@@ -255,7 +391,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                 type="button"
                                 className="pei-btn pei-btn-primary"
                                 disabled={!canSave || saving}
-                                onClick={() => void saveSession()}
+                                onClick={() => runInBackground(saveSession())}
                             >
                                 {saving ? '保存中…' : '保存'}
                             </button>
@@ -273,6 +409,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                     <label htmlFor="pei-filename">文件名</label>
                                     <input
                                         id="pei-filename"
+                                        ref={filenameInputRef}
                                         className="pei-input"
                                         value={session.filename}
                                         placeholder={
@@ -301,10 +438,14 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                 logLines={generate.logLines}
                                 tokenPreview={generate.tokenPreview}
                                 onRefreshModels={() =>
-                                    void generate.loadModels()
+                                    runInBackground(generate.loadModels())
                                 }
-                                onStart={() => void generate.startGenerate()}
-                                onStop={() => void generate.cancelGenerate()}
+                                onStart={() =>
+                                    runInBackground(generate.startGenerate())
+                                }
+                                onStop={() =>
+                                    runInBackground(generate.cancelGenerate())
+                                }
                             />
 
                             <EditorTabsBar
@@ -323,6 +464,13 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                     aria-labelledby={`pei-tab-${editorTab}`}
                                 >
                                     <EditorFormBody
+                                        // Switching preset otherwise reuses the
+                                        // row components — and with them the
+                                        // CodeMirror instances, whose undo
+                                        // history still holds the previous
+                                        // preset's text. One Ctrl+Z would then
+                                        // paste that text into this preset.
+                                        key={session.id}
                                         source={session.source}
                                         tab={editorTab}
                                         core={asCorePreset(
@@ -337,6 +485,9 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                                         rawText={session.rawText}
                                         parseError={session.parseError}
                                         onRawTextChange={updateRawText}
+                                        structuredEditingBlocked={
+                                            structuredEditingBlocked
+                                        }
                                     />
                                 </div>
                             )}
@@ -350,6 +501,39 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
                     )}
                 </section>
             </div>
+        </div>
+    )
+}
+
+interface ListPlaceholderProps {
+    listError: string
+    listLoading: boolean
+    onRetry: () => void
+}
+
+/**
+ * A failed request and an empty directory both render zero rows. Without the
+ * distinction an outage reads as "you have no presets", which invites the user to
+ * start recreating files that already exist.
+ */
+function ListPlaceholder({
+    listError,
+    listLoading,
+    onRetry
+}: ListPlaceholderProps) {
+    if (!listError) return <div className="pei-empty">暂无预设</div>
+
+    return (
+        <div className="pei-empty">
+            <span>{listError}</span>
+            <button
+                type="button"
+                className="pei-btn"
+                disabled={listLoading}
+                onClick={onRetry}
+            >
+                {listLoading ? '重试中…' : '重试'}
+            </button>
         </div>
     )
 }

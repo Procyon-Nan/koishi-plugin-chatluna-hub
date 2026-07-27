@@ -5,7 +5,8 @@ export interface RawPreset {
     prompts: BaseMessage[]
     format_user_prompt?: string
     world_lores?: RawWorldLore[]
-    version?: string
+    /** YAML keeps an unquoted `version: 1.0` as a number. */
+    version?: string | number
     authors_note?: AuthorsNote
     knowledge?: KnowledgeConfig
     config?: {
@@ -25,7 +26,8 @@ export type WorldLoreInsertPosition =
     | 'before_example_messages'
     | 'after_example_messages'
 
-export interface RawWorldLore {
+/** A world lore entry: ChatLuna's `isRoleBook` requires both keys to be present. */
+export interface RawWorldLoreEntry {
     keywords: string | string[]
     content: string
     insertPosition?: WorldLoreInsertPosition
@@ -40,11 +42,95 @@ export interface RawWorldLore {
     tokenLimit?: number
 }
 
-export interface BaseMessage {
-    role: 'user' | 'system' | 'assistant'
-    type?: 'personality' | 'description' | 'first_message' | 'scenario'
-    content: string
+/**
+ * The global lore config element (`isRoleBookConfig`): any `world_lores` item
+ * without `keywords` / `content`. Unknown keys survive the round-trip as-is.
+ */
+export interface RawWorldLoreConfig {
+    keywords?: undefined
+    content?: undefined
+    insertPosition?: WorldLoreInsertPosition
+    scanDepth?: number
+    recursiveScan?: boolean
+    maxRecursionDepth?: number
+    tokenLimit?: number
+    [key: string]: unknown
 }
+
+export type RawWorldLore = RawWorldLoreEntry | RawWorldLoreConfig
+
+/** ChatLuna's `isRoleBook`: an element carrying both keys is a lore entry. */
+export const isWorldLoreEntry = (
+    value: unknown
+): value is RawWorldLoreEntry => {
+    if (typeof value !== 'object' || value === null) return false
+    return 'keywords' in value && 'content' in value
+}
+
+/** Roles ChatLuna accepts: ai/model build an AIMessage, human a HumanMessage. */
+export type PromptRole =
+    | 'system'
+    | 'user'
+    | 'assistant'
+    | 'ai'
+    | 'model'
+    | 'human'
+
+/** One element of a LangChain `MessageContentComplex[]` content. */
+export interface PromptContentPart {
+    type: string
+    [key: string]: unknown
+}
+
+export type PromptContent = string | PromptContentPart[]
+
+export interface BaseMessage {
+    role: PromptRole
+    type?: 'personality' | 'description' | 'first_message' | 'scenario'
+    content: PromptContent
+}
+
+/**
+ * Shape guards for the form layer. Parsing never trims a value to fit its
+ * declared type, so a key typed as an object may hold any YAML shape. Read a
+ * field through the matching guard before rendering it.
+ */
+export const isRenderableText = (value: unknown): value is string =>
+    typeof value === 'string'
+
+export const isRenderableObject = (
+    value: unknown
+): value is Record<string, unknown> => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false
+    }
+
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === Object.prototype || prototype === null
+}
+
+export const isRenderableList = (value: unknown): value is unknown[] =>
+    Array.isArray(value)
+
+/** Complex content has no text form; the form editor must show it read-only. */
+export const isPlainTextContent = (content: PromptContent): content is string =>
+    isRenderableText(content)
+
+/**
+ * Read-only preview of a complex content: keeps the `text` parts and marks the
+ * rest by type. Lossy by design, so it only takes the complex branch — the text
+ * it returns must never be written back into the preset.
+ */
+export const promptContentPreview = (parts: readonly unknown[]): string =>
+    parts
+        .map((part) => {
+            if (!isRenderableObject(part)) return '[unknown]'
+            if (typeof part.text === 'string') return part.text
+            return typeof part.type === 'string'
+                ? `[${part.type}]`
+                : '[unknown]'
+        })
+        .join('\n')
 
 export interface PostHandler {
     prefix: string
@@ -73,8 +159,9 @@ export interface CharacterPresetTemplate {
     system: string
     mute_keyword?: string[]
     path?: string
-    bot_id?: string
-    owner_id?: string
+    /** YAML keeps unquoted ids such as `bot_id: 3345618715` as numbers. */
+    bot_id?: string | number
+    owner_id?: string | number
     description?: string
     personality?: string
     hobbies?: string
@@ -88,11 +175,24 @@ export interface CharacterPresetTemplate {
 export type StructuredPreset = RawPreset | CharacterPresetTemplate
 
 export const emptyCorePreset = (): RawPreset => ({
+    keywords: [],
+    prompts: []
+})
+
+export const emptyCharacterPreset = (): CharacterPresetTemplate => ({
+    name: '',
+    nick_name: [],
+    input: '',
+    system: ''
+})
+
+/** Placeholder content for a brand new draft, never for an existing document. */
+export const newCorePresetDraft = (): RawPreset => ({
     keywords: ['new-preset'],
     prompts: [{ role: 'system', content: '在这里输入预设内容' }]
 })
 
-export const emptyCharacterPreset = (): CharacterPresetTemplate => ({
+export const newCharacterPresetDraft = (): CharacterPresetTemplate => ({
     name: 'new-character',
     nick_name: ['new-character'],
     input: '在这里输入角色输入模板',

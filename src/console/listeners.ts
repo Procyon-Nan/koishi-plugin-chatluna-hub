@@ -1,12 +1,12 @@
 import { Context } from 'koishi'
 import type { ChatLunaHubService } from '../webui/service'
 import type { HubEvents } from '../webui/events'
+import {
+    CONSOLE_AUTHORITY_MUTATE as MUTATE,
+    CONSOLE_AUTHORITY_READ as READ
+} from '../webui/shared'
 
 const dataServiceField = 'chatluna_hub_webui'
-
-/** Authority required to mutate config/data vs. just read it. */
-const READ = 3
-const MUTATE = 4
 
 /**
  * A single RPC listener: the channel name, the handler that delegates to the
@@ -135,6 +135,15 @@ const listeners = [
         authority: READ,
         handle: (hub, input) => hub.getCorePreset(input)
     }),
+    /**
+     * Intentionally has no in-repo caller: the preset island validates drafts
+     * locally and only hits the server on save, which re-validates anyway. This
+     * stays because it is part of the published RPC contract for a released
+     * plugin, so third-party console clients may still call it. Do not delete
+     * it as dead code -- and if it ever is removed, drop the `HubEvents` entry
+     * in src/webui/events.ts and `ChatLunaHubService.validateCorePreset`
+     * together with this spec, or registration will throw at load time.
+     */
     spec({
         event: 'chatluna-hub/core/presets/validate',
         authority: READ,
