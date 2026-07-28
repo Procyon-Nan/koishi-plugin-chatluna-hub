@@ -43,10 +43,7 @@
         "koishi",
         "plugin"
     ],
-    "yakumo": {
-        "client": "scripts/client-vite-config.cjs"
-    },
-    "comment:codemirror-dedupe": "CodeMirror types are nominal and its extensions are registered per module instance, so two physical copies break tsc assignability and runtime extension lookup alike. These pins keep one copy of each. Both fields are only honoured when this package is the install root (yarn 4 reads resolutions from the top-level workspace manifest only; npm ignores overrides from dependencies), i.e. for a standalone clone of this repo. Inside the koishi-dev monorepo the same pins must live in that root manifest, and client/tsconfig.json paths plus scripts/client-vite-config.cjs resolve.dedupe cover type-checking and bundling.",
+    "comment:codemirror-dedupe": "CodeMirror types are nominal and its extensions are registered per module instance, so two physical copies break tsc assignability and runtime extension lookup alike. These pins keep one copy of each. Both fields are only honoured when this package is the install root (yarn 4 reads resolutions from the top-level workspace manifest only; npm ignores overrides from dependencies), i.e. for a standalone clone of this repo. Inside the koishi-dev monorepo the same pins must live in that root manifest, and client/tsconfig.json paths plus vite.config.cjs resolve.dedupe cover type-checking and bundling.",
     "resolutions": {
         "@codemirror/state": "^6.7.1",
         "@codemirror/view": "^6.43.6",

@@ -2,16 +2,21 @@
  * Single source of truth for the client bundle's Vite overrides.
  *
  * Two build paths reach @koishijs/client's `build()` and both MUST apply this
- * config, otherwise the two produce different bundles:
+ * config, otherwise they produce different bundles:
  *
- *   1. `npm run build:client` -> scripts/build-client.cjs -> build(root, config)
+ *   1. `npm run build:client` -> scripts/build-client.cjs -> build(root)
  *   2. `yarn build chatluna-hub` from the monorepo root -> yakumo's `client`
- *      step reads `yakumo.client` from package.json, imports this file and
- *      passes its default export to the same `build()`.
+ *      step -> build(root)
  *
- * This module therefore exports data only and must stay free of side effects:
- * yakumo `import()`s it merely to read the config, so anything executed at load
- * time would run an extra, unconfigured build.
+ * Neither path passes this file explicitly. `build()` writes the package root
+ * into Vite's `root`, and Vite discovers the config file from there, so this
+ * file must stay at the package root and stay named `vite.config.cjs`:
+ * `vite.config.js`, `.mjs` and `.ts` come earlier in Vite's lookup order and
+ * would shadow it, and a missing config yields a silently unconfigured bundle.
+ * scripts/check-artifacts.cjs asserts both conditions before packing.
+ *
+ * Keep this module data-only and free of side effects, and keep every Vite
+ * override here rather than in scripts/build-client.cjs.
  */
 
 /**

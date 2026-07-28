@@ -1,20 +1,18 @@
 /**
- * Build the client bundle with the shared Vite overrides.
+ * Build the client bundle. This is the `npm run build:client` entry.
  *
- * This is the `npm run build:client` entry. The monorepo root path
- * (`yarn build chatluna-hub`) does not go through this file: yakumo's `client`
- * step imports scripts/client-vite-config.cjs directly via the `yakumo.client`
- * field in package.json and hands it to the same `build()` used here. Keep
- * every Vite override in that shared config so both paths stay identical.
+ * `build()` writes the given root into Vite's `root`, and Vite discovers the
+ * config file from there, so the overrides in vite.config.cjs apply without
+ * being passed. Yakumo's `client` step calls the same helper with the same
+ * root, so both build paths load the same config. Keep every Vite override in
+ * vite.config.cjs rather than here.
  */
 const path = require('path')
 const { build } = require('@koishijs/client/lib')
 
-const clientViteConfig = require('./client-vite-config.cjs')
-
 const root = path.resolve(__dirname, '..')
 
-build(root, clientViteConfig).catch((error) => {
+build(root).catch((error) => {
     console.error(error)
     process.exit(1)
 })

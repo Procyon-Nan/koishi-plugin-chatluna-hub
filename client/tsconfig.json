@@ -15,7 +15,7 @@
         "types": [],
 
         // CodeMirror types are nominal, so a duplicated copy of a package makes the
-        // same class from two paths mutually unassignable. `scripts/client-vite-config.cjs`
+        // same class from two paths mutually unassignable. Root `vite.config.cjs`
         // collapses the copies at bundle time via resolve.dedupe, but tsc does not read
         // vite config, so the same set must be pinned here to keep type-checking and
         // bundling on one instance. Candidates follow node resolution order: this

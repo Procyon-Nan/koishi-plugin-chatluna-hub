@@ -36,8 +36,8 @@ design notes for this project are stale unless they are confirmed against
 
 Build from the monorepo root, not from inside the package:
 
-```bash
-cd /mnt/c/Users/31899/dev/koishi-dev
+```powershell
+cd C:\Users\31899\dev\koishi-dev
 yarn build chatluna-hub
 ```
 
@@ -58,10 +58,9 @@ The package also owns build scripts used by the publish path: `build:server`
 (writes `lib/`), `build:client` (writes `dist/`), `build`, `clean`, and
 `prepack`. They are not read-only checks.
 
-Both build paths produce the same client bundle. `package.json` declares
-`yakumo.client: "scripts/client-vite-config.cjs"`, so the root pipeline's
-`client` step and the in-package `build:client` load their Vite overrides from
-that one module. See `Build Output and Packaging`.
+Both build paths produce the same client bundle. They call
+`@koishijs/client`'s `build()` with the package root, so Vite discovers the root
+`vite.config.cjs`. See `Build Output and Packaging`.
 
 The package has ESLint and Prettier config at `.eslintrc.yml` and `.prettierrc`.
 Koishi module augmentation uses `namespace Console`; the
@@ -90,9 +89,9 @@ diagnostics.
 Invoke ESLint through the monorepo's own copy. The `.bin` shim throws a
 `SyntaxError` in this checkout:
 
-```bash
-cd /mnt/c/Users/31899/dev/koishi-dev
-node node_modules/eslint/bin/eslint.js external/chatluna-hub/client
+```powershell
+cd C:\Users\31899\dev\koishi-dev
+node node_modules\eslint\bin\eslint.js external\chatluna-hub\client
 ```
 
 ## Current Product Shape
@@ -1158,21 +1157,27 @@ only the wording is misleading.
 
 ### Client Vite Config
 
-`scripts/client-vite-config.cjs` is the single source of truth for the client
-bundle's Vite overrides, and both build paths load it:
+Root `vite.config.cjs` is the single source of truth for the client bundle's
+Vite overrides, and both build paths pick it up the same way:
 
-- `npm run build:client` → `scripts/build-client.cjs`, which `require`s it and
-  hands it to `@koishijs/client`'s `build()`.
-- `yarn build chatluna-hub` from the monorepo root → yakumo's `client` step reads
-  `yakumo.client` from `package.json` and imports the same file, then calls the
-  same `build()`.
+- `npm run build:client` → `scripts/build-client.cjs` → `build(root)`.
+- `yarn build chatluna-hub` from the monorepo root → yakumo's `client` step →
+  `build(root)`.
 
-It exports data only and must stay free of side effects: yakumo `import()`s it
-merely to read the config, so anything executed at load time would run a second,
-unconfigured build. Keep every Vite override in it rather than in
-`scripts/build-client.cjs`, or the two paths drift apart again.
+Neither path passes the config explicitly. `build()` writes the package root
+into Vite's `root`, and Vite discovers the config file from there. Keep every
+Vite override in that file rather than in `scripts/build-client.cjs`, and keep
+the module data-only and free of side effects.
 
-It carries two settings that look removable and are not:
+Two invariants make this discovery-based wiring safe, and both fail silently:
+the file must stay at the package root, and it must stay named
+`vite.config.cjs`. Vite's lookup order is
+`vite.config.{js,mjs,ts,cjs,mts,cts}`, so adding any of the first three shadows
+it, and a missing config just yields an unconfigured bundle rather than an
+error. `scripts/check-artifacts.cjs` asserts exactly one root Vite config with
+that name, and runs on `prepack`.
+
+The config carries two settings that look removable and are not:
 
 - `resolve.dedupe` over `codemirror`, the `@codemirror/*` and `@lezer/*` packages,
   `react`, and `react-dom`. See `CodeMirror Single Instance`.
@@ -1180,16 +1185,14 @@ It carries two settings that look removable and are not:
   sets `jsxImportSource: '@satorijs/element'`, which is correct for Koishi message
   elements and wrong for the React island.
 
-Upstream caveat, not a defect in this package: `@koishijs/client`'s `lib/index.js`
-loads this config with `await import(filename)` where `filename` came from
-`path.resolve(...)`, and that file never calls `pathToFileURL` anywhere. Under WSL
-the resolved path is POSIX and the import succeeds. On native Windows the resolved
-`C:\...` path is not a valid ESM specifier, so Node rejects it with
-`ERR_UNSUPPORTED_ESM_URL_SCHEME` and the root-level `client` step fails before it
-builds anything. If a Windows-side root build fails that way, fix it upstream or
-fall back to `npm run build:client` inside the package. Do not work around it by
-deleting the `yakumo.client` field — that silently restores the unconfigured
-bundle, whose breakage is quiet rather than loud.
+Do not add a `yakumo.client` field pointing at this config, which is the obvious
+alternative wiring and is broken. `@koishijs/client` resolves that field to an
+absolute path and hands the raw path to `import()`; a native Windows path such
+as `C:\...` is not a valid ESM specifier, so Node rejects it with
+`ERR_UNSUPPORTED_ESM_URL_SCHEME` and the root-level `client` step fails before
+it builds anything. With the field absent, yakumo takes the
+`deps['@koishijs/client']` branch instead and calls `build(root)` with an empty
+config, which is why the discovery path above is the one in use.
 
 ### CodeMirror Single Instance
 
@@ -1205,7 +1208,7 @@ Three mechanisms cover three different stages. They are complementary, not
 alternatives; do not delete one because another looks like it already handles the
 problem.
 
-- **Bundling** — `resolve.dedupe` in `scripts/client-vite-config.cjs`. Applies only
+- **Bundling** — `resolve.dedupe` in `vite.config.cjs`. Applies only
   while Vite bundles. `@koishijs/client` sets `resolve.dedupe` on its dev-server
   config only, and the build config it merges here has none, so this list is the
   only thing keeping duplicates out of `dist/index.js`.
@@ -1231,7 +1234,7 @@ standalone-clone case, where this package *is* the install root, and as
 documentation — the `comment:codemirror-dedupe` key beside it records why.
 
 For the monorepo the effective copy lives in
-`/mnt/c/Users/31899/dev/koishi-dev/package.json`, which is **not under version
+`C:\Users\31899\dev\koishi-dev\package.json`, which is **not under version
 control**. The pin is therefore lost on a new machine or a rebuilt tree, and what
 surfaces first is the silent runtime failure. Reinstate it by pasting these two
 fields into that root manifest and reinstalling:
@@ -1280,7 +1283,7 @@ Client-only packages are devDependencies on purpose, including `element-plus`,
 download code that is already in the bundle. Do not promote a client-only package
 to `dependencies` to fix a build error — fix the build config instead.
 
-The dedupe list in `scripts/client-vite-config.cjs` is wider than the declared
+The dedupe list in `vite.config.cjs` is wider than the declared
 devDependencies, and the `paths` map in `client/tsconfig.json` carries the same
 wider set: `@codemirror/commands`, `@codemirror/language`, `@codemirror/search`,
 `@lezer/common`, and `@lezer/highlight` arrive transitively through `codemirror`
@@ -1294,11 +1297,9 @@ by the Vue tabs and the Hub shell; the React preset island does not use it.
 Sibling repositories are references only unless the user says to edit them:
 
 - ChatLuna main repo:
-  `/mnt/c/Users/31899/dev/koishi-dev/external/chatluna`
+  `C:\Users\31899\dev\koishi-dev\external\chatluna`
 - Living Memory repo:
-  `/mnt/c/Users/31899/dev/koishi-dev/external/chatluna-livingmemory`
+  `C:\Users\31899\dev\koishi-dev\external\chatluna-livingmemory`
 
-The monorepo root is `/mnt/c/Users/31899/dev/koishi-dev`, and this package is
-`external/chatluna-hub` inside it. Tooling here runs under WSL, so use POSIX
-paths; the `C:\Users\...` form is the same tree seen from Windows and is not
-usable from the shell.
+The monorepo root is `C:\Users\31899\dev\koishi-dev`, and this package is
+`external\chatluna-hub` inside it.
