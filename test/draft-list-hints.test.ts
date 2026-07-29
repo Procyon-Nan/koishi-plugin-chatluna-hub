@@ -114,7 +114,11 @@ describe('character hints label the row with the name', () => {
 })
 
 describe('character promptCount counts filled sections only', () => {
-    const FOUR_SECTION_KEYS = `
+    // `mute_keyword` is a keyword filter and `output` is not a character-preset
+    // field; neither is a prompt section. The count must stay at 2 (input +
+    // system) so a file does not appear to lose a section once it is saved and
+    // the server reports its fixed character promptCount.
+    const PRESET_WITH_NON_SECTION_KEYS = `
 name: 小助手
 input: 输入
 system: 系统
@@ -139,10 +143,10 @@ output: ''
         )
     })
 
-    test('four section keys with three filled count three', () => {
-        const hints = hintsFor('character', FOUR_SECTION_KEYS)
+    test('mute_keyword and output do not inflate the section count', () => {
+        const hints = hintsFor('character', PRESET_WITH_NON_SECTION_KEYS)
 
-        assert.equal(hints.promptCount, 3)
+        assert.equal(hints.promptCount, 2)
     })
 
     test('a name-only draft counts no sections', () => {

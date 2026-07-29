@@ -53,9 +53,10 @@ const countPromptEntries = (rawText: string): number => {
     return matches?.length ?? 0
 }
 
+/** Same section set as `CHARACTER_SECTION_KEYS`: only `input` and `system`. */
 const countSections = (rawText: string): number => {
     let count = 0
-    for (const key of ['input', 'system', 'output', 'mute_keyword']) {
+    for (const key of ['input', 'system']) {
         if (new RegExp(`^\\s*${key}\\s*:`, 'm').test(rawText)) count += 1
     }
     return count

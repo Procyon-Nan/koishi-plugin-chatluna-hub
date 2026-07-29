@@ -186,7 +186,12 @@ export const asCharacterPreset = (
     return null
 }
 
-const CHARACTER_SECTION_KEYS = ['input', 'system', 'output', 'mute_keyword']
+/**
+ * The prompt sections the server counts toward a character preset's fixed
+ * `promptCount` of 2. `mute_keyword` is a keyword filter, not a prompt section,
+ * so listing it here made a saved file appear to drop from 3 sections to 2.
+ */
+const CHARACTER_SECTION_KEYS = ['input', 'system']
 
 /**
  * Parsing always writes `input` / `system`, so key presence alone would count a
