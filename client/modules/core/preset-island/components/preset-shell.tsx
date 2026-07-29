@@ -35,8 +35,6 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
         drafts,
         error,
         status,
-        newMenuOpen,
-        setNewMenuOpen,
         fileInputRef,
         dirty,
         hasUnsavedWork,
@@ -65,6 +63,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
         generate
     } = usePresetWorkspace(api)
 
+    const [newMenuOpen, setNewMenuOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
     const newButtonRef = useRef<HTMLButtonElement>(null)
     const editorHeadingRef = useRef<HTMLDivElement>(null)
@@ -144,6 +143,7 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
     }
 
     const createPreset = (source: PresetSource) => {
+        setNewMenuOpen(false)
         const fromId = sessionId
         startCreate(source)
         // The filename is the one field a new draft cannot be saved without.
