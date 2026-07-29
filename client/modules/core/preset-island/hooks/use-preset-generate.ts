@@ -9,6 +9,10 @@ import type {
 } from '../../types'
 import { errorMessage } from '../lib/draft-store'
 import type { PresetHubApi } from '../lib/hub-api'
+import {
+    resolveGenerateDone,
+    routeGenerateEvent
+} from '../lib/lifecycle-decisions'
 import type { DraftSession, PresetSource } from '../lib/types'
 
 const MODEL_STORAGE_KEY = 'chatluna-hub-preset-generate-model'
@@ -207,15 +211,16 @@ export function usePresetGenerate(options: {
             }
 
             if (event.kind === 'done') {
-                const targetSessionId = jobSessionIdRef.current
-                const stillSameSession =
-                    !!targetSessionId &&
-                    targetSessionId === (optionsSessionIdRef.current ?? null)
-                const draftWasNotEdited =
-                    jobSessionRawTextRef.current ===
-                    optionsSessionRawTextRef.current
+                // The apply/discard verdict lives in `resolveGenerateDone` so
+                // the session/text double-check is unit-testable.
+                const { apply, reason } = resolveGenerateDone({
+                    jobSessionId: jobSessionIdRef.current,
+                    optionsSessionId: optionsSessionIdRef.current,
+                    jobRaw: jobSessionRawTextRef.current,
+                    optionsRaw: optionsSessionRawTextRef.current
+                })
 
-                if (stillSameSession && draftWasNotEdited) {
+                if (apply) {
                     onApplyRef.current(event.rawText)
                     if (event.warnings?.length) {
                         pushLog(
@@ -228,7 +233,7 @@ export function usePresetGenerate(options: {
                             'ok'
                         )
                     }
-                } else if (!stillSameSession) {
+                } else if (reason === 'switched') {
                     pushLog('生成完成，但当前已切换预设，结果已丢弃', 'info')
                 } else {
                     pushLog(
@@ -272,10 +277,13 @@ export function usePresetGenerate(options: {
 
     const handleGenerateEvent = useCallback(
         (event: ChatLunaCorePresetGenerateEvent) => {
-            if (!event?.requestId) return
-            if (!generatingRef.current) return
+            const route = routeGenerateEvent({
+                eventRequestId: event?.requestId,
+                generating: generatingRef.current,
+                currentRequestId: requestIdRef.current
+            })
 
-            if (requestIdRef.current === null) {
+            if (route === 'buffer') {
                 // The id exists only in the start reply, so events broadcast
                 // before it lands cannot be matched yet. Dropping them would
                 // blank the first seconds of output, so they wait here and are
@@ -284,8 +292,7 @@ export function usePresetGenerate(options: {
                 return
             }
 
-            if (requestIdRef.current !== event.requestId) return
-            applyEvent(event)
+            if (route === 'apply') applyEvent(event)
         },
         [applyEvent]
     )

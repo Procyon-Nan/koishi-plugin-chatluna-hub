@@ -111,6 +111,12 @@ export function PresetShell({ api, onDirtyChange }: PresetShellProps) {
 
     // The menu has no dismissal of its own; without this it stays open over the
     // list until another preset is created.
+    //
+    // Registering on `document` on the same click that opened the menu is safe:
+    // this effect runs in React's passive-effects phase, flushed only after the
+    // opening click's bubble phase has fully completed, so the new listener
+    // misses that click. `menuRef.current?.contains` then keeps clicks inside
+    // the panel from closing it.
     useEffect(() => {
         if (!newMenuOpen) return
 

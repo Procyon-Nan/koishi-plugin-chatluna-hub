@@ -6,6 +6,7 @@ import {
     serializeSession,
     sessionFromDetail
 } from '../lib/draft-store'
+import { resolveSaveOutcome } from '../lib/lifecycle-decisions'
 import type { PresetHubApi } from '../lib/hub-api'
 import { sourceLabel } from '../lib/id'
 import { downloadYaml } from '../lib/serialize'
@@ -99,26 +100,17 @@ export function usePresetPersistence({
 
             // Two independent races, neither implying the other: `openGenRef`
             // says the editor moved to another preset, `local.rawText` says it
-            // is still the same preset but the text moved on.
-            const stale = gen !== openGenRef.current
-            const local = sessionRef.current
-            const keptEditing = !stale && !!local && local.rawText !== sent
+            // is still the same preset but the text moved on. The verdict lives
+            // in `resolveSaveOutcome` so it can be unit-tested.
+            const { stale, keptEditing, next } = resolveSaveOutcome({
+                gen,
+                openGen: openGenRef.current,
+                local: sessionRef.current,
+                sent,
+                savedSession
+            })
 
-            if (!stale) {
-                const next =
-                    keptEditing && local
-                        ? {
-                              ...savedSession,
-                              // Id / filename / source come from the server, the
-                              // text and its parse state stay the user's, and the
-                              // baseline is what was written — so `dirty` and 还原
-                              // both refer to the file that now exists on disk.
-                              structured: local.structured,
-                              rawText: local.rawText,
-                              parseError: local.parseError,
-                              baselineRawText: sent
-                          }
-                        : savedSession
+            if (next) {
                 sessionRef.current = next
                 setSession(next)
             }
