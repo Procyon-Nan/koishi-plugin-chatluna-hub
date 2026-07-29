@@ -160,9 +160,6 @@ const createWriteGuard = () => {
         },
         releaseOnFailure() {
             if (!succeeded) claimed = false
-        },
-        get hasSucceeded() {
-            return succeeded
         }
     }
 }

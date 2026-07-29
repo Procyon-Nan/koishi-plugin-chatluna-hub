@@ -210,9 +210,3 @@ export const isCharacterPresetTemplate = (
     if (typeof obj !== 'object' || obj === null) return false
     return 'name' in obj && 'input' in obj && 'system' in obj
 }
-
-export const keywordList = (value: string | string[] | undefined): string[] => {
-    if (value == null) return []
-    if (typeof value === 'string') return value ? [value] : []
-    return value.map(String)
-}

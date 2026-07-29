@@ -3,7 +3,6 @@ import { defaultTabForSource } from '../components/editor-tabs'
 import {
     createDraftSession,
     errorMessage,
-    serializeSession,
     sessionFromDetail
 } from '../lib/draft-store'
 import { resolveSaveOutcome } from '../lib/lifecycle-decisions'
@@ -78,7 +77,7 @@ export function usePresetPersistence({
         try {
             // Exactly what goes to disk. Anything typed after this point is
             // newer than the file, so the response must not replace it.
-            const sent = serializeSession(current)
+            const sent = current.rawText
             const detail = current.isDraft
                 ? await api.create({
                       source: current.source,
@@ -205,7 +204,7 @@ export function usePresetPersistence({
         if (!current) return
 
         try {
-            const content = serializeSession(current)
+            const content = current.rawText
             const name =
                 current.filename.trim() ||
                 (current.source === 'character'

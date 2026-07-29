@@ -25,6 +25,7 @@ export interface DraftSession {
     filename: string
     /** Last successfully parsed structured draft; kept when YAML parse fails. */
     structured: StructuredPreset | null
+    /** Current document text; form patches keep it in sync with `structured`. */
     rawText: string
     baselineRawText: string
     parseError: string

@@ -164,11 +164,6 @@ export const applyRawTextEdit = (
     }
 }
 
-/** Persist the current document text. Form patches keep `rawText` in sync. */
-export const serializeSession = (session: DraftSession): string => {
-    return session.rawText
-}
-
 export const asCorePreset = (
     data: StructuredPreset | null,
     source?: PresetSource
