@@ -16,7 +16,7 @@ import type { HubEvents } from 'koishi-plugin-chatluna-hub'
 export type * from 'koishi-plugin-chatluna-hub'
 
 /** Client-only UI tab key — has no server counterpart. */
-export type CoreTab = 'conversation' | 'model' | 'preset' | 'log'
+export type CoreTab = 'conversation' | 'model' | 'preset' | 'square' | 'log'
 
 declare module '@koishijs/client' {
     interface Events extends HubEvents {}

@@ -27,6 +27,13 @@
                         />
                     </KeepAlive>
 
+                    <!-- v-show 而非 v-if + KeepAlive：iframe 从 DOM 移除后会重新加载
+                         外部页面，保持 DOM 常驻可避免切换 tab 时重载预设广场 -->
+                    <square-page
+                        v-show="activeTab === 'square'"
+                        class="view-container"
+                    />
+
                     <KeepAlive>
                         <log-page
                             v-if="activeTab === 'log'"
@@ -49,6 +56,7 @@ import ConversationPage from './pages/conversation-page.vue'
 import LogPage from './pages/log-page.vue'
 import ModelPage from './pages/model-page.vue'
 import PresetPage from './pages/preset-page.vue'
+import SquarePage from './pages/square-page.vue'
 import type { CoreTab } from './types'
 
 const activeTab = ref<CoreTab>('conversation')
