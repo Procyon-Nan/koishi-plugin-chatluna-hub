@@ -2,7 +2,10 @@
     <div class="core-dashboard">
         <div class="core-main">
             <el-scrollbar>
-                <div class="core-content">
+                <div
+                    class="core-content"
+                    :class="{ 'core-content--fluid': activeTab === 'square' }"
+                >
                     <KeepAlive>
                         <conversation-page
                             v-if="activeTab === 'conversation'"
@@ -105,6 +108,12 @@ const handleTabChange = (tab: CoreTab) => {
     margin: 0 auto;
 }
 
+/* 预设广场：iframe 铺满整个内容区，去除默认留白与居中约束 */
+.core-content--fluid {
+    padding: 0;
+    align-items: stretch;
+}
+
 .view-container {
     flex: 1;
     min-height: 500px;
@@ -114,6 +123,10 @@ const handleTabChange = (tab: CoreTab) => {
     .core-content {
         padding: 16px;
         padding-bottom: 112px;
+    }
+
+    .core-content--fluid {
+        padding: 0 0 112px;
     }
 }
 </style>

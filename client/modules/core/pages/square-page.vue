@@ -41,9 +41,7 @@ const onLoad = () => {
     flex: 1;
     min-width: 0;
     border: 0;
-    border-radius: 12px;
     background: var(--k-card-bg);
-    box-shadow: var(--k-card-shadow);
 }
 
 .square-loading {
@@ -57,7 +55,6 @@ const onLoad = () => {
     color: var(--k-text-light);
     font-size: 14px;
     background: var(--k-card-bg);
-    border-radius: 12px;
 }
 
 .square-loading .el-icon {
