@@ -343,6 +343,13 @@ config reloads can dispose the Hub service scope and its injected scope in
 either order, so the provider disposer must remain idempotent and a replacement
 provider must release the previous Hub owner before patching model methods.
 
+The `_createStream` patch must preserve upstream's synchronous async-iterable
+return contract. Published ChatLuna consumes the value without awaiting first
+(`stream = this._createStream(...)` followed by `for await`), so wrapping the
+return value in a Promise breaks every streaming call with
+`TypeError: stream is not async iterable`. Return the wrapped stream directly
+and defer the original call to the wrapped generator's first `next()` instead.
+
 Current log constraints:
 
 - Maximum retained log entries: `100`.

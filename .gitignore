@@ -17,5 +17,14 @@ tsconfig.tsbuildinfo
 *.ntvs*
 *.njsproj
 *.sln
-.claude/settings.local.json
-tmp/*
+
+# agent
+.claude/
+.agents/
+.codex/
+
+# codegraph
+.codegraph/
+
+# tmp
+tmp/

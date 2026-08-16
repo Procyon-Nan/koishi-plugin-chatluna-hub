@@ -1045,6 +1045,11 @@ const patchChatModelMethods = (
         }
     }
 
+    // Upstream _streamResponseChunks consumes this synchronously
+    // (`stream = this._createStream(...)` then `for await`), so the patched
+    // method must keep returning an async iterable directly, never a Promise.
+    // Defer the original call to the wrapped generator's first next() so the
+    // return shape stays sync while the run settles through the wrapper.
     const patchedCreateStream = function patchedCreateStream(
         this: ChatLunaChatModelLike,
         params: unknown
@@ -1054,36 +1059,37 @@ const patchChatModelMethods = (
 
         const context: ModelRequestContext = { ref }
 
-        return (async () => {
-            let stream: unknown
-
-            try {
-                stream = await withModelContext(
+        const lazyStream = {
+            // A generator method keeps this lint-clean: the anonymous
+            // `async function* (` form trips the repo's conflicting
+            // generator-star-spacing and prettier rules.
+            async *run(model: ChatLunaChatModelLike, params: unknown) {
+                const stream = await withModelContext(
                     storage,
                     contextStack,
                     context,
                     () =>
-                        Promise.resolve(originalCreateStream.call(this, params))
+                        Promise.resolve(
+                            originalCreateStream.call(model, params)
+                        )
                 )
-            } catch (error) {
-                safelyFailRun(store, ref, error, logger)
-                throw error
-            }
 
-            if (!isAsyncIterable(stream)) {
-                safelyCompleteRun(store, ref, logger)
-                return stream
-            }
+                if (!isAsyncIterable(stream)) {
+                    throw new TypeError('stream is not async iterable')
+                }
 
-            return wrapRequesterStream(
-                stream,
-                storage,
-                contextStack,
-                context,
-                store,
-                logger
-            )
-        })()
+                yield* stream
+            }
+        }.run
+
+        return wrapRequesterStream(
+            lazyStream(this, params),
+            storage,
+            contextStack,
+            context,
+            store,
+            logger
+        )
     }
 
     target._completion = patchedCompletion
