@@ -482,6 +482,20 @@ Koishi loader base directory and `node_modules/koishi-plugin-chatluna-hub`.
 Direct real paths under `external/` can fail under Koishi production asset
 serving.
 
+## npm 自动发布
+
+- `.github/workflows/publish.yml` 在 `main` 分支的 `package.json` 或工作流文件
+  变更时触发，也支持手动运行。npm 已存在当前版本时跳过安装、构建和发布；
+  查询失败时只有 `E404` 表示版本不存在，其他错误终止流程。
+- CI 使用 Node 24、`npm ci`、`npm run build` 和 `npm publish --access public`。
+  `package-lock.json` 用于独立仓库 CI，调整依赖时通过 npm 同步更新；更新版本
+  时也同步锁文件的根包版本。
+- 构建脚本使用标准依赖解析，不依赖上层 `koishi-dev` 的固定路径。
+- 认证使用 npm Trusted Publisher 的 OIDC 临时凭据，保留 `id-token: write`，
+  不配置长期 npm token。npm 侧需要绑定 GitHub 仓库
+  `Procyon-Nan/chatluna-hub` 和工作流文件 `publish.yml`。
+- 本地构建或打包验证不代表 GitHub Actions 与 npm 发布已验收。
+
 ## Dependency Notes
 
 Direct runtime dependencies currently include:

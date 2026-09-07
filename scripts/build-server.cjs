@@ -3,16 +3,7 @@ const { resolve } = require('path')
 const { buildSync } = require('esbuild')
 
 const cwd = resolve(__dirname, '..')
-const tsc = resolve(
-    __dirname,
-    '..',
-    '..',
-    '..',
-    'node_modules',
-    'typescript',
-    'bin',
-    'tsc'
-)
+const tsc = require.resolve('typescript/bin/tsc')
 
 execFileSync(process.execPath, [tsc, '-b', '--force'], {
     cwd,

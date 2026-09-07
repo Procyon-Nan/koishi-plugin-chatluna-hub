@@ -80,6 +80,25 @@ Hub 只在 Koishi loader 可写、目标 adapter 包已安装时执行新增、�
 
 日志持久化到 Koishi 数据目录下的 `data/chatluna-hub/core-logs.json`。日志可能包含模型请求内容和响应内容，生产环境开启时应注意访问权限和数据清理。
 
+## 自动发布
+
+`main` 分支的 `package.json` 或 `.github/workflows/publish.yml` 变更后，
+GitHub Actions 会检查 npm 上的当前包版本：已发布则跳过，未发布则使用
+Node 24 执行 `npm ci`、`npm run build` 和 `npm publish --access public`。
+也可在 Actions 中手动运行 `Publish package`。
+
+首次启用前，在 npm 包 `koishi-plugin-chatluna-hub` 的 Settings 中配置
+Trusted Publisher，选择 GitHub Actions 并填写：
+
+- Organization or user：`Procyon-Nan`
+- Repository：`chatluna-hub`
+- Workflow filename：`publish.yml`
+- Environment name：留空（工作流未使用 GitHub Environment）
+
+发布使用 OIDC 临时凭据，无需设置 `NPM_TOKEN`。更新版本时同步提交
+`package.json`、`package-lock.json` 的根包版本与 `CHANGELOG.md`；推送到
+`main` 后查看 Actions 结果确认发布状态。
+
 ## 安装方式
 
 ### 在线安装

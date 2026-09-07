@@ -22,15 +22,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Procyon-Nan/koishi-plugin-chatluna-hub.git"
+    "url": "git+https://github.com/Procyon-Nan/chatluna-hub.git"
   },
   "contributors": [
     "Procyon-Nan <3189960265@qq.com>"
   ],
   "scripts": {
     "build:server": "node scripts/build-server.cjs",
-    "build:client": "../../node_modules/.bin/koishi-console build",
-    "build": "yarn build:server && yarn build:client",
+    "build:client": "koishi-console build",
+    "build": "npm run build:server && npm run build:client",
     "lint": "yarn eslint src --ext=ts",
     "lint-fix": "yarn eslint src --ext=ts --fix"
   },
@@ -48,17 +48,20 @@
   "devDependencies": {
     "@koishijs/client": "^5.30.11",
     "@koishijs/plugin-console": "^5.30.11",
-    "@typescript-eslint/eslint-plugin": "^7.18.1-alpha.3",
-    "@typescript-eslint/parser": "^8.45.1-alpha.0",
+    "@types/node": "^22.20.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "esbuild": "^0.23.1",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.5.4",
-    "eslint-plugin-promise": "^7.2.1",
+    "eslint-plugin-promise": "^6.6.0",
     "koishi": "^4.18.9",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "yml-register": "^1.2.5"
   },
   "peerDependencies": {
     "@koishijs/plugin-console": "^5.30.11",
