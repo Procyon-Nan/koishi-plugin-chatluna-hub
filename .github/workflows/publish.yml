@@ -3,7 +3,7 @@ name: Publish package
 on:
     push:
         branches:
-            - main
+            - master
         paths:
             - package.json
             - .github/workflows/publish.yml

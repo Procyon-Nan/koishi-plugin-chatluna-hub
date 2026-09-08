@@ -151,7 +151,7 @@ chatluna-hub/
 
 ## 发布流程
 
-- `.github/workflows/publish.yml` 在 `main` 的 `package.json` 或工作流文件
+- `.github/workflows/publish.yml` 在 `master` 的 `package.json` 或工作流文件
   变化后触发，也支持手动运行。当前版本已存在时跳过；npm 查询只有 `E404`
   进入发布，其他错误终止流程。
 - CI 使用 Node 24，依次执行 `npm ci`、`npm run build` 和
