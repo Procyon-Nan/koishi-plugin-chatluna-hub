@@ -121,6 +121,22 @@
                         <span class="node-status">核心</span>
                     </button>
 
+                    <button
+                        v-if="coreNode && canOpenHubModuleConfig(coreNode)"
+                        class="node-config-button"
+                        :class="{ dragging: draggingId === coreNode.id }"
+                        :style="nodeConfigButtonStyle(coreNode)"
+                        :title="`打开 ${coreNode.title} 插件配置`"
+                        :aria-label="`打开 ${coreNode.title} 插件配置`"
+                        type="button"
+                        @pointerdown.stop
+                        @pointerenter="focusedNodeId = coreNode.id"
+                        @pointerleave="handleNodePointerLeave(coreNode.id)"
+                        @click.stop="handleOpenModuleConfig(coreNode)"
+                    >
+                        <el-icon><Tools /></el-icon>
+                    </button>
+
                     <template v-for="node in satelliteNodes" :key="node.id">
                         <button
                             class="graph-node satellite"

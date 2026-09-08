@@ -27,7 +27,7 @@ export const canOpenHubModuleConfig = (
     item: HubModuleItem
 ): item is HubModuleItem & { configRoutePath: string } => {
     return (
-        item.entryType === 'webui' &&
+        (item.entryType === 'webui' || item.entryType === 'hub') &&
         item.installed &&
         item.configStatus === 'single' &&
         Boolean(item.configRoutePath)

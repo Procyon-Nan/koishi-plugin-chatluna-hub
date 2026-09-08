@@ -271,6 +271,7 @@ export const moduleDefinitions: HubModuleDefinition[] = [
         title: 'ChatLuna',
         icon: 'ChatRound',
         order: 0,
+        pluginName: 'chatluna',
         toggleable: false
     },
     {
@@ -496,7 +497,10 @@ export const resolveHubModuleState = async (
     const matchCount = matches.length
     const installed = pluginName ? isPluginInstalled(ctx, pluginName) : true
     const configured = pluginName ? matchCount > 0 : true
-    const available = pluginName ? isPluginRunning(ctx, pluginName) : true
+    const available =
+        definition.entryType === 'hub' || !pluginName
+            ? true
+            : isPluginRunning(ctx, pluginName)
     const configStatus = getConfigStatus(pluginName, installed, matchCount)
     const configPath = configStatus === 'single' ? matches[0].path : undefined
     const configRoutePath = configPath

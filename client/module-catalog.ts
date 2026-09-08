@@ -148,6 +148,7 @@ export const fallbackModules: HubModuleItem[] = [
         title: 'ChatLuna',
         icon: 'ChatRound',
         order: 0,
+        pluginName: 'chatluna',
         toggleable: false
     },
     {
