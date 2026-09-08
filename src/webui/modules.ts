@@ -30,6 +30,7 @@ export type HubModuleId =
     | 'livingDiary'
 
 export type HubModuleIconName =
+    | 'Qzone'
     | 'ChatRound'
     | 'Collection'
     | 'Connection'
@@ -264,7 +265,7 @@ const configModuleDefinitions = [
     defineConfigModule({
         id: 'livingDiary',
         title: 'Living Diary',
-        icon: 'Collection',
+        icon: 'Qzone',
         order: 240,
         pluginName: 'chatluna-livingdiary'
     })

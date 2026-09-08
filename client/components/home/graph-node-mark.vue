@@ -112,6 +112,7 @@ import {
 } from '@element-plus/icons-vue'
 import MemesLunaIcon from '../../icons/memesluna.vue'
 import TreeOfLifeIcon from '../../icons/tree-of-life.vue'
+import QzoneIcon from '../../icons/qzone.vue'
 import type { HubModuleIconName, HubModuleId } from '../../types'
 
 const props = withDefaults(
@@ -138,10 +139,14 @@ const icons = {
     Star,
     TrendCharts,
     UserFilled,
-    MemesLunaEmoji: MemesLunaIcon
+    MemesLunaEmoji: MemesLunaIcon,
+    Qzone: QzoneIcon
 } satisfies Record<HubModuleIconName, Component>
 
-const iconSize = computed(() => (props.mini ? 22 : 34))
+const iconSize = computed(() => {
+    if (props.mini) return 22
+    return props.moduleId === 'livingDiary' ? 46 : 34
+})
 
 const livingMemoryStyle = computed(() => {
     const size = props.mini ? 22 : 36

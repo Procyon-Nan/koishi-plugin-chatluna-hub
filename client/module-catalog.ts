@@ -140,7 +140,7 @@ const configFallbackModuleDefinitions = [
     createConfigFallbackDefinition({
         id: 'livingDiary',
         title: 'Living Diary',
-        icon: 'Collection',
+        icon: 'Qzone',
         order: 240
     })
 ]

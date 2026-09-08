@@ -23,6 +23,7 @@ export type HubModuleId =
     | 'livingDiary'
 
 export type HubModuleIconName =
+    | 'Qzone'
     | 'ChatRound'
     | 'Collection'
     | 'Connection'
