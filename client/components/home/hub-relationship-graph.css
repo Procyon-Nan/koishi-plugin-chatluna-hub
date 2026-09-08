@@ -687,8 +687,8 @@
     --config-button-scale: 1;
 
     position: absolute;
-    left: var(--config-button-px);
-    top: var(--config-button-py);
+    left: 0;
+    top: 0;
     z-index: 4;
     width: 30px;
     height: 30px;
@@ -704,7 +704,10 @@
         0 0 12px color-mix(in srgb, var(--node-tone), transparent 76%);
     cursor: pointer;
     touch-action: manipulation;
+    /* Keep frame-driven translation separate from the hover scale transition. */
+    translate: var(--config-button-px) var(--config-button-py);
     transform: translate(-50%, -50%) scale(var(--config-button-scale));
+    will-change: translate;
     transition:
         border-color var(--hub-duration) var(--hub-ease),
         box-shadow var(--hub-duration) var(--hub-ease),
