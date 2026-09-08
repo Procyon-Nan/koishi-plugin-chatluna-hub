@@ -136,6 +136,12 @@ const configFallbackModuleDefinitions = [
         title: 'Toolbox',
         icon: 'Link',
         order: 230
+    }),
+    createConfigFallbackDefinition({
+        id: 'livingDiary',
+        title: 'Living Diary',
+        icon: 'Collection',
+        order: 240
     })
 ]
 
@@ -435,6 +441,19 @@ export const moduleDetails = {
             '供多媒体与工具链插件复用'
         ],
         tip: '文档链接：待补充'
+    },
+    livingDiary: {
+        title: 'Living Diary',
+        subtitle: 'QQ 空间生活日记与自动互动',
+        description:
+            '以 QQ 空间为载体，通过动态发布、每日记忆日记和评论互动呈现 Bot 的日常',
+        features: [
+            '通过指令读取和发布 QQ 空间图文动态',
+            '提供 qzone_publish 工具供 ChatLuna 调用',
+            '基于 Living Memory 当日记忆生成日记动态',
+            '支持好友新动态评论与评论区自动回复'
+        ],
+        tip: '文档链接：https://github.com/Procyon-Nan/koishi-plugin-chatluna-livingdiary'
     },
     toolbox: {
         title: 'ChatLuna Toolbox',

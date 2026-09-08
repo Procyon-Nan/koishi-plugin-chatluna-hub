@@ -20,6 +20,7 @@ export type HubModuleId =
     | 'vectorStoreService'
     | 'storageService'
     | 'toolbox'
+    | 'livingDiary'
 
 export type HubModuleIconName =
     | 'ChatRound'

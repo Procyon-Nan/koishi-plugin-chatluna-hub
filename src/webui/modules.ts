@@ -27,6 +27,7 @@ export type HubModuleId =
     | 'vectorStoreService'
     | 'storageService'
     | 'toolbox'
+    | 'livingDiary'
 
 export type HubModuleIconName =
     | 'ChatRound'
@@ -259,6 +260,13 @@ const configModuleDefinitions = [
         icon: 'Link',
         order: 230,
         pluginName: 'chatluna-toolbox'
+    }),
+    defineConfigModule({
+        id: 'livingDiary',
+        title: 'Living Diary',
+        icon: 'Collection',
+        order: 240,
+        pluginName: 'chatluna-livingdiary'
     })
 ]
 
