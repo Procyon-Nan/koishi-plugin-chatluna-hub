@@ -91,7 +91,7 @@ Node 24 执行 `npm ci`、`npm run build` 和 `npm publish --access public`。
 Trusted Publisher，选择 GitHub Actions 并填写：
 
 - Organization or user：`Procyon-Nan`
-- Repository：`chatluna-hub`
+- Repository：`koishi-plugin-chatluna-hub`
 - Workflow filename：`publish.yml`
 - Environment name：留空（工作流未使用 GitHub Environment）
 

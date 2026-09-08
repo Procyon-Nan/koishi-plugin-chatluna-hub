@@ -22,7 +22,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Procyon-Nan/chatluna-hub.git"
+    "url": "git+https://github.com/Procyon-Nan/koishi-plugin-chatluna-hub.git"
   },
   "contributors": [
     "Procyon-Nan <3189960265@qq.com>"

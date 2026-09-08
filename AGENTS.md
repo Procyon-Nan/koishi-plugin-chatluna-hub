@@ -156,6 +156,6 @@ chatluna-hub/
   进入发布，其他错误终止流程。
 - CI 使用 Node 24，依次执行 `npm ci`、`npm run build` 和
   `npm publish --access public`。更新版本时同步锁文件的根包版本。
-- npm Trusted Publisher 绑定 `Procyon-Nan/chatluna-hub` 与 `publish.yml`，
+- npm Trusted Publisher 绑定 `Procyon-Nan/koishi-plugin-chatluna-hub` 与 `publish.yml`，
   工作流保留 `id-token: write`。当前采用直接发布，npm 侧必须允许
   `npm publish`；修改仓库或工作流文件名时同步更新绑定。配置步骤见 readme。

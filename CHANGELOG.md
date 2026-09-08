@@ -2,7 +2,8 @@
 
 ## 2026-09-08 version:0.9.1
 
-- pending: 将 npm 自动发布工作流的推送触发分支修正为 master，与仓库默认分支一致，并同步发布文档。
+- pending: 修正 package.json 仓库地址，与 GitHub Actions 发布来源一致，解决 npm provenance 校验失败，并同步 Trusted Publisher 文档。
+- 3ad4d89: 将 npm 自动发布工作流的推送触发分支修正为 master，与仓库默认分支一致，并同步发布文档。
 - dfb750a: 更新插件版本至 0.9.1，同步 npm 锁文件根包版本。
 - aede4d7: 为 Living Diary 节点增加 QQ 空间风格的星形镂空图标，缩减图标留白并将节点图标尺寸调至 46px，沿用外圈节点状态配色。
 - 91879ec: 在首页外圈增加 Living Diary 插件节点及功能说明，复用插件安装状态、配置跳转与启停能力。
